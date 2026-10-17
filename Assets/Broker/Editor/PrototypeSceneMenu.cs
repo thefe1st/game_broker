@@ -7,6 +7,9 @@ namespace Broker.Editor
 {
     public static class PrototypeSceneMenu
     {
+        [MenuItem("Broker/Create 3D Office Scene")]
+        public static void Create3DScene() { CreateScene(); }
+
         [MenuItem("Broker/Create Prototype Scene")]
         public static void CreateScene()
         {

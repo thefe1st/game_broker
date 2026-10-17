@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Broker.Runtime
 {
-    public sealed class PrototypeBootstrap : MonoBehaviour
+    public sealed partial class PrototypeBootstrap : MonoBehaviour
     {
         private BrokerDay day;
         private readonly List<DialogueTurn>[] histories = { new List<DialogueTurn>(), new List<DialogueTurn>(), new List<DialogueTurn>() };
@@ -37,7 +37,9 @@ namespace Broker.Runtime
         }
         private void Awake()
         {
-            office = new GameObject("Editable office greybox").AddComponent<OfficeScene>();
+            office = new GameObject("First-person broker office").AddComponent<OfficeScene>();
+            office.Player.OnInteraction = OnWorldInteraction;
+            office.Player.OnFocusLost = () => { if (!intro && !day.DayEnded && navigation.IsExploring) navigation.Pause(); };
             voice = gameObject.AddComponent<VoiceSession>();
             voice.OnTranscript = text => { if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text; };
             Restart();
@@ -46,9 +48,16 @@ namespace Broker.Runtime
         {
             canvasScale = Mathf.Max(0.1f, Mathf.Min(Screen.width / 1440f, Screen.height / 960f));
             canvasOffset = new Vector2((Screen.width - 1440 * canvasScale) / 2, (Screen.height - 960 * canvasScale) / 2);
-            office.Layout(canvasScale, canvasOffset);
-            if (!intro && !showNews && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
+            if (!intro && !day.DayEnded && !showNews && day.PendingEvent == null && OfficeInput.EscapePressed())
+            {
+                if (navigation.IsExploring) { navigation.Pause(); voice.Cancel(); }
+                else { CancelPending(); EnterWorld(); }
+            }
+            if (!intro && !showNews && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); lastDayEnded = true; }
+            bool blocked = intro || showNews || day.DayEnded || day.PendingEvent != null;
+            office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
+            office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
             DrainNews(); office.Refresh(day);
         }
         private void OnDestroy()
@@ -63,6 +72,7 @@ namespace Broker.Runtime
             foreach (var history in histories) history.Clear();
             foreach (var conversation in conversations) conversation.Clear();
             officeNews.Clear(); message = ""; scroll = Vector2.zero; DrainNews();
+            navigation.Reset(); staffTargetIndex = 0; office.Player.SetControl(false); office.ResetPlayer();
         }
         private void DrainNews()
         {
@@ -131,6 +141,13 @@ namespace Broker.Runtime
             if (theme == null) theme = new BrokerTheme();
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
+            if (navigation.View != OfficeView.Desk)
+            {
+                GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
+                DrawExplorationScreen();
+                GUI.matrix = previous;
+                return;
+            }
             var view = new Rect(canvasOffset.x + 340 * canvasScale, canvasOffset.y + 110 * canvasScale, 720 * canvasScale, 300 * canvasScale);
             // Leave the camera viewport uncovered by the GUI background.
             Paint(new Rect(0, 0, Screen.width, view.y), theme.Canvas);
@@ -154,7 +171,7 @@ namespace Broker.Runtime
             Label(650, 20, 170, 30, "$" + day.Cash, theme.Title); Label(650, 56, 170, 24, "в кассе / нужно " + day.TotalExpenses, theme.Small);
             Label(850, 20, 160, 30, day.TeamMorale + "%", theme.Title); Label(850, 56, 160, 24, "настроение команды", theme.Small);
             Label(1040, 20, 160, 30, day.Reputation + "/100", theme.Title); Label(1040, 56, 160, 24, "репутация", theme.Small);
-            if (Button(1230, 24, 190, 48, "Завершить день", !busy && !voice.Recording)) { CancelPending(); day.EndDay(); }
+            if (Button(1230, 24, 190, 48, "Встать / Esc")) { CancelPending(); EnterWorld(); }
         }
         private void DrawClients()
         {
@@ -261,16 +278,16 @@ namespace Broker.Runtime
             useGateway = GUI.Toggle(new Rect(1100, 676, 300, 44), useGateway, " ИИ-формулировки через сервер", theme.Button); GUI.enabled = before;
             bool nextVoice = GUI.Toggle(new Rect(1100, 732, 300, 44), voiceEnabled, " Голос: внешний API и микрофон", theme.Button);
             if (nextVoice != voiceEnabled) { voiceEnabled = nextVoice; if (!voiceEnabled) voice.Cancel(); }
-            Label(1100, 790, 300, 112, voiceEnabled ? voice.Status + "\nЗапись только по кнопке; звук уходит провайдеру." : "Всё основное работает без сервера. Поручения — кнопками. Голос опционален.\n\nДосье относится к выбранному клиенту.", theme.Small);
+            Label(1100, 790, 300, 112, voiceEnabled ? voice.Status + "\nЗапись только по кнопке; звук уходит провайдеру." : "Esc — встать из-за стола. День завершается у входной двери.\n\nБез сервера работает весь офис. Досье относится к выбранному клиенту.", theme.Small);
         }
         private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.02f, 0.05f, 0.07f, 0.92f)); }
         private void DrawIntro()
         {
             Scrim(); Panel(340, 220, 760, 510, "ДЕНЬ 01 / СНАЧАЛА ЗАРАБОТАЙТЕ НА ОФИС");
             Label(372, 288, 696, 64, "Вы — генеральный директор.\nОб этом пока знают только визитки.", theme.Title);
-            Label(372, 380, 696, 160, "Три клиента, два сотрудника и $340 обязательных расходов.\n\nЗвоните клиентам, выясняйте цель, раскрывайте риск и комиссию 2%. Лене можно поручить досье, Максу — побочный обзвон. Следите за офисными происшествиями и не потратьте зарплаты на красивый телефон.", theme.Text);
+            Label(372, 380, 696, 160, "WASD — ходить. Мышь — осматриваться. E — взаимодействовать. Esc — пауза или встать из-за стола.\n\nПодойдите к своему столу и телефону, чтобы звонить клиентам. Поговорите с Леной и Максом, поручите работу. Кофе — у кофемашины, конец дня — у входной двери. Нужно заработать $340.", theme.Text);
             Label(372, 562, 696, 52, "Это сценарная демоверсия: понимание реплик по ключевым словам. Все компании и деньги вымышлены.", theme.Small);
-            if (Button(372, 646, 696, 52, "Открыть контору", true, true)) intro = false;
+            if (Button(372, 646, 696, 52, "Войти в 3D-офис", true, true)) { intro = false; EnterWorld(); }
         }
         private void DrawEvent()
         {
@@ -278,9 +295,9 @@ namespace Broker.Runtime
             Panel(340, 228, 760, 490, "ОФИСНОЕ ПРОИСШЕСТВИЕ / ВРЕМЯ НА ПАУЗЕ");
             Label(372, 294, 696, 80, item.Title, theme.Title);
             Label(372, 388, 696, 96, item.Description, theme.Text);
-            if (Button(372, 514, 696, 56, item.FirstChoice, day.Cash >= item.FirstChoiceCost)) News(day.ResolveEvent(0));
+            if (Button(372, 514, 696, 56, item.FirstChoice, day.Cash >= item.FirstChoiceCost)) ResolveOfficeEvent(0);
             // Resolution may replace PendingEvent; the local immutable item stays safe for this GUI frame.
-            if (Button(372, 590, 696, 56, item.SecondChoice)) News(day.ResolveEvent(1));
+            if (Button(372, 590, 696, 56, item.SecondChoice)) ResolveOfficeEvent(1);
             Label(372, 668, 696, 30, "В кассе $" + day.Cash + ". Бесплатный вариант доступен всегда.", theme.Small);
         }
         private void DrawNewsJournal()
