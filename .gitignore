@@ -19,3 +19,10 @@ UserSettings/
 .env
 .env.*
 !.env.example
+
+# .NET core rule checks
+[Bb]in/
+TestResults/
+
+# Keep the intentional headless core test project
+!Tools/CoreChecks/CoreChecks.csproj

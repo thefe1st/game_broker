@@ -129,3 +129,16 @@ test('provider network failure is sanitized', async t => {
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { error: 'gateway_failed' });
 });
+
+test('all three game personas are accepted and receive separate system context', async t => {
+  for (const [clientId, name] of [['boris', 'Борис'], ['inna', 'Инна'], ['artem', 'Артём']]) {
+    const f = await fixture(t, ai(async (_url, options) => {
+      const payload = JSON.parse(options.body);
+      assert.ok(payload.messages[0].content.includes(name));
+      return completion(JSON.stringify({ reply: name + ': Слушаю.' }));
+    }));
+    const response = await f.post({ ...data(), clientId });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { reply: name + ': Слушаю.' });
+  }
+});

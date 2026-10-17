@@ -148,7 +148,8 @@ namespace Broker.Runtime.Voice
             Cancel();
             if (string.IsNullOrWhiteSpace(text)) return;
             text = text.Split('\n')[0];
-            if (text.StartsWith("Борис: ", StringComparison.Ordinal)) text = text.Substring("Борис: ".Length);
+            int prefix = text.IndexOf(": ", StringComparison.Ordinal);
+            if (prefix >= 0 && prefix < 24) text = text.Substring(prefix + 2);
             if (text.Length > 400) text = text.Substring(0, 400);
             var source = new CancellationTokenSource(); pending = source;
             int version = ++revision; Working = true; Status = "Готовлю голос Бориса…";
