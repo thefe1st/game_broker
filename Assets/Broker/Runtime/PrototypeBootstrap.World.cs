@@ -45,7 +45,7 @@ namespace Broker.Runtime
         private void DrawWorldHUD()
         {
             Paint(new Rect(24, 24, 1392, 86), new Color(0.05f, 0.11f, 0.14f, 0.91f));
-            Label(44, 40, 430, 34, "МОЙКА КАПИТАЛ / ДЕНЬ 01", theme.Heading);
+            Label(44, 40, 430, 34, "МОЙКА КАПИТАЛ / ДЕНЬ " + day.DayNumber + "/3", theme.Heading);
             int seconds = Mathf.CeilToInt(day.RemainingSeconds);
             Label(510, 40, 180, 34, $"{seconds / 60:00}:{seconds % 60:00}", theme.Title);
             Label(720, 40, 210, 34, "$" + day.Cash + " / " + day.TotalExpenses, theme.Title);
@@ -129,18 +129,18 @@ namespace Broker.Runtime
         {
             Panel(340, 220, 760, 510, "ВХОДНАЯ ДВЕРЬ / ПОРА ДОМОЙ?");
             Label(372, 288, 696, 64, "Закончить рабочий день?", theme.Title);
-            Label(372, 380, 696, 128, "В кассе $" + day.Cash + ". Обязательства: $" + day.TotalExpenses + ".\nПосле расчёта останется / будет долг: $" + day.FinalBalance + ".\n\nНезавершённые звонки и поручения будут остановлены. Сохранений пока нет.", theme.Text);
+            Label(372, 380, 696, 128, "В кассе $" + day.Cash + ". Обязательства: $" + day.TotalExpenses + ".\nПосле расчёта останется / будет долг: $" + day.FinalBalance + ".\n\nНезавершённые звонки и поручения остановятся. После расчёта прогресс сохранится.", theme.Text);
             if (Button(372, 552, 696, 52, "Закрыть контору на сегодня", true, true)) { CancelPending(); day.EndDay(); }
             if (Button(372, 628, 696, 52, "Нет, вернуться к работе / Esc")) EnterWorld();
         }
         private void DrawPausePanel()
         {
             Panel(340, 220, 760, 510, "ПАУЗА / РЫНОК ПОДОЖДЁТ");
-            Label(372, 288, 696, 60, "Первый день в собственной конторе.", theme.Title);
+            Label(372, 288, 696, 60, "День " + day.DayNumber + "/3 в собственной конторе.", theme.Title);
             Label(372, 376, 696, 100, "Подойдите к столу, сотруднику, кофемашине или двери и нажмите E.\n\nКурсор освобождается в меню. Время на паузе, пока открыто это окно.", theme.Text);
             if (Button(372, 520, 696, 52, "Продолжить / Esc", true, true)) EnterWorld();
             if (Button(372, 594, 696, 52, "Журнал офиса")) showNews = true;
-            if (Button(372, 668, 696, 44, "Начать день заново (сбросить прогресс)")) Restart();
+            if (Button(372, 668, 696, 44, "Начать текущий день заново")) Restart();
         }
     }
 }

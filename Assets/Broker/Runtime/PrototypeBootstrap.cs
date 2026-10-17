@@ -42,7 +42,7 @@ namespace Broker.Runtime
             office.Player.OnFocusLost = () => { if (!intro && !day.DayEnded && navigation.IsExploring) navigation.Pause(); };
             voice = gameObject.AddComponent<VoiceSession>();
             voice.OnTranscript = text => { if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text; };
-            Restart();
+            InitializeCareer();
         }
         private void Update()
         {
@@ -54,7 +54,7 @@ namespace Broker.Runtime
                 else { CancelPending(); EnterWorld(); }
             }
             if (!intro && !showNews && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
-            if (day.DayEnded && !lastDayEnded) { CancelPending(); lastDayEnded = true; }
+            if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
             bool blocked = intro || showNews || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
             office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
@@ -68,7 +68,15 @@ namespace Broker.Runtime
         }
         private void Restart()
         {
-            CancelPending(); day = new BrokerDay(); lastDayEnded = false; intro = true; showNews = false; newsScroll = Vector2.zero;
+            CancelPending();
+            if (career.IsFinished)
+            {
+                // Presentation-only day: the actual final ledger is stored in CareerState.
+                day = new BrokerDay(3, Math.Max(0, career.Balance), career.Reputation, career.GoldenPhone);
+                day.EndDay(); lastDayEnded = true; intro = false;
+            }
+            else { day = career.CreateDay(); lastDayEnded = false; intro = true; }
+            showNews = false; newsScroll = Vector2.zero;
             foreach (var history in histories) history.Clear();
             foreach (var conversation in conversations) conversation.Clear();
             officeNews.Clear(); message = ""; scroll = Vector2.zero; DrainNews();
@@ -165,7 +173,7 @@ namespace Broker.Runtime
         private void DrawHeader()
         {
             Label(24, 20, 400, 36, "АЛЛО, ЭТО ДЕНЬГИ", theme.Title);
-            Label(24, 58, 400, 24, "ДЕНЬ 01  /  БОЛЬШИЕ АМБИЦИИ, МАЛЕНЬКИЙ ОФИС", theme.Small);
+            Label(24, 58, 400, 24, "ДЕНЬ " + day.DayNumber + "/3  /  " + day.DayTitle.ToUpperInvariant(), theme.Small);
             int seconds = Mathf.CeilToInt(day.RemainingSeconds);
             Label(470, 20, 150, 30, $"{seconds / 60:00}:{seconds % 60:00}", theme.Title); Label(470, 56, 150, 24, "до конца дня", theme.Small);
             Label(650, 20, 170, 30, "$" + day.Cash, theme.Title); Label(650, 56, 170, 24, "в кассе / нужно " + day.TotalExpenses, theme.Small);
@@ -199,7 +207,7 @@ namespace Broker.Runtime
         private void DrawEconomy()
         {
             Panel(20, 596, 300, 324, "КАССА И АПГРЕЙДЫ");
-            Label(40, 644, 260, 48, "Аренда $100 + зарплаты $240\nИтоговые расходы: $" + day.TotalExpenses, theme.Small);
+            Label(40, 644, 260, 48, "Аренда $" + day.DailyRent + " + зарплаты $" + day.DailyPayroll + "\nВсего $" + day.TotalExpenses + (day.CarryDebt > 0 ? " (долг $" + day.CarryDebt + ")" : ""), theme.Small);
             Meter(40, 702, 260, day.Cash / (float)day.TotalExpenses, day.Successful ? theme.Green : theme.Gold);
             if (Button(40, 724, 260, 48, day.CoffeeBought ? "Кофе уже куплен" : "Кофе команде • $40", !day.CoffeeBought && day.Cash >= 40)) News(day.BuyCoffee());
             if (Button(40, 784, 260, 48, day.HasGoldenPhone ? "Золотой телефон установлен" : "Золотой телефон • $90", !day.HasGoldenPhone && day.Cash >= 90)) News(day.BuyGoldenPhone());
@@ -219,11 +227,12 @@ namespace Broker.Runtime
             Panel(340, 508, 720, 412, "ЛИНИЯ: " + day.Current.Name.ToUpperInvariant());
             Label(830, 525, 210, 26, "ДОВЕРИЕ  " + day.Trust + "/4", theme.Tag);
             string checks = (day.NeedsKnown ? "[+]" : "[ ]") + " цель     " + (day.RisksExplained ? "[+]" : "[ ]") + " риски     " + (day.FeesExplained ? "[+]" : "[ ]") + " комиссия";
+            if (day.Current.Returning) checks += (day.Current.ReportReviewed ? "     [+]" : "     [ ]") + " отчёт";
             Label(360, 556, 680, 28, checks, theme.Small);
             var transcriptRect = new Rect(356, 594, 688, 144);
             float height = 10;
             foreach (var line in Conversation) height += theme.Text.CalcHeight(new GUIContent(line), 648) + 16;
-            string emptyText = day.Current.Brief + "\n\nПродукт: «Мойка-Капитал». Риск убытка, комиссия 2%, срок — год, персональный отчёт.";
+            string emptyText = day.Current.Brief + (day.Current.Returning ? " Клиент помнит прошлый день: обсудите отчёт до новой сделки." : "") + "\n\nПродукт: «Мойка-Капитал». Риск убытка, комиссия 2%, срок — год, персональный отчёт.";
             float emptyHeight = theme.Text.CalcHeight(new GUIContent(emptyText), 636);
             if (Conversation.Count == 0) height = Mathf.Max(height, emptyHeight + 12);
             scroll = GUI.BeginScrollView(transcriptRect, scroll, new Rect(0, 0, 654, Mathf.Max(144, height)));
@@ -283,11 +292,12 @@ namespace Broker.Runtime
         private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.02f, 0.05f, 0.07f, 0.92f)); }
         private void DrawIntro()
         {
-            Scrim(); Panel(340, 220, 760, 510, "ДЕНЬ 01 / СНАЧАЛА ЗАРАБОТАЙТЕ НА ОФИС");
-            Label(372, 288, 696, 64, "Вы — генеральный директор.\nОб этом пока знают только визитки.", theme.Title);
-            Label(372, 380, 696, 160, "WASD — ходить. Мышь — осматриваться. E — взаимодействовать. Esc — пауза или встать из-за стола.\n\nПодойдите к своему столу и телефону, чтобы звонить клиентам. Поговорите с Леной и Максом, поручите работу. Кофе — у кофемашины, конец дня — у входной двери. Нужно заработать $340.", theme.Text);
-            Label(372, 562, 696, 52, "Это сценарная демоверсия: понимание реплик по ключевым словам. Все компании и деньги вымышлены.", theme.Small);
-            if (Button(372, 646, 696, 52, "Войти в 3D-офис", true, true)) { intro = false; EnterWorld(); }
+            Scrim(); Panel(340, 180, 760, 600, "ДЕНЬ " + day.DayNumber + "/3 / " + day.DayTitle.ToUpperInvariant());
+            Label(372, 244, 696, 76, day.DayNumber == 1 ? "Вы — генеральный директор.\nОб этом пока знают только визитки." : "Они помнят вчерашний разговор.\nТеперь нужны не только обещания.", theme.Title);
+            Label(372, 344, 696, 136, "WASD — ходить. Мышь — осмотр. E — действие. Esc — пауза.\n\nВ кассе $" + day.OpeningCash + ". Обязательства сегодня: $" + day.TotalExpenses + ". " + (day.CarryDebt > 0 ? "Включая долг $" + day.CarryDebt + ". " : "") + "К финалу третьего дня нужны неотрицательный баланс и репутация от 40.", theme.Text);
+            Label(372, 500, 696, 76, day.DayNumber == 1 ? "Стол и телефон — звонки. Сотрудники — поручения. Дверь — конец дня. После завершения дня прогресс сохранится." : "Вернувшимся клиентам сначала нужен отчёт. Деньги, долг, репутация и купленный телефон перенесены. Задания и кофейный бюджет начались заново.", theme.Text);
+            Label(372, 598, 696, 64, saveNotice + "\nТекущие звонки не сохраняются. Все продукты и деньги вымышлены.", theme.Small);
+            if (Button(372, 692, 696, 52, "Начать день " + day.DayNumber + " / Войти в офис", true, true)) { intro = false; EnterWorld(); }
         }
         private void DrawEvent()
         {
@@ -317,11 +327,15 @@ namespace Broker.Runtime
         }
         private void DrawResults()
         {
-            Scrim(); Panel(340, 140, 760, 650, "РАБОЧИЙ ДЕНЬ ЗАКРЫТ");
-            Label(372, 210, 696, 80, day.Successful ? "КОНТОРА ПЕРЕЖИЛА ДЕНЬ." : "ВИЗИТКИ БЫЛИ УБЕДИТЕЛЬНЕЕ КАССЫ.", theme.Title);
-            Label(372, 318, 696, 220, "Основных сделок: " + day.DealsCount + "/3\nЗаработано: $" + day.Earned + "\nПотрачено в течение дня: $" + day.Spent + "\nОбязательства: $" + day.TotalExpenses + "\nОстаток / долг после расчёта: $" + day.FinalBalance + "\nРепутация: " + day.Reputation + "/100 • настроение: " + day.TeamMorale + "%", theme.Text);
-            Label(372, 556, 696, 86, day.Successful ? day.Reputation < 40 ? "Деньги есть. А вот желание клиентов перезванивать — под вопросом." : "Аренда и зарплаты покрыты. Можно снова говорить «мы динамично развиваемся»." : "Арендодатель принимает переводы. Ваш потенциал он принимать отказался.", theme.Text);
-            if (Button(372, 688, 696, 52, "Начать день заново", true, true)) Restart();
+            if (career.IsFinished) { DrawCareerFinal(); return; }
+            Scrim(); Panel(340, 116, 760, 728, "ДЕНЬ " + day.DayNumber + "/3 ЗАКРЫТ");
+            Label(372, 178, 696, 72, day.Successful ? "КОНТОРА ПЕРЕЖИЛА ДЕНЬ." : "ДОЛГ ПЕРЕХОДИТ НА ЗАВТРА.", theme.Title);
+            Label(372, 270, 696, 220, "Было в кассе утром: $" + day.OpeningCash + "\nЗаработано: $" + day.Earned + "\nПотрачено за день: $" + day.Spent + "\nОбязательства (включая старый долг): $" + day.TotalExpenses + "\nОстаток / долг после расчёта: $" + day.FinalBalance + "\nОсновных сделок: " + day.DealsCount + "/3\nРепутация: " + day.Reputation + "/100", theme.Text);
+            Label(372, 506, 696, 56, (saveSucceeded ? "" : "ВНИМАНИЕ: ") + saveNotice, theme.Small);
+            bool settled = career.CompletedDays == day.DayNumber;
+            if (Button(372, 590, 696, 52, "Следующий день" + (saveSucceeded ? "" : " (пока без записи на диск)"), settled, true)) Restart();
+            if (Button(372, 662, 696, 48, "Новая кампания (сбросить прогресс)")) NewCareer();
+            if (!saveSucceeded && Button(372, 726, 696, 48, "Повторить сохранение")) SaveCareer();
         }
     }
 }
