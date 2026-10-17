@@ -1,0 +1,7 @@
+{
+  "name": "Broker.Tests",
+  "rootNamespace": "Broker.Tests",
+  "references": ["Broker.Core"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"]
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Broker.Core",
+  "rootNamespace": "Broker.Core",
+  "noEngineReferences": true
+}

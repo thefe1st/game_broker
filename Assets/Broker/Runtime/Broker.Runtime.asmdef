@@ -1,0 +1,5 @@
+{
+  "name": "Broker.Runtime",
+  "rootNamespace": "Broker.Runtime",
+  "references": ["Broker.Core"]
+}

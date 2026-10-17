@@ -1,0 +1,5 @@
+{
+  "name": "Broker.Editor",
+  "rootNamespace": "Broker.Editor",
+  "includePlatforms": ["Editor"]
+}
