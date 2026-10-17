@@ -36,7 +36,7 @@ test('remote plaintext and credentials in URL rejected', () => {
 });
 test('health reports mock mode without secrets', async t => {
   const f = await fixture(t);
-  assert.deepEqual(await (await fetch(f.url + '/health')).json(), { status: 'ok', mode: 'mock' });
+  assert.deepEqual(await (await fetch(f.url + '/health')).json(), { status: 'ok', mode: 'mock', voice: 'disabled' });
 });
 test('mock round trip preserves canonical result', async t => {
   const f = await fixture(t); const response = await f.post();

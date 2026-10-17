@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Broker.Runtime.Dialogue;
+using Broker.Runtime.Voice;
 using Broker.Core;
 using UnityEngine;
 
@@ -15,6 +16,8 @@ namespace Broker.Runtime
         private int revision;
         private bool busy;
         private bool useGateway;
+        private bool voiceEnabled;
+        private VoiceSession voice;
         private bool lastDayEnded;
         private readonly List<string> log = new List<string>();
         private string message = "";
@@ -29,10 +32,18 @@ namespace Broker.Runtime
                 new GameObject("Broker Prototype").AddComponent<PrototypeBootstrap>();
         }
 
-        private void Awake() { Restart(); }
+        private void Awake()
+        {
+            voice = gameObject.AddComponent<VoiceSession>();
+            voice.OnTranscript = text =>
+            {
+                if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text;
+            };
+            Restart();
+        }
         private void Update()
         {
-            day.AdvanceTime(Time.unscaledDeltaTime);
+            if (!busy && (voice == null || !voice.Working)) day.AdvanceTime(Time.unscaledDeltaTime);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); lastDayEnded = true; }
         }
 
@@ -41,6 +52,7 @@ namespace Broker.Runtime
         private void CancelPending()
         {
             revision++;
+            if (voice != null) voice.Cancel();
             pending?.Cancel();
             pending = null;
             busy = false;
@@ -48,7 +60,9 @@ namespace Broker.Runtime
 
         private async void SendMessageToClient()
         {
-            if (busy || day.DayEnded || day.Call != CallStatus.Active || string.IsNullOrWhiteSpace(message)) return;
+            if (busy || day.DayEnded || day.Call != CallStatus.Active || string.IsNullOrWhiteSpace(message)
+                || (voice != null && (voice.Recording || voice.Working))) return;
+            voice.Cancel();
             string input = message.Trim();
             message = "";
             Add("Вы: " + input);
@@ -67,22 +81,27 @@ namespace Broker.Runtime
                     : new OfflineDialogueProvider();
                 string reply = await provider.ReplyAsync(request, source.Token);
                 if (version != revision || day.DayEnded) return;
-                Add(reply);
-                RememberClient(reply);
+                PresentClientReply(reply);
             }
             catch (OperationCanceledException) { }
             catch (Exception)
             {
                 if (version != revision || day.DayEnded) return;
                 Add("[Шлюз недоступен или ответ некорректен — локальный ответ]");
-                Add(canonical);
-                RememberClient(canonical);
+                PresentClientReply(canonical);
             }
             finally
             {
                 source.Dispose();
                 if (version == revision) { pending = null; busy = false; }
             }
+        }
+
+        private void PresentClientReply(string reply)
+        {
+            Add(reply);
+            RememberClient(reply);
+            if (voiceEnabled && !day.DayEnded) voice.PlayReply(reply);
         }
 
         private void RememberClient(string reply)
@@ -121,14 +140,21 @@ namespace Broker.Runtime
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1));
             GUILayout.BeginArea(new Rect(20, 20, 960, 720), GUI.skin.box);
             GUILayout.Label("АЛЛО, ЭТО ДЕНЬГИ", titleStyle);
-            GUILayout.Label("Правила по ключевым словам • шлюз меняет только формулировки • без голоса");
+            GUILayout.Label("Правила по ключевым словам • голос через локальный сервер");
             GUI.enabled = !busy && day.Call == CallStatus.NotStarted && !day.DayEnded;
             useGateway = GUILayout.Toggle(useGateway, "Локальный шлюз :8787 (mock или ИИ — зависит от настроек сервера)");
             GUI.enabled = true;
+            bool enabledNow = GUILayout.Toggle(voiceEnabled, "Голос: разрешить отправку записи внешнему API и синтез речи (нужен ключ на сервере)");
+            if (enabledNow != voiceEnabled) { voiceEnabled = enabledNow; if (!voiceEnabled) voice.Cancel(); }
+            if (voiceEnabled)
+            {
+                GUILayout.Label(voice.Status, wrappedLabel);
+                if ((voice.Working || voice.Playing || voice.Recording) && GUILayout.Button("Остановить голос", GUILayout.Height(26))) voice.Cancel();
+            }
             GUILayout.Label($"Деньги: {day.Cash}   Аренда: {BrokerDay.Rent}   Доверие: {day.Trust}/3   Время: {Mathf.CeilToInt(day.RemainingSeconds)} с", wrappedLabel);
             GUILayout.Space(8);
             GUILayout.Label("Борис • владелец автомоек. Продукт: вымышленный «Мойка-Капитал». Риск убытка, комиссия 2%. В прототипе параметры фиксированы.", wrappedLabel);
-            scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(290));
+            scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(210));
             foreach (string line in log)
             {
                 GUILayout.Label(line, wrappedLabel);
@@ -143,13 +169,20 @@ namespace Broker.Runtime
                     if (GUILayout.Button("Позвонить Борису", GUILayout.Height(38)))
                     {
                         string greeting = day.StartCall();
-                        Add(greeting);
-                        RememberClient(greeting);
+                        PresentClientReply(greeting);
                     }
                 }
                 else if (day.Call == CallStatus.Active)
                 {
-                    GUI.enabled = !busy;
+                    if (voiceEnabled)
+                    {
+                        GUI.enabled = !busy && !voice.Working;
+                        if (GUILayout.Button(voice.Recording ? "Закончить запись и распознать" : "Записать реплику (до 20 секунд)", GUILayout.Height(34)))
+                        {
+                            if (voice.Recording) voice.FinishRecording(); else voice.BeginRecording();
+                        }
+                    }
+                    GUI.enabled = !busy && !voice.Recording && !voice.Working;
                     message = GUILayout.TextField(message, 500, GUILayout.Height(34));
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Отправить", GUILayout.Height(38)) && !string.IsNullOrWhiteSpace(message))
@@ -157,13 +190,13 @@ namespace Broker.Runtime
                         SendMessageToClient();
                         GUI.FocusControl(null);
                     }
-                    GUI.enabled = !busy;
-                    if (GUILayout.Button("Предложить сделку", GUILayout.Height(38))) Add(day.OfferDeal());
+                    GUI.enabled = !busy && !voice.Recording && !voice.Working;
+                    if (GUILayout.Button("Предложить сделку", GUILayout.Height(38))) PresentClientReply(day.OfferDeal());
                     GUI.enabled = true;
                     if (GUILayout.Button("Повесить трубку", GUILayout.Height(38)))
                     {
                         CancelPending();
-                        Add(day.EndCall());
+                        PresentClientReply(day.EndCall());
                     }
                     GUILayout.EndHorizontal();
                 }

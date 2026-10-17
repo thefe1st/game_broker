@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { handleVoice } from './audio.mjs';
 
 const SYSTEM = `Ты Борис, владелец трёх автомоек в сатирической игре. Отвечай по-русски.
 Перефразируй canonicalReply в характере Бориса: обычно 1–2 коротких предложения.
@@ -46,7 +47,10 @@ async function boundedText(response, limit) {
 
 export function createGateway({ mode = 'mock', apiKey = '', model = '',
   baseUrl = 'https://api.openai.com/v1/', fetchImpl = fetch,
-  timeoutMs = 8000, rateLimit = 30, maxConcurrent = 2 } = {}) {
+  timeoutMs = 8000, voiceTimeoutMs = 25000, rateLimit = 30, maxConcurrent = 2,
+  voiceMode = 'disabled', sttModel = 'whisper-1', ttsModel = 'tts-1', ttsVoice = 'alloy' } = {}) {
+  if (!['disabled', 'ai'].includes(voiceMode)) throw new Error('VOICE_MODE must be disabled or ai');
+  if (voiceMode === 'ai' && !apiKey) throw new Error('Voice mode requires API_KEY');
   if (!['mock', 'ai'].includes(mode)) throw new Error('MODE must be mock or ai');
   if (mode === 'ai' && (!apiKey || !model)) throw new Error('AI mode requires API_KEY and MODEL');
   const base = new URL(baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
@@ -67,12 +71,15 @@ export function createGateway({ mode = 'mock', apiKey = '', model = '',
     if (!/^(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/.test(host) || req.headers.origin) {
       send(403, { error: 'local_desktop_only' }); req.resume(); return;
     }
-    if (req.method === 'GET' && req.url === '/health') { send(200, { status: 'ok', mode }); return; }
-    if (req.url !== '/dialogue') { send(404, { error: 'not_found' }); req.resume(); return; }
+    if (req.method === 'GET' && req.url === '/health') { send(200, { status: 'ok', mode, voice: voiceMode }); return; }
+    const isVoice = ['/transcribe', '/speech'].includes(req.url);
+    if (req.url !== '/dialogue' && !isVoice) { send(404, { error: 'not_found' }); req.resume(); return; }
     if (req.method !== 'POST') { send(405, { error: 'method_not_allowed' }); req.resume(); return; }
-    if (!(req.headers['content-type'] || '').startsWith('application/json')) {
-      send(415, { error: 'json_required' }); req.resume(); return;
+    const expectedType = req.url === '/transcribe' ? 'audio/wav' : 'application/json';
+    if (!(req.headers['content-type'] || '').startsWith(expectedType)) {
+      send(415, { error: 'unsupported_content_type' }); req.resume(); return;
     }
+    if (isVoice && voiceMode !== 'ai') { send(503, { error: 'voice_not_configured' }); req.resume(); return; }
     if (Date.now() - windowStart >= 60000) { windowStart = Date.now(); used = 0; }
     if (++used > rateLimit || active >= maxConcurrent) {
       send(429, { error: 'rate_limited' }); req.resume(); return;
@@ -80,7 +87,7 @@ export function createGateway({ mode = 'mock', apiKey = '', model = '',
     active++;
     const controller = new AbortController();
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; controller.abort(); send(504, { error: 'timeout' }); req.resume(); }, timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; controller.abort(); send(504, { error: 'timeout' }); req.resume(); }, isVoice ? voiceTimeoutMs : timeoutMs);
     const disconnected = () => { if (!res.writableEnded) controller.abort(); };
     res.on('close', disconnected);
     try {
@@ -88,10 +95,19 @@ export function createGateway({ mode = 'mock', apiKey = '', model = '',
       let size = 0;
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 16384) { send(413, { error: 'body_too_large' }); return; }
+        if (size > (req.url === '/transcribe' ? 2000000 : 16384)) { send(413, { error: 'body_too_large' }); return; }
         chunks.push(chunk);
       }
       if (controller.signal.aborted) return;
+      if (isVoice) {
+        await handleVoice({ path: req.url, bytes: Buffer.concat(chunks), send,
+          sendAudio: audio => {
+            if (res.destroyed || res.writableEnded) return;
+            res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': audio.length });
+            res.end(audio);
+          }, fetchImpl, base, apiKey, signal: controller.signal, sttModel, ttsModel, ttsVoice });
+        return;
+      }
       let data;
       try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { send(400, { error: 'invalid_json' }); return; }
@@ -118,7 +134,7 @@ export function createGateway({ mode = 'mock', apiKey = '', model = '',
       clearTimeout(timer); res.off('close', disconnected); active--;
     }
   });
-  server.requestTimeout = 10000;
+  server.requestTimeout = Math.max(10000, voiceTimeoutMs + 1000);
   server.headersTimeout = 5000;
   return server;
 }
