@@ -31,6 +31,7 @@ namespace Broker.Tests
             Assert.That(CityBlockPlan.SpawnX, Is.InRange(CityBlockPlan.PlazaMinX + 2, CityBlockPlan.PlazaMaxX - 2));
             Assert.That(CityBlockPlan.SpawnZ, Is.InRange(CityBlockPlan.PlazaMinZ + 2, CityBlockPlan.PlazaMaxZ - 2));
             Assert.That(CityBlockPlan.SpawnY, Is.GreaterThan(CityBlockPlan.GroundY));
+            Assert.That(CityBlockPlan.TerrainTopY, Is.LessThan(CityBlockPlan.GroundY - 0.05f), "Scenery ground must not overlap the plaza floor");
         }
         [TestCase(0)] [TestCase(1)] [TestCase(2)] [TestCase(3)]
         public void VisualTrafficIsBoundedAndLoops(int lane)

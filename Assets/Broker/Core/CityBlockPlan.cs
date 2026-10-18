@@ -16,6 +16,7 @@ namespace Broker.Core
     public sealed class CityBlockPlan
     {
         public const float GroundY = -8f;
+        public const float TerrainTopY = GroundY - 0.1f;
         public const float SpawnX = 0f, SpawnY = GroundY + 0.05f, SpawnZ = 16f;
         public const float PlazaMinX = -15f, PlazaMaxX = 15f, PlazaMinZ = 8f, PlazaMaxZ = 28f;
         public ReadOnlyCollection<CityBuilding> Buildings { get; }

@@ -35,6 +35,7 @@ namespace Broker.Runtime.Office
             var obj = GameObject.CreatePrimitive(type); obj.name = name; obj.transform.SetParent(parent, false);
             obj.transform.localPosition = position; obj.transform.localScale = scale;
             obj.GetComponent<Renderer>().sharedMaterial = material;
+            MapSurface(obj, type, scale, material);
             var collider = obj.GetComponent<Collider>(); if (!solid && collider != null) Destroy(collider);
             return obj;
         }
@@ -53,10 +54,12 @@ namespace Broker.Runtime.Office
         {
             transform.position = new Vector3(500, 0, 0);
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            navy = Mat("#182B40"); wood = Mat("#786957"); brass = Mat("#D2A352"); green = Mat("#70CDBF", true);
+            navy = Mat("#182B40"); wood = Surface("wood", "#FFFFFF", 1.4f, 0.28f, 0.25f); brass = Mat("#D2A352"); green = Mat("#70CDBF", true);
             amber = Mat("#D99149"); ink = Mat("#14232A"); cream = Mat("#E9E1CE"); skin = Mat("#DCB18B");
             phoneMaterial = Mat("#294650");
-            var wall = Mat("#A7B3BC"); var floor = Mat("#56616C"); var plank = Mat("#5C6874");
+            var wall = Surface("plaster", "#D5DDE5", 2f, 0.08f, 0.25f);
+            var floor = Surface("wood", "#C5CAD0", 1.4f, 0.2f, 0.22f);
+            var plank = Surface("wood", "#CED3D9", 1.4f, 0.2f, 0.22f);
             var lights = Mat("#DDEEE9", true);
             previousAmbientMode = RenderSettings.ambientMode; previousAmbient = RenderSettings.ambientLight;
             RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.51f, 0.56f, 0.61f);
@@ -219,6 +222,7 @@ namespace Broker.Runtime.Office
         private void OnDestroy()
         {
             RestoreCityEnvironment();
+            ReleaseSurfaces();
             RenderSettings.ambientMode = previousAmbientMode; RenderSettings.ambientLight = previousAmbient;
             foreach (var material in materials) if (material != null) Destroy(material);
         }

@@ -16,11 +16,13 @@ namespace Broker.Runtime.Office
 
         private void BuildCity()
         {
-            var pavement = Mat("#65747E"); var asphalt = Mat("#253140"); var concrete = Mat("#465365");
+            var pavement = Surface("concrete", "#B9C7D0", 2f, 0.12f, 0.3f);
+            var asphalt = Surface("asphalt", "#8998A8", 3f, 0.04f, 0.3f);
+            var concrete = Surface("concrete", "#8D9DAF", 2f, 0.08f, 0.25f);
             var cityLight = Mat("#A5DAD5", true); var warmLight = Mat("#EBCB99", true);
             var facades = new[] { Mat("#2C4054"), Mat("#455061"), Mat("#344C58") };
             const float ground = CityBlockPlan.GroundY;
-            Box("City / terrain", new Vector3(0, ground - 0.25f, 59), new Vector3(120, 0.5f, 112), concrete, false);
+            Box("City / terrain", new Vector3(0, CityBlockPlan.TerrainTopY - 0.25f, 59), new Vector3(120, 0.5f, 112), concrete, false);
             Box("City / walkable plaza", new Vector3(0, ground - 0.12f, 18), new Vector3(32, 0.24f, 22), pavement);
             for (int i = 0; i < 9; i++)
                 Box("Plaza / paving joint", new Vector3(-14 + i * 3.5f, ground + 0.008f, 18), new Vector3(0.025f, 0.012f, 20), concrete, false);
