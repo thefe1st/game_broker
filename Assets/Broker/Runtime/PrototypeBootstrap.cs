@@ -19,6 +19,7 @@ namespace Broker.Runtime
         private int revision;
         private bool busy, useGateway, voiceEnabled, lastDayEnded, showNews, intro = true;
         private Vector2 newsScroll;
+        private double toastUntil;
         private VoiceSession voice;
         private OfficeScene office;
         private BrokerTheme theme;
@@ -59,6 +60,7 @@ namespace Broker.Runtime
             if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
             bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
+            office.WorldMotionEnabled = !blocked && navigation.RunsClock && !busy && !voice.Working;
             office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
             DrainNews(); office.Refresh(day);
         }
@@ -70,7 +72,7 @@ namespace Broker.Runtime
         }
         private void Restart()
         {
-            CancelPending(); showVoiceSetup = false; confirmation = ConfirmationKind.None;
+            CancelPending(); showVoiceSetup = false; showCallLog = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
             if (career.IsFinished)
             {
                 // Presentation-only day: the actual final ledger is stored in CareerState.
@@ -91,6 +93,7 @@ namespace Broker.Runtime
         }
         private void News(string text)
         {
+            toastUntil = Time.realtimeSinceStartupAsDouble + 5;
             officeNews.Add(text); if (officeNews.Count > 30) officeNews.RemoveAt(0);
         }
         private void CancelPending()
@@ -100,7 +103,11 @@ namespace Broker.Runtime
         private void Add(string line) { Conversation.Add(line); if (Conversation.Count > 80) Conversation.RemoveAt(0); scroll.y = float.MaxValue; }
         private void PresentClientReply(string reply)
         {
-            Add(reply); History.Add(new DialogueTurn("client", reply));
+            // External providers may return text without a speaker prefix. Keep the
+            // display history consistent so the compact latest-reply view never stays stale.
+            string prefix = day.Current.Name + ": ";
+            Add(reply.StartsWith(prefix, StringComparison.Ordinal) ? reply : prefix + reply);
+            History.Add(new DialogueTurn("client", reply));
             while (History.Count > 12) History.RemoveAt(0);
             if (voiceEnabled && !day.DayEnded && day.PendingEvent == null) voice.PlayReply(reply);
         }
@@ -141,7 +148,7 @@ namespace Broker.Runtime
         }
         private void Panel(float x, float y, float w, float h, string title)
         {
-            Paint(new Rect(x, y, w, h), theme.Surface); Paint(new Rect(x, y, w, 2), theme.Border);
+            GUI.Box(new Rect(x, y, w, h), "", theme.PanelStyle);
             if (!string.IsNullOrEmpty(title)) Label(x + 20, y + 16, w - 40, 30, title, theme.Heading);
         }
         private void Meter(float x, float y, float w, float value, Color color)
@@ -155,7 +162,7 @@ namespace Broker.Runtime
             {
                 GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
                 GUI.enabled = true;
-                if (showVoiceSetup) DrawVoiceSetup(); else DrawConfirmation();
+                if (showVoiceSetup) DrawVoiceSetup(); else if (showCallLog) DrawCallLog(); else DrawConfirmation();
                 GUI.matrix = previous;
                 return;
             }
@@ -166,159 +173,36 @@ namespace Broker.Runtime
                 GUI.matrix = previous;
                 return;
             }
-            var view = new Rect(canvasOffset.x + 340 * canvasScale, canvasOffset.y + 110 * canvasScale, 720 * canvasScale, 300 * canvasScale);
-            // Leave the camera viewport uncovered by the GUI background.
-            Paint(new Rect(0, 0, Screen.width, view.y), theme.Canvas);
-            Paint(new Rect(0, view.yMax, Screen.width, Screen.height - view.yMax), theme.Canvas);
-            Paint(new Rect(0, view.y, view.x, view.height), theme.Canvas);
-            Paint(new Rect(view.xMax, view.y, Screen.width - view.xMax, view.height), theme.Canvas);
             GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
-            bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
-            GUI.enabled = !blocked;
-            DrawHeader(); DrawClients(); DrawEconomy(); DrawOfficeNews(); DrawConversation(); DrawTeam(); DrawSettings();
+            DrawModernDesk();
             GUI.enabled = true;
             if (intro) DrawIntro(); else if (day.DayEnded) DrawResults(); else if (day.PendingEvent != null) DrawEvent(); else if (showNews) DrawNewsJournal();
             GUI.matrix = previous;
         }
-        private void DrawHeader()
-        {
-            Label(24, 20, 400, 36, "АЛЛО, ЭТО ДЕНЬГИ", theme.Title);
-            Label(24, 58, 400, 24, "ДЕНЬ " + day.DayNumber + "/3  /  " + day.DayTitle.ToUpperInvariant(), theme.Small);
-            int seconds = Mathf.CeilToInt(day.RemainingSeconds);
-            Label(470, 20, 150, 30, $"{seconds / 60:00}:{seconds % 60:00}", theme.Title); Label(470, 56, 150, 24, "до конца дня", theme.Small);
-            Label(650, 20, 170, 30, "$" + day.Cash, theme.Title); Label(650, 56, 170, 24, "в кассе / нужно " + day.TotalExpenses, theme.Small);
-            Label(850, 20, 160, 30, day.TeamMorale + "%", theme.Title); Label(850, 56, 160, 24, "настроение команды", theme.Small);
-            Label(1040, 20, 160, 30, day.Reputation + "/100", theme.Title); Label(1040, 56, 160, 24, "репутация", theme.Small);
-            if (Button(1230, 24, 190, 48, "Встать / Esc")) { CancelPending(); EnterWorld(); }
-        }
-        private void DrawClients()
-        {
-            Panel(20, 110, 300, 470, "КЛИЕНТСКАЯ БАЗА");
-            for (int i = 0; i < day.Clients.Count; i++)
-            {
-                var client = day.Clients[i]; float y = 164 + i * 108;
-                bool chosen = i == day.SelectedClientIndex;
-                Paint(new Rect(36, y, 268, 98), chosen ? BrokerTheme.Hex("#304750") : BrokerTheme.Hex("#14262E"));
-                if (chosen) Paint(new Rect(36, y, 3, 98), theme.Gold);
-                bool canSelect = !busy && day.Call != CallStatus.Active;
-                if (Button(40, y + 4, 260, 90, "", canSelect))
-                {
-                    CancelPending();
-                    if (day.SelectClient(i)) { message = ""; scroll = Vector2.zero; }
-                }
-                Label(52, y + 8, 150, 28, client.Name, theme.Heading);
-                Label(212, y + 12, 76, 24, "+$" + client.Commission, theme.Tag);
-                Label(52, y + 38, 232, 24, client.Role, theme.Small);
-                Label(52, y + 65, 232, 24, client.DealClosed ? "СДЕЛКА ЗАКРЫТА" : client.Call == CallStatus.Closed ? "ЗВОНОК ЗАВЕРШЁН" : client.Call == CallStatus.Active ? "НА ЛИНИИ" : chosen ? "ВЫБРАН ДЛЯ ЗВОНКА" : "ОЖИДАЕТ ЗВОНКА", theme.Tag);
-            }
-            if (Button(40, 510, 260, 48, day.Call == CallStatus.Active ? "Разговор идёт…" : "Позвонить: " + day.Current.Name, day.Call == CallStatus.NotStarted && !busy, true))
-                PresentClientReply(day.StartCall());
-        }
-        private void DrawEconomy()
-        {
-            Panel(20, 596, 300, 324, "КАССА И АПГРЕЙДЫ");
-            Label(40, 644, 260, 48, "Аренда $" + day.DailyRent + " + зарплаты $" + day.DailyPayroll + "\nВсего $" + day.TotalExpenses + (day.CarryDebt > 0 ? " (долг $" + day.CarryDebt + ")" : ""), theme.Small);
-            Meter(40, 702, 260, day.Cash / (float)day.TotalExpenses, day.Successful ? theme.Green : theme.Gold);
-            if (Button(40, 724, 260, 48, day.CoffeeBought ? "Кофе уже куплен" : "Кофе команде • $40", !day.CoffeeBought && day.Cash >= 40)) News(day.BuyCoffee());
-            if (Button(40, 784, 260, 48, day.HasGoldenPhone ? "Золотой телефон установлен" : "Золотой телефон • $90", !day.HasGoldenPhone && day.Cash >= 90)) News(day.BuyGoldenPhone());
-            Label(40, 846, 260, 60, "Кофе: +20 настроения.\nТелефон: +1 доверия оставшихся клиентов. Не забудь про зарплаты.", theme.Small);
-        }
-        private void DrawOfficeNews()
-        {
-            Label(356, 120, 680, 24, "МОЙКА КАПИТАЛ  /  ВИД ИЗ КАБИНЕТА", theme.Tag);
-            Panel(340, 426, 720, 66, "");
-            string news = officeNews.Count == 0 ? "Офис пока подозрительно тихий." : officeNews[officeNews.Count - 1];
-            if (news.Length > 140) news = news.Substring(0, 137) + "…";
-            Label(356, 434, 560, 48, news, theme.Small);
-            if (Button(932, 436, 112, 44, "Журнал")) showNews = true;
-        }
-        private void DrawConversation()
-        {
-            Panel(340, 508, 720, 412, "ЛИНИЯ: " + day.Current.Name.ToUpperInvariant());
-            Label(830, 525, 210, 26, "ДОВЕРИЕ  " + day.Trust + "/4", theme.Tag);
-            Label(360, 556, 680, 40, day.NextConversationStep, theme.Small);
-            var transcriptRect = new Rect(356, 606, 688, 132);
-            float height = 10;
-            foreach (var line in Conversation) height += theme.Text.CalcHeight(new GUIContent(line), 648) + 16;
-            string emptyText = day.Current.Brief + (day.Current.Returning ? " Клиент помнит прошлый день: обсудите отчёт до новой сделки." : "") + "\n\nПродукт: «Мойка-Капитал». Риск убытка, комиссия 2%, срок — год, персональный отчёт.";
-            float emptyHeight = theme.Text.CalcHeight(new GUIContent(emptyText), 636);
-            if (Conversation.Count == 0) height = Mathf.Max(height, emptyHeight + 12);
-            scroll = GUI.BeginScrollView(transcriptRect, scroll, new Rect(0, 0, 654, Mathf.Max(132, height)));
-            float y = 4;
-            if (Conversation.Count == 0)
-                GUI.Label(new Rect(4, y, 636, emptyHeight), emptyText, theme.Text);
-            else foreach (var line in Conversation)
-            {
-                float lineHeight = theme.Text.CalcHeight(new GUIContent(line), 648);
-                GUI.Label(new Rect(4, y, 648, lineHeight), line, theme.Text); y += lineHeight + 16;
-            }
-            GUI.EndScrollView();
-            bool canTalk = day.Call == CallStatus.Active && !busy && !voice.Recording && !voice.Working;
-            bool enabled = GUI.enabled; GUI.enabled = enabled && canTalk;
-            GUI.SetNextControlName("BrokerMessage");
-            message = GUI.TextField(new Rect(360, 750, 680, 48), message, 500, theme.Field); GUI.enabled = enabled;
-            if (GUI.enabled && canTalk && GUI.GetNameOfFocusedControl() == "BrokerMessage"
-                && Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
-            { Event.current.Use(); SendMessageToClient(); }
-            if (Button(360, 812, 212, 44, busy ? "Клиент думает…" : "Отправить", canTalk && !string.IsNullOrWhiteSpace(message), true)) { SendMessageToClient(); GUI.FocusControl(null); }
-            if (Button(584, 812, 220, 44, !day.Current.ObjectionRaised ? "Предложить сделку" : day.Current.ObjectionResolved ? "Закрыть сделку" : "Повторить вопрос", canTalk)) PresentClientReply(day.OfferDeal());
-            if (Button(816, 812, 224, 44, "Повесить трубку", day.Call == CallStatus.Active)) { CancelPending(); PresentClientReply(day.EndCall()); }
-            if (voiceEnabled)
-            {
-                if (Button(360, 868, 440, 44, voice.Recording ? "Закончить запись и распознать" : "Записать реплику • до 20 секунд", day.Call == CallStatus.Active && !busy && !voice.Working))
-                { if (voice.Recording) voice.FinishRecording(); else voice.BeginRecording(); }
-                if (Button(816, 868, 224, 44, "Остановить голос")) voice.Cancel();
-            }
-            else Label(360, 872, 680, 36, "После предложения выслушай вопрос клиента. Давление снижает доверие; повторы его не повышают.", theme.Small);
-        }
-        private void DrawTeam()
-        {
-            Panel(1080, 110, 340, 500, "ВАША КОМАНДА");
-            for (int i = 0; i < day.Employees.Count; i++)
-            {
-                var worker = day.Employees[i]; float y = 164 + i * 214;
-                Label(1100, y, 200, 28, worker.Name, theme.Heading); Label(1310, y + 2, 90, 24, worker.Morale + "%", theme.Tag);
-                Label(1100, y + 34, 300, 48, worker.Trait, theme.Small);
-                string work = worker.Work == WorkKind.Idle ? "Свободен" : worker.Work == WorkKind.Research ? "Досье: " + day.Clients[worker.TargetClient].Name : worker.Work == WorkKind.Leads ? "Побочный обзвон" : "На перерыве";
-                Label(1100, y + 88, 300, 26, work + (worker.Work == WorkKind.Idle ? "" : " • " + Mathf.CeilToInt(worker.Remaining) + " с"), theme.Small);
-                Meter(1100, y + 122, 300, worker.Work == WorkKind.Idle ? 0 : 1 - worker.Remaining / worker.Duration, theme.Green);
-                bool idle = worker.Work == WorkKind.Idle;
-                if (Button(1100, y + 140, 92, 44, "Досье", idle && !day.Current.Researched)) News(day.AssignTask(i, WorkKind.Research, day.SelectedClientIndex));
-                if (Button(1204, y + 140, 92, 44, "Обзвон", idle && !worker.SideDealDone)) News(day.AssignTask(i, WorkKind.Leads, day.SelectedClientIndex));
-                if (Button(1308, y + 140, 92, 44, "Перерыв", idle)) News(day.AssignTask(i, WorkKind.Break, day.SelectedClientIndex));
-            }
-        }
-        private void DrawSettings()
-        {
-            Panel(1080, 626, 340, 294, "СВЯЗЬ И ПАМЯТКА");
-            bool before = GUI.enabled; GUI.enabled = before && !busy && day.Call != CallStatus.Active;
-            useGateway = GUI.Toggle(new Rect(1100, 676, 300, 44), useGateway, " ИИ-формулировки через сервер", theme.Button); GUI.enabled = before;
-            bool nextVoice = GUI.Toggle(new Rect(1100, 732, 300, 44), voiceEnabled, " Голос: отправка записи внешнему API", theme.Button);
-            if (nextVoice != voiceEnabled) { voiceEnabled = nextVoice; if (!voiceEnabled) voice.Cancel(); }
-            if (Button(1100, 790, 300, 40, "Проверка микрофона и связи", !busy && !voice.Working && !voice.Recording)) OpenVoiceSetup();
-            Label(1100, 842, 300, 64, voiceEnabled ? voice.Status : "Голос необязателен. Микрофон можно проверить без API и сервера.", theme.Small);
-        }
-        private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.02f, 0.05f, 0.07f, 0.92f)); }
+        private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.035f, 0.055f, 0.09f, 0.86f)); }
         private void DrawIntro()
         {
-            Scrim(); Panel(340, 180, 760, 600, "ДЕНЬ " + day.DayNumber + "/3 / " + day.DayTitle.ToUpperInvariant());
-            Label(372, 244, 696, 76, day.DayNumber == 1 ? "Вы — генеральный директор.\nОб этом пока знают только визитки." : "Они помнят вчерашний разговор.\nТеперь нужны не только обещания.", theme.Title);
-            Label(372, 344, 696, 136, "WASD — ходить. Мышь — осмотр. E — действие. Esc — пауза.\n\nВ кассе $" + day.OpeningCash + ". Обязательства сегодня: $" + day.TotalExpenses + ". " + (day.CarryDebt > 0 ? "Включая долг $" + day.CarryDebt + ". " : "") + "К финалу третьего дня нужны неотрицательный баланс и репутация от 40.", theme.Text);
-            Label(372, 500, 696, 76, day.DayNumber == 1 ? "Стол и телефон — звонки. Сотрудники — поручения. Дверь — конец дня. После завершения дня прогресс сохранится." : "Вернувшимся клиентам сначала нужен отчёт. Деньги, долг, репутация и купленный телефон перенесены. Задания и кофейный бюджет начались заново.", theme.Text);
-            Label(372, 598, 696, 64, saveNotice + "\nТекущие звонки не сохраняются. Все продукты и деньги вымышлены.", theme.Small);
-            if (Button(372, 664, 696, 32, "Проверить микрофон без API")) OpenVoiceSetup();
-            if (Button(372, 708, 696, 52, "Начать день " + day.DayNumber + " / Войти в офис", true, true)) { intro = false; EnterWorld(); }
+            Scrim(); Panel(280, 112, 880, 736, "");
+            Label(320, 152, 800, 32, "ДЕНЬ " + day.DayNumber + " / 3", theme.Tag);
+            Label(320, 208, 800, 132, day.DayNumber == 1 ? "МАЛЕНЬКАЯ КОНТОРА.\nБОЛЬШИЕ АМБИЦИИ." : "СЕГОДНЯ ВАС\nУЖЕ ПОМНЯТ.", theme.Display);
+            MetricCard(320, 376, 248, "В кассе", "$" + day.OpeningCash);
+            MetricCard(592, 376, 248, "Счета сегодня", "$" + day.TotalExpenses);
+            MetricCard(864, 376, 256, "Клиенты", "3");
+            Label(320, 520, 800, 28, "WASD — ходить    Мышь — обзор    E — действие    Esc — пауза", theme.Small);
+            Label(320, 560, 800, 52, saveNotice, theme.Small);
+            if (Button(320, 632, 800, 56, "Начать день " + day.DayNumber, true, true)) { intro = false; EnterWorld(); }
+            if (Button(320, 704, 800, 48, "Проверить микрофон без API")) OpenVoiceSetup();
+            Label(320, 792, 800, 28, "Лифт справа — в квартал. Дверь у входа — закончить день.", theme.Small);
         }
         private void DrawEvent()
         {
             Scrim(); var item = day.PendingEvent;
-            Panel(340, 228, 760, 490, "ОФИСНОЕ ПРОИСШЕСТВИЕ / ВРЕМЯ НА ПАУЗЕ");
-            Label(372, 294, 696, 80, item.Title, theme.Title);
-            Label(372, 388, 696, 96, item.Description, theme.Text);
-            if (Button(372, 514, 696, 56, item.FirstChoice, day.Cash >= item.FirstChoiceCost)) ResolveOfficeEvent(0);
-            // Resolution may replace PendingEvent; the local immutable item stays safe for this GUI frame.
-            if (Button(372, 590, 696, 56, item.SecondChoice)) ResolveOfficeEvent(1);
-            Label(372, 668, 696, 30, "В кассе $" + day.Cash + ". Бесплатный вариант доступен всегда.", theme.Small);
+            Panel(280, 188, 880, 584, ""); Label(320, 224, 800, 28, "РЕШЕНИЕ / ВРЕМЯ НА ПАУЗЕ", theme.Tag);
+            Label(320, 284, 800, 92, item.Title, theme.Title);
+            Label(320, 392, 800, 84, item.Description, theme.Text);
+            if (Button(320, 492, 384, 136, item.FirstChoice, day.Cash >= item.FirstChoiceCost, true)) ResolveOfficeEvent(0);
+            if (Button(736, 492, 384, 136, item.SecondChoice)) ResolveOfficeEvent(1);
+            Label(320, 688, 800, 32, "В кассе $" + day.Cash, theme.Heading);
         }
         private void DrawNewsJournal()
         {
@@ -338,14 +222,19 @@ namespace Broker.Runtime
         private void DrawResults()
         {
             if (career.IsFinished) { DrawCareerFinal(); return; }
-            Scrim(); Panel(340, 116, 760, 728, "ДЕНЬ " + day.DayNumber + "/3 ЗАКРЫТ");
-            Label(372, 178, 696, 72, day.Successful ? "КОНТОРА ПЕРЕЖИЛА ДЕНЬ." : "ДОЛГ ПЕРЕХОДИТ НА ЗАВТРА.", theme.Title);
-            Label(372, 270, 696, 220, "Было в кассе утром: $" + day.OpeningCash + "\nЗаработано: $" + day.Earned + "\nПотрачено за день: $" + day.Spent + "\nОбязательства (включая старый долг): $" + day.TotalExpenses + "\nОстаток / долг после расчёта: $" + day.FinalBalance + "\nОсновных сделок: " + day.DealsCount + "/3\nРепутация: " + day.Reputation + "/100", theme.Text);
-            Label(372, 506, 696, 56, (saveSucceeded ? "" : "ВНИМАНИЕ: ") + saveNotice, theme.Small);
+            Scrim(); Panel(280, 112, 880, 736, "");
+            Label(320, 152, 800, 28, "ДЕНЬ " + day.DayNumber + " ЗАКРЫТ", theme.Tag);
+            Label(320, 208, 800, 72, day.Successful ? "КОНТОРА ЖИВЁТ." : "ДОЛГ НА ЗАВТРА.", theme.Display);
+            MetricCard(320, 304, 248, "Остаток / долг", "$" + day.FinalBalance);
+            MetricCard(592, 304, 248, "Сделки", day.DealsCount + " / 3");
+            MetricCard(864, 304, 256, "Репутация", day.Reputation + "/100");
+            Label(320, 448, 800, 28, "Утро + доход − покупки − счета", theme.Small);
+            Label(320, 488, 800, 48, "$" + day.OpeningCash + " + $" + day.Earned + " − $" + day.Spent + " − $" + day.TotalExpenses + " = $" + day.FinalBalance, theme.Heading);
+            Label(320, 560, 800, 52, saveNotice, theme.Small);
             bool settled = career.CompletedDays == day.DayNumber;
-            if (Button(372, 590, 696, 52, "Следующий день" + (saveSucceeded ? "" : " (пока без записи на диск)"), settled, true)) Restart();
-            if (Button(372, 662, 696, 48, "Новая кампания (сбросить прогресс)")) RequestConfirmation(ConfirmationKind.NewCareer);
-            if (!saveSucceeded && Button(372, 726, 696, 48, "Повторить сохранение")) SaveCareer();
+            if (Button(320, 632, 800, 56, saveSucceeded ? "Следующий день" : "Продолжить без записи на диск", settled, true)) Restart();
+            if (Button(320, 704, 800, 48, "Новая кампания")) RequestConfirmation(ConfirmationKind.NewCareer);
+            if (!saveSucceeded && Button(320, 776, 800, 48, "Повторить сохранение")) SaveCareer();
         }
     }
 }

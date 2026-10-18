@@ -7,7 +7,7 @@ namespace Broker.Runtime
         private enum ConfirmationKind { None, RestartDay, NewCareer }
         private ConfirmationKind confirmation;
         private bool showVoiceSetup;
-        private bool UtilityOverlayOpen => showVoiceSetup || confirmation != ConfirmationKind.None;
+        private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || confirmation != ConfirmationKind.None;
 
         private void OpenVoiceSetup()
         {
@@ -17,7 +17,7 @@ namespace Broker.Runtime
 
         private void CloseUtilityOverlay()
         {
-            voice.Cancel(); showVoiceSetup = false; confirmation = ConfirmationKind.None;
+            voice.Cancel(); showVoiceSetup = false; showCallLog = false; confirmation = ConfirmationKind.None;
             // Also called from Update on Escape: do not call IMGUI APIs here.
             // Return to the original intro/pause/desk, not directly to exploration.
         }

@@ -1,6 +1,6 @@
 namespace Broker.Core
 {
-    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit }
+    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit, Street, ReturnOffice }
     public enum OfficeView { Explore, Desk, Employee, Coffee, Upgrade, Exit, Pause }
 
     // UI routing only. Never grants money, ends calls or completes staff tasks.

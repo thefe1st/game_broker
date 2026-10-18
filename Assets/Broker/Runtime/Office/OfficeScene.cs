@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 namespace Broker.Runtime.Office
 {
     // Procedural low-poly set. All objects are visible/editable in Play Mode.
-    public sealed class OfficeScene : MonoBehaviour
+    public sealed partial class OfficeScene : MonoBehaviour
     {
         private readonly List<Material> materials = new List<Material>();
         private readonly Transform[] people = new Transform[2], heads = new Transform[2], arms = new Transform[4];
@@ -53,16 +53,19 @@ namespace Broker.Runtime.Office
         {
             transform.position = new Vector3(500, 0, 0);
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            navy = Mat("#19323C"); wood = Mat("#9C6542"); brass = Mat("#D2A352"); green = Mat("#65BCA3", true);
+            navy = Mat("#182B40"); wood = Mat("#786957"); brass = Mat("#D2A352"); green = Mat("#70CDBF", true);
             amber = Mat("#D99149"); ink = Mat("#14232A"); cream = Mat("#E9E1CE"); skin = Mat("#DCB18B");
             phoneMaterial = Mat("#294650");
-            var wall = Mat("#D8CDB9"); var floor = Mat("#785A45"); var plank = Mat("#8C6950");
-            var sky = Mat("#92B5C0", true); var trim = Mat("#4B666C"); var lights = Mat("#FFF0C6", true);
+            var wall = Mat("#A7B3BC"); var floor = Mat("#56616C"); var plank = Mat("#5C6874");
+            var lights = Mat("#DDEEE9", true);
             previousAmbientMode = RenderSettings.ambientMode; previousAmbient = RenderSettings.ambientLight;
-            RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.43f, 0.46f, 0.47f);
+            RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.51f, 0.56f, 0.61f);
             Box("Floor collider", new Vector3(0, -0.15f, 0), new Vector3(12.4f, 0.3f, 9.4f), floor);
             for (int i = 0; i < 12; i++) Box("Wood floor strip", new Vector3(-5.5f + i, 0.005f, 0), new Vector3(0.985f, 0.01f, 9), i % 2 == 0 ? floor : plank, false);
-            Box("Rear wall", new Vector3(0, 1.9f, 4.6f), new Vector3(12.4f, 3.8f, 0.2f), wall);
+            Box("Rear wall / base", new Vector3(0, 0.65f, 4.6f), new Vector3(12.4f, 1.3f, 0.2f), wall);
+            Box("Rear wall / lintel", new Vector3(0, 3.6f, 4.6f), new Vector3(12.4f, 0.6f, 0.2f), wall);
+            foreach (float x in new[] { -5.625f, -1.8f, 1.8f, 5.625f })
+                Box("Rear wall / pier", new Vector3(x, 2.3f, 4.6f), new Vector3(Mathf.Abs(x) > 5 ? 1.15f : 0.7f, 2, 0.2f), wall);
             Box("Front wall", new Vector3(0, 1.9f, -4.6f), new Vector3(12.4f, 3.8f, 0.2f), wall);
             Box("Left wall", new Vector3(-6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), navy);
             Box("Right wall", new Vector3(6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), wall);
@@ -71,14 +74,13 @@ namespace Broker.Runtime.Office
             for (int i = 0; i < 3; i++)
             {
                 float x = -3.6f + i * 3.6f;
-                Box("Window frame", new Vector3(x, 2.35f, 4.42f), new Vector3(2.9f, 1.85f, 0.12f), navy);
-                Box("Window sky", new Vector3(x, 2.35f, 4.32f), new Vector3(2.66f, 1.62f, 0.08f), sky, false);
-                for (int b = 0; b < 5; b++)
-                {
-                    float h = 0.22f + ((b * 3 + i) % 4) * 0.12f;
-                    Box("Distant city silhouette", new Vector3(x - 1.0f + b * 0.5f, 1.56f + h * 0.5f, 4.25f), new Vector3(0.34f, h, 0.04f), trim, false);
-                }
-                Box("Window mullion", new Vector3(x, 2.35f, 4.16f), new Vector3(0.06f, 1.66f, 0.08f), cream, false);
+                foreach (float dx in new[] { -1.42f, 1.42f })
+                    Box("Window / frame side", new Vector3(x + dx, 2.3f, 4.47f), new Vector3(0.07f, 2.02f, 0.15f), navy);
+                foreach (float y in new[] { 1.32f, 3.28f })
+                    Box("Window / frame rail", new Vector3(x, y, 4.47f), new Vector3(2.9f, 0.07f, 0.15f), navy);
+                var glass = Box("Window / invisible safety pane", new Vector3(x, 2.3f, 4.53f), new Vector3(2.8f, 1.96f, 0.05f), navy);
+                glass.GetComponent<Renderer>().enabled = false;
+                Box("Window mullion", new Vector3(x, 2.3f, 4.42f), new Vector3(0.05f, 1.96f, 0.06f), cream, false);
                 Box("Window sill", new Vector3(x, 1.43f, 4.2f), new Vector3(3.0f, 0.12f, 0.35f), cream);
             }
             Box("Company plaque", new Vector3(0, 3.42f, 4.35f), new Vector3(6.0f, 0.45f, 0.1f), navy, false);
@@ -91,6 +93,7 @@ namespace Broker.Runtime.Office
                 var point = lamp.AddComponent<Light>(); point.type = LightType.Point; point.range = 8; point.intensity = 1.1f;
                 point.color = new Color(1, 0.88f, 0.69f);
             }
+            BuildCity();
             BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor();
             Box("Plant pot", new Vector3(5.3f, 0.32f, 3.3f), new Vector3(0.6f, 0.64f, 0.6f), brass);
             Box("Plant stem", new Vector3(5.3f, 0.96f, 3.3f), new Vector3(0.08f, 0.8f, 0.08f), wood, false);
@@ -105,7 +108,7 @@ namespace Broker.Runtime.Office
             var camera = new GameObject("Desk overview camera"); camera.transform.SetParent(transform, false);
             overview = camera.AddComponent<Camera>(); overview.depth = 10; overview.clearFlags = CameraClearFlags.SolidColor;
             overview.backgroundColor = new Color(0.10f, 0.17f, 0.2f); overview.orthographic = true;
-            overview.orthographicSize = 5.5f; overview.nearClipPlane = 0.1f; overview.farClipPlane = 100;
+            overview.orthographicSize = 5.5f; overview.nearClipPlane = 0.1f; overview.farClipPlane = 180;
             camera.transform.localPosition = new Vector3(10, 12, -14); camera.transform.LookAt(transform.TransformPoint(new Vector3(0, 0.9f, 0.4f)));
             overview.enabled = false;
         }
@@ -194,10 +197,10 @@ namespace Broker.Runtime.Office
             if (overview == null || Player == null) return;
             overview.enabled = atDesk; Player.Eye.enabled = !atDesk;
             ceilingRenderer.enabled = !atDesk; // The desk overview must see inside the room, not the roof.
-            if (atDesk) overview.pixelRect = new Rect(offset.x + 340 * scale, Screen.height - offset.y - 410 * scale, 720 * scale, 300 * scale);
+            if (atDesk) overview.rect = new Rect(0, 0, 1, 1);
             else Player.Eye.rect = new Rect(0, 0, 1, 1);
         }
-        public void ResetPlayer() { Player.ResetAt(transform.TransformPoint(new Vector3(0, 0.05f, -3.4f))); }
+        public void ResetPlayer() { IsInCity = false; Player.ResetAt(transform.TransformPoint(new Vector3(0, 0.05f, -3.4f))); }
         public void Refresh(BrokerDay day)
         {
             if (day == null) return;
@@ -215,6 +218,7 @@ namespace Broker.Runtime.Office
         }
         private void OnDestroy()
         {
+            RestoreCityEnvironment();
             RenderSettings.ambientMode = previousAmbientMode; RenderSettings.ambientLight = previousAmbient;
             foreach (var material in materials) if (material != null) Destroy(material);
         }

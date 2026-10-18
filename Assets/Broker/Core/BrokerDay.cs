@@ -96,23 +96,44 @@ namespace Broker.Core
             if (Current.Id == "artem") return "Артём: А у вас есть что-нибудь для особенных клиентов? Только не называйте меня обычным.";
             return "Борис: У меня три автомойки. Чем ваши бумажки лучше четвёртой?";
         }
+        public ConversationStage ConversationStep
+        {
+            get
+            {
+                if (DayEnded) return ConversationStage.DayEnded;
+                if (Call == CallStatus.NotStarted) return ConversationStage.AwaitingCall;
+                if (Call == CallStatus.Closed) return ConversationStage.Closed;
+                if (!Current.ReportReviewed) return ConversationStage.Report;
+                if (!NeedsKnown) return ConversationStage.Goal;
+                if (!RisksExplained) return ConversationStage.Risk;
+                if (!FeesExplained) return ConversationStage.Fee;
+                if (Current.Id == "inna" && !Current.SpecialDiscussed) return ConversationStage.Term;
+                if (Current.Id == "artem" && !Current.SpecialDiscussed) return ConversationStage.Service;
+                if (!Current.ObjectionRaised) return ConversationStage.Proposal;
+                if (!Current.ObjectionResolved) return ConversationStage.Objection;
+                return Trust < 2 ? ConversationStage.Trust : ConversationStage.Ready;
+            }
+        }
         public string NextConversationStep
         {
             get
             {
-                if (DayEnded) return "День завершён. Результаты — в итоговом отчёте.";
-                if (Call == CallStatus.NotStarted) return "Позвони клиенту и выясни, для чего ему нужны деньги.";
-                if (Call == CallStatus.Closed) return DealClosed ? "Сделка закрыта. Можно выбрать следующего клиента." : "Звонок завершён. Можно выбрать другого клиента.";
-                if (!Current.ReportReviewed) return "Сначала обсуди отчёт по прошлому разговору.";
-                if (!NeedsKnown) return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
-                if (!RisksExplained) return "Дальше: объясни риск убытка, без обещаний гарантированной прибыли.";
-                if (!FeesExplained) return "Дальше: назови комиссию 2% — отдельно от доходности.";
-                if (Current.Id == "inna" && !Current.SpecialDiscussed) return "Дальше: назови срок вложения — год или 12 месяцев.";
-                if (Current.Id == "artem" && !Current.SpecialDiscussed) return "Дальше: обсуди персональный отчёт или личное сопровождение.";
-                if (!Current.ObjectionRaised) return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
-                if (!Current.ObjectionResolved) return ClientConversation.Hint(Current.Id);
-                if (Trust < 2) return "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
-                return "Вопрос клиента закрыт. Можно завершить сделку.";
+                switch (ConversationStep)
+                {
+                    case ConversationStage.DayEnded: return "День завершён. Результаты — в итоговом отчёте.";
+                    case ConversationStage.AwaitingCall: return "Позвони клиенту и выясни, для чего ему нужны деньги.";
+                    case ConversationStage.Closed: return DealClosed ? "Сделка закрыта. Можно выбрать следующего клиента." : "Звонок завершён. Можно выбрать другого клиента.";
+                    case ConversationStage.Report: return "Сначала обсуди отчёт по прошлому разговору.";
+                    case ConversationStage.Goal: return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
+                    case ConversationStage.Risk: return "Дальше: объясни риск убытка, без обещаний гарантированной прибыли.";
+                    case ConversationStage.Fee: return "Дальше: назови комиссию 2% — отдельно от доходности.";
+                    case ConversationStage.Term: return "Дальше: назови срок вложения — год или 12 месяцев.";
+                    case ConversationStage.Service: return "Дальше: обсуди персональный отчёт или личное сопровождение.";
+                    case ConversationStage.Proposal: return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
+                    case ConversationStage.Objection: return ClientConversation.Hint(Current.Id);
+                    case ConversationStage.Trust: return "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
+                    default: return "Вопрос клиента закрыт. Можно завершить сделку.";
+                }
             }
         }
 

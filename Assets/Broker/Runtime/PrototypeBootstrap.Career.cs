@@ -35,21 +35,21 @@ namespace Broker.Runtime
         }
         private void DrawCareerFinal()
         {
-            Scrim(); Panel(340, 100, 760, 760, "КАМПАНИЯ / ТРИ ДНЯ СПУСТЯ");
-            string title = career.Won ? "ВАС ПОКА НЕ ЗАКРЫЛИ." : career.Balance < 0 ? "В КАССЕ НЕ СОШЛОСЬ." : "ДЕНЬГИ ЕСТЬ. ДОВЕРИЯ НЕТ.";
-            Label(372, 170, 696, 76, title, theme.Title);
-            Label(372, 262, 696, 42, "Основных сделок за кампанию: " + career.TotalDeals + "/9", theme.Heading);
+            Scrim(); Panel(280, 112, 880, 736, "");
+            Label(320, 152, 800, 28, "ТРИ ДНЯ СПУСТЯ", theme.Tag);
+            Label(320, 208, 800, 72, career.Won ? "КОНТОРА В ИГРЕ." : "НУЖЕН НОВЫЙ ПЛАН.", theme.Display);
+            MetricCard(320, 304, 248, "Итог / долг", "$" + career.Balance);
+            MetricCard(592, 304, 248, "Сделки", career.TotalDeals + " / 9");
+            MetricCard(864, 304, 256, "Репутация", career.Reputation + "/100");
             var reports = career.Capture().reports;
             for (int i = 0; i < reports.Length; i++)
             {
                 var r = reports[i];
-                Label(372, 326 + i * 64, 696, 48,
-                    "День " + r.day + "  /  остаток или долг $" + r.balance + "  /  сделок " + r.deals + "/3  /  репутация " + r.reputation, theme.Text);
+                Label(320, 456 + i * 44, 800, 36, "0" + r.day + "     $" + r.balance + "     " + r.deals + "/3 сделки     репутация " + r.reputation, theme.Text);
             }
-            Label(372, 540, 696, 66, "Итоговый баланс: $" + career.Balance + ". Репутация: " + career.Reputation + "/100.\nЦель: выйти без долга и сохранить не меньше 40 репутации.", theme.Text);
-            Label(372, 624, 696, 60, (saveSucceeded ? "" : "ВНИМАНИЕ: ") + saveNotice, theme.Small);
-            if (Button(372, 704, 696, 52, "Новая кампания (сбросить прогресс)", true, true)) RequestConfirmation(ConfirmationKind.NewCareer);
-            if (!saveSucceeded && Button(372, 778, 696, 44, "Повторить сохранение")) SaveCareer();
+            Label(320, 600, 800, 72, career.Won ? saveNotice : (career.Balance < 0 ? "Остался долг. " : "Репутация ниже 40. ") + saveNotice, theme.Small);
+            if (Button(320, 704, 800, 56, "Новая кампания", true, true)) RequestConfirmation(ConfirmationKind.NewCareer);
+            if (!saveSucceeded && Button(320, 776, 800, 48, "Повторить сохранение")) SaveCareer();
         }
     }
 }

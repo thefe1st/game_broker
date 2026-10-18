@@ -1,4 +1,5 @@
 using System;
+using Broker.Core;
 using UnityEngine;
 
 namespace Broker.Runtime.Office
@@ -15,16 +16,18 @@ namespace Broker.Runtime.Office
         private CharacterController body;
         private float pitch, verticalSpeed;
         private int suppressLook;
+        private Vector3 safeWorldPosition;
 
         private void Awake()
         {
+            safeWorldPosition = transform.position;
             body = GetComponent<CharacterController>(); body.height = 1.8f; body.radius = 0.3f;
             body.center = new Vector3(0, 0.9f, 0); body.stepOffset = 0.2f; body.slopeLimit = 45;
             gameObject.layer = 2; // Ignore Raycast: own capsule never blocks the aim ray.
             var eyes = new GameObject("Player eyes"); eyes.transform.SetParent(transform, false);
             eyes.transform.localPosition = new Vector3(0, 1.65f, 0);
-            Eye = eyes.AddComponent<Camera>(); Eye.depth = 10; Eye.fieldOfView = 72; Eye.nearClipPlane = 0.05f; Eye.farClipPlane = 80;
-            Eye.clearFlags = CameraClearFlags.SolidColor; Eye.backgroundColor = new Color(0.08f, 0.13f, 0.18f);
+            Eye = eyes.AddComponent<Camera>(); Eye.depth = 10; Eye.fieldOfView = 72; Eye.nearClipPlane = 0.05f; Eye.farClipPlane = 180;
+            Eye.clearFlags = CameraClearFlags.SolidColor; Eye.backgroundColor = new Color(0.09f, 0.14f, 0.22f);
             eyes.AddComponent<AudioListener>();
         }
         public void SetControl(bool enabled)
@@ -41,6 +44,7 @@ namespace Broker.Runtime.Office
         public void Release() { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; Target = null; }
         public void ResetAt(Vector3 position)
         {
+            safeWorldPosition = position;
             body.enabled = false; transform.SetPositionAndRotation(position, Quaternion.identity); body.enabled = true;
             pitch = 0; verticalSpeed = 0; Eye.transform.localRotation = Quaternion.identity; Release();
         }
@@ -63,7 +67,7 @@ namespace Broker.Runtime.Office
             verticalSpeed += -18f * delta;
             body.Move((transform.right * move.x * speed + transform.forward * move.y * speed + Vector3.up * verticalSpeed) * delta);
             // Recovery for invalid spawns / unexpected external scene changes.
-            if (transform.localPosition.y < -4) ResetAt(transform.parent.TransformPoint(new Vector3(0, 0.05f, -3.4f)));
+            if (transform.localPosition.y < CityBlockPlan.GroundY - 6) ResetAt(safeWorldPosition);
             if (Physics.Raycast(Eye.transform.position, Eye.transform.forward, out RaycastHit hit, 2.7f,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 Target = hit.collider.GetComponentInParent<OfficeInteractable>();
