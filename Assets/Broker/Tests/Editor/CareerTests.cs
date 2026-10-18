@@ -10,6 +10,7 @@ namespace Broker.Tests
         {
             day.SelectClient(client); day.StartCall();
             day.Say("Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт.");
+            NegotiationTestSteps.AnswerObjection(day);
             day.OfferDeal(); Assert.That(day.DealClosed, Is.True);
         }
         private static BrokerDay Finish(CareerState career, bool sell = true)
@@ -64,7 +65,7 @@ namespace Broker.Tests
         {
             var c = new CareerState(); Finish(c); var d = c.CreateDay(); d.StartCall();
             d.Say("Какая цель? Есть риск. Комиссия 2%."); d.OfferDeal(); Assert.That(d.DealClosed, Is.False);
-            d.Say("Вот отчёт по прошлому разговору."); d.OfferDeal(); Assert.That(d.DealClosed, Is.True);
+            d.Say("Вот отчёт по прошлому разговору."); NegotiationTestSteps.AnswerObjection(d); d.OfferDeal(); Assert.That(d.DealClosed, Is.True);
             int cash = d.Cash; d.OfferDeal(); Assert.That(d.Cash, Is.EqualTo(cash));
         }
         [Test] public void ClosedUnsuccessfulCallDamagesOnlyItsRelationship()

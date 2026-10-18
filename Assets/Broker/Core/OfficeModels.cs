@@ -21,6 +21,12 @@ namespace Broker.Core
         public bool Returning { get; internal set; }
         public bool ReportReviewed { get; internal set; } = true;
         public bool DealClosed { get; internal set; }
+        public bool ObjectionRaised { get; internal set; }
+        public bool ObjectionResolved { get; internal set; }
+        public bool PressureWarned { get; internal set; }
+        public bool PressureRecovered { get; internal set; }
+        public bool PressureTrustLost { get; internal set; }
+        public int UnclearReplies { get; internal set; }
         public ClientRecord(string id, string name, string role, string brief, int commission, int trust)
         { Id = id; Name = name; Role = role; Brief = brief; Commission = commission; Trust = trust; }
     }

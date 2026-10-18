@@ -236,16 +236,14 @@ namespace Broker.Runtime
         {
             Panel(340, 508, 720, 412, "ЛИНИЯ: " + day.Current.Name.ToUpperInvariant());
             Label(830, 525, 210, 26, "ДОВЕРИЕ  " + day.Trust + "/4", theme.Tag);
-            string checks = (day.NeedsKnown ? "[+]" : "[ ]") + " цель     " + (day.RisksExplained ? "[+]" : "[ ]") + " риски     " + (day.FeesExplained ? "[+]" : "[ ]") + " комиссия";
-            if (day.Current.Returning) checks += (day.Current.ReportReviewed ? "     [+]" : "     [ ]") + " отчёт";
-            Label(360, 556, 680, 28, checks, theme.Small);
-            var transcriptRect = new Rect(356, 594, 688, 144);
+            Label(360, 556, 680, 40, day.NextConversationStep, theme.Small);
+            var transcriptRect = new Rect(356, 606, 688, 132);
             float height = 10;
             foreach (var line in Conversation) height += theme.Text.CalcHeight(new GUIContent(line), 648) + 16;
             string emptyText = day.Current.Brief + (day.Current.Returning ? " Клиент помнит прошлый день: обсудите отчёт до новой сделки." : "") + "\n\nПродукт: «Мойка-Капитал». Риск убытка, комиссия 2%, срок — год, персональный отчёт.";
             float emptyHeight = theme.Text.CalcHeight(new GUIContent(emptyText), 636);
             if (Conversation.Count == 0) height = Mathf.Max(height, emptyHeight + 12);
-            scroll = GUI.BeginScrollView(transcriptRect, scroll, new Rect(0, 0, 654, Mathf.Max(144, height)));
+            scroll = GUI.BeginScrollView(transcriptRect, scroll, new Rect(0, 0, 654, Mathf.Max(132, height)));
             float y = 4;
             if (Conversation.Count == 0)
                 GUI.Label(new Rect(4, y, 636, emptyHeight), emptyText, theme.Text);
@@ -263,7 +261,7 @@ namespace Broker.Runtime
                 && Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter))
             { Event.current.Use(); SendMessageToClient(); }
             if (Button(360, 812, 212, 44, busy ? "Клиент думает…" : "Отправить", canTalk && !string.IsNullOrWhiteSpace(message), true)) { SendMessageToClient(); GUI.FocusControl(null); }
-            if (Button(584, 812, 220, 44, "Предложить сделку", canTalk)) PresentClientReply(day.OfferDeal());
+            if (Button(584, 812, 220, 44, !day.Current.ObjectionRaised ? "Предложить сделку" : day.Current.ObjectionResolved ? "Закрыть сделку" : "Повторить вопрос", canTalk)) PresentClientReply(day.OfferDeal());
             if (Button(816, 812, 224, 44, "Повесить трубку", day.Call == CallStatus.Active)) { CancelPending(); PresentClientReply(day.EndCall()); }
             if (voiceEnabled)
             {
@@ -271,7 +269,7 @@ namespace Broker.Runtime
                 { if (voice.Recording) voice.FinishRecording(); else voice.BeginRecording(); }
                 if (Button(816, 868, 224, 44, "Остановить голос")) voice.Cancel();
             }
-            else Label(360, 872, 680, 36, "Подсказка: цель → риск → комиссия 2% → сделка. У каждого клиента есть свой нюанс.", theme.Small);
+            else Label(360, 872, 680, 36, "После предложения выслушай вопрос клиента. Давление снижает доверие; повторы его не повышают.", theme.Small);
         }
         private void DrawTeam()
         {

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Text.RegularExpressions;
 
 namespace Broker.Core
 {
@@ -61,9 +60,9 @@ namespace Broker.Core
             DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
             Reputation = reputation; HasGoldenPhone = goldenPhone;
             clients = new List<ClientRecord> {
-                new ClientRecord("boris", "Борис", "Владелец трёх автомоек", "Оборудование через год. Не любит сложные слова. Честность ценит больше презентации.", 150, 1),
-                new ClientRecord("inna", "Инна", "Бывший финансовый директор", "Проверяет каждую цифру. Нужно обсудить срок вложения: один год. Подготовка досье поможет доверию.", 220, 0),
-                new ClientRecord("artem", "Артём", "Наследник с большими планами", "Хочет личного внимания. Расскажи о персональном отчёте, а не обещай эксклюзивную доходность.", 180, 2)
+                new ClientRecord("boris", "Борис", "Владелец трёх автомоек", "Оборудование через год. Не любит жаргон и боится вложить всё. Нужен резерв для бизнеса.", 150, 1),
+                new ClientRecord("inna", "Инна", "Бывший финансовый директор", "Проверяет цифры, годовой срок и письменные условия. Подготовка досье поможет доверию.", 220, 0),
+                new ClientRecord("artem", "Артём", "Наследник с большими планами", "Хочет персональный отчёт и живой контакт после сделки. Обещания эксклюзивной доходности не помогут.", 180, 2)
             };
             for (int i = 0; i < clients.Count; i++)
             {
@@ -89,45 +88,96 @@ namespace Broker.Core
             if (Call != CallStatus.NotStarted) return "Этот звонок уже начат или завершён. Выберите другого клиента.";
             Current.Call = CallStatus.Active;
             if (Current.Returning)
-                return Current.Name + ": Снова вы. Прошлый разговор помню: сначала отчёт, потом новые предложения.";
+                return Current.Name + ": " + (Current.Id == "boris"
+                    ? "Снова вы. Мойки работают, а что с прошлым разговором? Сначала отчёт, потом новые предложения."
+                    : Current.Id == "inna" ? "Прошлые условия помню. Сначала обсудим отчёт, потом новую сделку."
+                    : "Моё имя ещё помните? Тогда сначала персональный отчёт по прошлому разговору.");
             if (Current.Id == "inna") return "Инна: Давайте без вступления. Комиссия, риски, срок — именно в таком порядке.";
             if (Current.Id == "artem") return "Артём: А у вас есть что-нибудь для особенных клиентов? Только не называйте меня обычным.";
             return "Борис: У меня три автомойки. Чем ваши бумажки лучше четвёртой?";
         }
+        public string NextConversationStep
+        {
+            get
+            {
+                if (DayEnded) return "День завершён. Результаты — в итоговом отчёте.";
+                if (Call == CallStatus.NotStarted) return "Позвони клиенту и выясни, для чего ему нужны деньги.";
+                if (Call == CallStatus.Closed) return DealClosed ? "Сделка закрыта. Можно выбрать следующего клиента." : "Звонок завершён. Можно выбрать другого клиента.";
+                if (!Current.ReportReviewed) return "Сначала обсуди отчёт по прошлому разговору.";
+                if (!NeedsKnown) return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
+                if (!RisksExplained) return "Дальше: объясни риск убытка, без обещаний гарантированной прибыли.";
+                if (!FeesExplained) return "Дальше: назови комиссию 2% — отдельно от доходности.";
+                if (Current.Id == "inna" && !Current.SpecialDiscussed) return "Дальше: назови срок вложения — год или 12 месяцев.";
+                if (Current.Id == "artem" && !Current.SpecialDiscussed) return "Дальше: обсуди персональный отчёт или личное сопровождение.";
+                if (!Current.ObjectionRaised) return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
+                if (!Current.ObjectionResolved) return ClientConversation.Hint(Current.Id);
+                if (Trust < 2) return "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
+                return "Вопрос клиента закрыт. Можно завершить сделку.";
+            }
+        }
+
         public string Say(string message)
         {
             if (DayEnded || Call != CallStatus.Active || PendingEvent != null) return "Сейчас разговор недоступен.";
             if (string.IsNullOrWhiteSpace(message)) return "Введите реплику.";
-            string text = message.Trim().ToLowerInvariant();
-            if (text.Length > 500) return "Для прототипа сократите реплику до 500 символов.";
-            bool negated = Regex.IsMatch(text, @"не\s+гарантир\w*|никаких\s+гарантий|без\s+гарантий|не\s+обещаю\s+гарант\w*");
-            bool guarantee = Regex.IsMatch(text, @"гарантир\w*|гарантирован\w*|без\s+риска|безрисков\w*|риска\s+нет|нет\s+риска");
-            // Still lexical, not a semantic classifier. Known negation examples are supported.
-            if (guarantee && !negated)
+            if (message.Trim().Length > 500) return "Сократите реплику до 500 символов.";
+            DialogueIntent facts = DialogueRules.Analyze(message);
+            if (DialogueRules.Has(facts, DialogueIntent.Guarantee))
             {
                 Current.Trust = Math.Max(0, Trust - 1); Reputation = Math.Max(0, Reputation - 10);
                 if (Trust == 0) { Current.Call = CallStatus.Closed; return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно."; }
-                return Current.Name + ": Уже подозрительно. Давайте без гарантий.";
+                return Current.Name + ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска.";
             }
             var answers = new List<string>();
-            if (Current.Returning && Has(text, "отчёт", "отчет", "результат", "динамик", "итог"))
+            bool pressure = DialogueRules.Has(facts, DialogueIntent.Pressure);
+            if (pressure)
+            {
+                if (!Current.PressureWarned)
+                {
+                    Current.PressureWarned = true; Current.PressureTrustLost = Trust > 0;
+                    Current.Trust = Math.Max(0, Trust - 1);
+                }
+                answers.Add(ClientConversation.Pressure(Current.Id));
+            }
+            else if (Current.PressureTrustLost && !Current.PressureRecovered && DialogueRules.Has(facts, DialogueIntent.Respect))
+            {
+                Current.PressureRecovered = true; Current.Trust = Math.Min(4, Trust + 1);
+                answers.Add(ClientConversation.Respect(Current.Id));
+            }
+            if (Current.Returning && !Current.ReportReviewed && DialogueRules.Has(facts, DialogueIntent.Report))
             { Current.ReportReviewed = true; answers.Add("Обсудили отчёт по прошлому разговору. Теперь можно к новым условиям."); }
-            if (Has(text, "цель", "целях", "нужно", "важно", "задач"))
+            if (!NeedsKnown && DialogueRules.Has(facts, DialogueIntent.Needs))
             {
-                if (!NeedsKnown) Current.Trust = Math.Min(4, Trust + 1);
-                Current.NeedsKnown = true;
-                answers.Add(Current.Id == "boris" ? "Деньги нужны через год на оборудование. Всю сумму терять не готов." : Current.Id == "inna" ? "Часть свободного капитала. Без обещаний чудес и с понятным сроком." : "Хочу личное сопровождение, а не рассылку «уважаемый клиент»." );
+                Current.Trust = Math.Min(4, Trust + 1); Current.NeedsKnown = true;
+                answers.Add(ClientConversation.Needs(Current.Id));
             }
-            if (Has(text, "риск", "убыт", "потер")) { Current.RisksExplained = true; answers.Add("Риск убытка услышал" + (Current.Id == "inna" ? "а" : "") + ". Продолжайте."); }
-            if (Regex.IsMatch(text, @"(?<![\d.,-])2\s*%|два\s+процента")) { Current.FeesExplained = true; answers.Add("Комиссия 2%. Хорошо, что не пришлось искать лупу."); }
-            if (Current.Id == "inna" && Has(text, "год", "12 месяц", "срок"))
+            if (!RisksExplained && DialogueRules.Has(facts, DialogueIntent.Risk))
+            { Current.RisksExplained = true; answers.Add(ClientConversation.Risk(Current.Id)); }
+            if (!FeesExplained && DialogueRules.Has(facts, DialogueIntent.Fee))
+            { Current.FeesExplained = true; answers.Add(ClientConversation.Fee(Current.Id)); }
+            if (Current.Id == "inna" && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Year))
             {
-                if (!Current.SpecialDiscussed) Current.Trust = Math.Min(4, Trust + 1);
-                Current.SpecialDiscussed = true; answers.Add("Год — понятный срок. Теперь к сути предложения.");
+                Current.Trust = Math.Min(4, Trust + 1); Current.SpecialDiscussed = true;
+                answers.Add("Год — понятный срок. Не вечность, замаскированная мелким шрифтом.");
             }
-            if (Current.Id == "artem" && Has(text, "персональн", "личн", "отчёт", "отчет"))
-            { Current.SpecialDiscussed = true; answers.Add("Персональный отчёт? Уже лучше. Только имя не перепутайте."); }
-            return Current.Name + ": " + (answers.Count > 0 ? string.Join(" ", answers) : "Мне нужны конкретные условия: цель, риск и комиссия. Красивые слова оставьте для вывески.");
+            if (Current.Id == "artem" && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Personal))
+            { Current.SpecialDiscussed = true; answers.Add("Персональное сопровождение? Уже лучше. Только имя не перепутайте."); }
+            if (Current.ObjectionRaised && !Current.ObjectionResolved && !pressure
+                && DialogueRules.Has(facts, ClientConversation.AnswerIntent(Current.Id)))
+            {
+                Current.ObjectionResolved = true; Current.Trust = Math.Min(4, Trust + 1);
+                answers.Add(ClientConversation.ObjectionAnswered(Current.Id));
+            }
+            if (Current.Id == "boris" && DialogueRules.Has(facts, DialogueIntent.Jargon))
+                answers.Add("Сложные слова услышал. Переведите на язык мойки, оборудования и запаса денег.");
+            if (answers.Count == 0)
+            {
+                const DialogueIntent known = DialogueIntent.Needs | DialogueIntent.Risk | DialogueIntent.Fee | DialogueIntent.Year
+                    | DialogueIntent.Personal | DialogueIntent.Report | DialogueIntent.Reserve | DialogueIntent.Written | DialogueIntent.Contact;
+                if ((facts & known) != 0) answers.Add("Это уже обсудили или ещё не дошли до этого вопроса. " + NextConversationStep);
+                else { answers.Add(ClientConversation.Unclear(Current.Id, Current.UnclearReplies)); Current.UnclearReplies = (Current.UnclearReplies + 1) % 2; }
+            }
+            return Current.Name + ": " + string.Join(" ", answers);
         }
         public string OfferDeal()
         {
@@ -138,11 +188,20 @@ namespace Broker.Core
             if (!FeesExplained) return Current.Name + ": А ваша комиссия какая?";
             if (Current.Id == "inna" && !Current.SpecialDiscussed) return "Инна: А срок вложения мы так и не обсудили.";
             if (Current.Id == "artem" && !Current.SpecialDiscussed) return "Артём: Где обещанное личное внимание? Расскажите о персональном отчёте.";
-            if (Trust < 2) return Current.Name + ": Пока не доверяю. Подготовьтесь лучше.";
+            if (!Current.ObjectionRaised)
+            {
+                Current.ObjectionRaised = true;
+                return Current.Name + ": " + ClientConversation.Objection(Current.Id);
+            }
+            if (!Current.ObjectionResolved) return Current.Name + ": Мой вопрос всё ещё открыт. " + ClientConversation.Objection(Current.Id);
+            if (Trust < 2) return Current.Name + ": Пока не доверяю. Подготовьте досье или вернёмся к разговору без давления.";
             Current.DealClosed = true; Current.Call = CallStatus.Closed;
             Credit(Current.Commission); Reputation = Math.Min(100, Reputation + 5);
             Notify("Бухгалтерия: +" + Current.Commission + " комиссии. Сделок: " + DealsCount + "/3.");
-            return Current.Name + ": Договорились, начнём с небольшой суммы. Но за обещания спрошу.\nКомиссия: +" + Current.Commission + ". Все деньги и продукты вымышлены.";
+            string agreement = Current.Id == "boris" ? "Договорились. Начнём с небольшой суммы, резерв остаётся у мойки."
+                : Current.Id == "inna" ? "Условия согласованы. Год, комиссия, риск и письменный договор. Теперь можно работать."
+                : "Договорились. Личный контакт записал. Если ответит робот, назову его вашим именем.";
+            return Current.Name + ": " + agreement + "\nКомиссия: +" + Current.Commission + ". Все деньги и продукты вымышлены.";
         }
         public string EndCall()
         {
@@ -269,6 +328,5 @@ namespace Broker.Core
         private void Credit(int amount) { Cash += amount; Earned += amount; }
         private void Spend(int amount) { Cash -= amount; Spent += amount; }
         private void ChangeMorale(int amount) { foreach (var e in employees) e.Morale = Math.Max(0, Math.Min(100, e.Morale + amount)); }
-        private static bool Has(string text, params string[] parts) { foreach (var part in parts) if (text.IndexOf(part, StringComparison.Ordinal) >= 0) return true; return false; }
     }
 }

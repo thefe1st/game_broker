@@ -12,6 +12,7 @@ namespace Broker.Tests
             day.Say("Какая у вас цель?");
             day.Say("Объясню риск убытка.");
             day.Say("Комиссия 2%.");
+            NegotiationTestSteps.AnswerObjection(day);
             return day;
         }
 

@@ -6,7 +6,7 @@ namespace Broker.Tests
     public sealed class OfficeDayTests
     {
         private static void Qualify(BrokerDay day)
-        { day.StartCall(); day.Say("Какая цель? Есть риск убытка. Комиссия 2%. Срок — год. Персональный отчёт."); }
+        { day.StartCall(); day.Say("Какая цель? Есть риск убытка. Комиссия 2%. Срок — год. Персональный отчёт."); NegotiationTestSteps.AnswerObjection(day); }
         [Test] public void ThreeDistinctClientsAndTwoEmployeesExist()
         { var day = new BrokerDay(); Assert.That(day.Clients.Count, Is.EqualTo(3)); Assert.That(day.Employees.Count, Is.EqualTo(2)); }
         [Test] public void CannotSwitchDuringActiveCall()
@@ -26,12 +26,12 @@ namespace Broker.Tests
         [Test] public void InnaRequiresInvestmentHorizon()
         {
             var day = new BrokerDay(); day.SelectClient(1); day.StartCall(); day.Say("Какая цель? Есть риск. Комиссия 2%."); day.OfferDeal();
-            Assert.That(day.DealClosed, Is.False); day.Say("Срок — год."); day.OfferDeal(); Assert.That(day.DealClosed, Is.True);
+            Assert.That(day.DealClosed, Is.False); day.Say("Срок — год."); NegotiationTestSteps.AnswerObjection(day); day.OfferDeal(); Assert.That(day.DealClosed, Is.True);
         }
         [Test] public void ArtemRequiresPersonalReport()
         {
             var day = new BrokerDay(); day.SelectClient(2); day.StartCall(); day.Say("Какая цель? Есть риск. Комиссия 2%."); day.OfferDeal();
-            Assert.That(day.DealClosed, Is.False); day.Say("Предоставим персональный отчёт."); day.OfferDeal(); Assert.That(day.DealClosed, Is.True);
+            Assert.That(day.DealClosed, Is.False); day.Say("Предоставим персональный отчёт."); NegotiationTestSteps.AnswerObjection(day); day.OfferDeal(); Assert.That(day.DealClosed, Is.True);
         }
         [Test] public void ResearchTargetsAssignedClientNotCurrentSelection()
         {
