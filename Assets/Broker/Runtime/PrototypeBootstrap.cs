@@ -48,14 +48,16 @@ namespace Broker.Runtime
         {
             canvasScale = Mathf.Max(0.1f, Mathf.Min(Screen.width / 1440f, Screen.height / 960f));
             canvasOffset = new Vector2((Screen.width - 1440 * canvasScale) / 2, (Screen.height - 960 * canvasScale) / 2);
-            if (!intro && !day.DayEnded && !showNews && day.PendingEvent == null && OfficeInput.EscapePressed())
+            bool escape = OfficeInput.EscapePressed();
+            if (UtilityOverlayOpen && escape) CloseUtilityOverlay();
+            else if (!intro && !day.DayEnded && !showNews && day.PendingEvent == null && escape)
             {
                 if (navigation.IsExploring) { navigation.Pause(); voice.Cancel(); }
                 else { CancelPending(); EnterWorld(); }
             }
-            if (!intro && !showNews && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
+            if (!intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
-            bool blocked = intro || showNews || day.DayEnded || day.PendingEvent != null;
+            bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
             office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
             DrainNews(); office.Refresh(day);
@@ -68,7 +70,7 @@ namespace Broker.Runtime
         }
         private void Restart()
         {
-            CancelPending();
+            CancelPending(); showVoiceSetup = false; confirmation = ConfirmationKind.None;
             if (career.IsFinished)
             {
                 // Presentation-only day: the actual final ledger is stored in CareerState.
@@ -149,6 +151,14 @@ namespace Broker.Runtime
             if (theme == null) theme = new BrokerTheme();
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.identity;
+            if (UtilityOverlayOpen)
+            {
+                GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
+                GUI.enabled = true;
+                if (showVoiceSetup) DrawVoiceSetup(); else DrawConfirmation();
+                GUI.matrix = previous;
+                return;
+            }
             if (navigation.View != OfficeView.Desk)
             {
                 GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
@@ -163,7 +173,7 @@ namespace Broker.Runtime
             Paint(new Rect(0, view.y, view.x, view.height), theme.Canvas);
             Paint(new Rect(view.xMax, view.y, Screen.width - view.xMax, view.height), theme.Canvas);
             GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
-            bool blocked = intro || showNews || day.DayEnded || day.PendingEvent != null;
+            bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             GUI.enabled = !blocked;
             DrawHeader(); DrawClients(); DrawEconomy(); DrawOfficeNews(); DrawConversation(); DrawTeam(); DrawSettings();
             GUI.enabled = true;
@@ -285,9 +295,10 @@ namespace Broker.Runtime
             Panel(1080, 626, 340, 294, "СВЯЗЬ И ПАМЯТКА");
             bool before = GUI.enabled; GUI.enabled = before && !busy && day.Call != CallStatus.Active;
             useGateway = GUI.Toggle(new Rect(1100, 676, 300, 44), useGateway, " ИИ-формулировки через сервер", theme.Button); GUI.enabled = before;
-            bool nextVoice = GUI.Toggle(new Rect(1100, 732, 300, 44), voiceEnabled, " Голос: внешний API и микрофон", theme.Button);
+            bool nextVoice = GUI.Toggle(new Rect(1100, 732, 300, 44), voiceEnabled, " Голос: отправка записи внешнему API", theme.Button);
             if (nextVoice != voiceEnabled) { voiceEnabled = nextVoice; if (!voiceEnabled) voice.Cancel(); }
-            Label(1100, 790, 300, 112, voiceEnabled ? voice.Status + "\nЗапись только по кнопке; звук уходит провайдеру." : "Esc — встать из-за стола. День завершается у входной двери.\n\nБез сервера работает весь офис. Досье относится к выбранному клиенту.", theme.Small);
+            if (Button(1100, 790, 300, 40, "Проверка микрофона и связи", !busy && !voice.Working && !voice.Recording)) OpenVoiceSetup();
+            Label(1100, 842, 300, 64, voiceEnabled ? voice.Status : "Голос необязателен. Микрофон можно проверить без API и сервера.", theme.Small);
         }
         private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.02f, 0.05f, 0.07f, 0.92f)); }
         private void DrawIntro()
@@ -297,7 +308,8 @@ namespace Broker.Runtime
             Label(372, 344, 696, 136, "WASD — ходить. Мышь — осмотр. E — действие. Esc — пауза.\n\nВ кассе $" + day.OpeningCash + ". Обязательства сегодня: $" + day.TotalExpenses + ". " + (day.CarryDebt > 0 ? "Включая долг $" + day.CarryDebt + ". " : "") + "К финалу третьего дня нужны неотрицательный баланс и репутация от 40.", theme.Text);
             Label(372, 500, 696, 76, day.DayNumber == 1 ? "Стол и телефон — звонки. Сотрудники — поручения. Дверь — конец дня. После завершения дня прогресс сохранится." : "Вернувшимся клиентам сначала нужен отчёт. Деньги, долг, репутация и купленный телефон перенесены. Задания и кофейный бюджет начались заново.", theme.Text);
             Label(372, 598, 696, 64, saveNotice + "\nТекущие звонки не сохраняются. Все продукты и деньги вымышлены.", theme.Small);
-            if (Button(372, 692, 696, 52, "Начать день " + day.DayNumber + " / Войти в офис", true, true)) { intro = false; EnterWorld(); }
+            if (Button(372, 664, 696, 32, "Проверить микрофон без API")) OpenVoiceSetup();
+            if (Button(372, 708, 696, 52, "Начать день " + day.DayNumber + " / Войти в офис", true, true)) { intro = false; EnterWorld(); }
         }
         private void DrawEvent()
         {
@@ -334,7 +346,7 @@ namespace Broker.Runtime
             Label(372, 506, 696, 56, (saveSucceeded ? "" : "ВНИМАНИЕ: ") + saveNotice, theme.Small);
             bool settled = career.CompletedDays == day.DayNumber;
             if (Button(372, 590, 696, 52, "Следующий день" + (saveSucceeded ? "" : " (пока без записи на диск)"), settled, true)) Restart();
-            if (Button(372, 662, 696, 48, "Новая кампания (сбросить прогресс)")) NewCareer();
+            if (Button(372, 662, 696, 48, "Новая кампания (сбросить прогресс)")) RequestConfirmation(ConfirmationKind.NewCareer);
             if (!saveSucceeded && Button(372, 726, 696, 48, "Повторить сохранение")) SaveCareer();
         }
     }

@@ -26,3 +26,6 @@ TestResults/
 
 # Keep the intentional headless core test project
 !Tools/CoreChecks/CoreChecks.csproj
+
+# Headless voice-flow checks (uses explicit Unity test doubles)
+!Tools/VoiceChecks/VoiceChecks.csproj

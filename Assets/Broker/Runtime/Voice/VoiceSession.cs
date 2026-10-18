@@ -9,7 +9,7 @@ using UnityEngine.Networking;
 namespace Broker.Runtime.Voice
 {
     // Explicit two-click recording, preview before sending, no continuous listening.
-    public sealed class VoiceSession : MonoBehaviour
+    public sealed partial class VoiceSession : MonoBehaviour
     {
         [Serializable] private sealed class Transcript { public string text; }
         [Serializable] private sealed class SpeechInput { public string text; }
@@ -18,6 +18,8 @@ namespace Broker.Runtime.Voice
         public bool Working { get; private set; }
         public bool Playing => speaker != null && speaker.isPlaying;
         public string Status { get; private set; } = "Голос выключен.";
+        public string LastFailure { get; private set; } = "";
+        private void Fail(string message) { Status = message; LastFailure = message; }
         private AudioClip microphoneClip;
         private AudioClip playbackClip;
         private AudioSource speaker;
@@ -37,6 +39,7 @@ namespace Broker.Runtime.Voice
 
         private void Update()
         {
+            UpdateInputLevel();
             if (Recording && Time.realtimeSinceStartupAsDouble - recordingStarted >= 20.0) FinishRecording();
         }
         private void OnDestroy() { Cancel(); }
@@ -44,18 +47,20 @@ namespace Broker.Runtime.Voice
         public void Cancel()
         {
             revision++;
+            if (healthChecking) { healthChecking = false; GatewayStatus = "Проверка отменена."; }
             pending?.Cancel(); pending = null;
             if (Recording) Microphone.End(device);
-            Recording = false; Working = false;
+            Recording = false; Working = false; InputLevel = 0f; HasLocalPreview = false;
             if (speaker != null) { speaker.Stop(); speaker.clip = null; }
             if (microphoneClip != null) { Destroy(microphoneClip); microphoneClip = null; }
             if (playbackClip != null) { Destroy(playbackClip); playbackClip = null; }
             Status = "Голос остановлен.";
         }
 
-        public async void BeginRecording()
+        public async void BeginRecording(bool localPreview = false)
         {
             Cancel();
+            previewRecording = localPreview;
             var source = new CancellationTokenSource(); pending = source;
             int version = ++revision;
             Working = true;
@@ -71,19 +76,26 @@ namespace Broker.Runtime.Voice
                 }
                 source.Token.ThrowIfCancellationRequested();
                 if (Microphone.devices.Length == 0) throw new InvalidOperationException("Микрофон не найден.");
-                device = Microphone.devices[0];
+                RefreshDevices();
+                if (string.IsNullOrEmpty(SelectedDevice)) throw new InvalidOperationException("Выбери доступный микрофон.");
+                device = SelectedDevice;
                 Microphone.GetDeviceCaps(device, out int minimum, out int maximum);
                 int rate = 16000;
                 if (minimum > 0 && maximum >= minimum) rate = Mathf.Clamp(rate, minimum, maximum);
                 if (rate < 8000 || rate > 48000) throw new InvalidOperationException("Нужен микрофон с частотой 8–48 кГц.");
                 microphoneClip = Microphone.Start(device, false, 20, rate);
                 if (microphoneClip == null) throw new InvalidOperationException("Не удалось начать запись.");
-                recordingStarted = Time.realtimeSinceStartupAsDouble;
+                recordingStarted = Time.realtimeSinceStartupAsDouble; nextLevelUpdate = 0;
                 Recording = true;
-                Status = "● Идёт запись. Нажми «Закончить запись». Максимум 20 секунд.";
+                Status = localPreview
+                    ? "Локальный тест: идёт запись, до 20 секунд. Звук не отправляется в сеть."
+                    : "● Идёт запись. Нажми «Закончить запись». Максимум 20 секунд.";
             }
             catch (OperationCanceledException) { }
-            catch (Exception error) { if (version == revision) Status = error.Message; }
+            catch (Exception error)
+            {
+                if (version == revision) { Cancel(); Fail(error.Message); }
+            }
             finally
             {
                 source.Dispose();
@@ -112,11 +124,20 @@ namespace Broker.Runtime.Voice
                     for (int channel = 0; channel < channels; channel++) sum += samples[frame * channels + channel];
                     mono[frame] = sum / channels;
                 }
-                byte[] wav = WaveCodec.Encode(mono, 1, microphoneClip.frequency);
-                Destroy(microphoneClip); microphoneClip = null;
-                Transcribe(wav);
+                int frequency = microphoneClip.frequency;
+                Destroy(microphoneClip); microphoneClip = null; InputLevel = 0f;
+                if (previewRecording)
+                {
+                    // Local-only branch: no WAV upload, transcription callback or game-rule changes.
+                    playbackClip = AudioClip.Create("Local microphone test", frames, 1, frequency, false);
+                    if (!playbackClip.SetData(mono, 0)) throw new InvalidOperationException("Не удалось подготовить прослушивание.");
+                    HasLocalPreview = true;
+                    LocalSignalHint = VoiceDiagnostics.SignalHint(VoiceDiagnostics.Rms(mono));
+                    Status = "Тестовая запись готова. Нажми «Прослушать». " + LocalSignalHint;
+                }
+                else Transcribe(WaveCodec.Encode(mono, 1, frequency));
             }
-            catch (Exception error) { Cancel(); Status = error.Message; }
+            catch (Exception error) { Cancel(); Fail(error.Message); }
         }
 
         private async void Transcribe(byte[] wav)
@@ -135,7 +156,8 @@ namespace Broker.Runtime.Voice
                 OnTranscript?.Invoke(result.text);
             }
             catch (OperationCanceledException) { }
-            catch (Exception) { if (version == revision) Status = "Распознавание недоступно. Проверь сервер и VOICE_MODE=ai; можно написать текстом."; }
+            catch (GatewayException error) { if (version == revision) Fail("Распознавание: " + error.Message); }
+            catch (Exception) { if (version == revision) Fail("Распознавание: неверный ответ или ошибка соединения. Можно написать текстом."); }
             finally
             {
                 source.Dispose();
@@ -152,20 +174,21 @@ namespace Broker.Runtime.Voice
             if (prefix >= 0 && prefix < 24) text = text.Substring(prefix + 2);
             if (text.Length > 400) text = text.Substring(0, 400);
             var source = new CancellationTokenSource(); pending = source;
-            int version = ++revision; Working = true; Status = "Готовлю голос Бориса…";
+            int version = ++revision; Working = true; Status = "Готовлю голос клиента…";
             try
             {
                 var json = JsonUtility.ToJson(new SpeechInput { text = text });
                 byte[] bytes = await Post("speech", Encoding.UTF8.GetBytes(json), "application/json", 2000000, source.Token);
                 if (version != revision) return;
                 WaveData wave = WaveCodec.Decode(bytes);
-                playbackClip = AudioClip.Create("Boris response", wave.Samples.Length / wave.Channels, wave.Channels, wave.Frequency, false);
-                playbackClip.SetData(wave.Samples, 0);
+                playbackClip = AudioClip.Create("Client response", wave.Samples.Length / wave.Channels, wave.Channels, wave.Frequency, false);
+                if (!playbackClip.SetData(wave.Samples, 0)) throw new InvalidOperationException("Invalid audio samples");
                 speaker.clip = playbackClip; speaker.Play();
-                Status = "Борис отвечает. Новая запись остановит воспроизведение.";
+                Status = "Клиент отвечает. Новая запись остановит воспроизведение.";
             }
             catch (OperationCanceledException) { }
-            catch (Exception) { if (version == revision) Status = "Озвучка недоступна. Проверь сервер и VOICE_MODE=ai; ответ остаётся в тексте."; }
+            catch (GatewayException error) { if (version == revision) Fail("Озвучка: " + error.Message); }
+            catch (Exception) { if (version == revision) Fail("Озвучка: неверный ответ или ошибка соединения. Ответ остаётся в тексте."); }
             finally
             {
                 source.Dispose();
@@ -189,8 +212,10 @@ namespace Broker.Runtime.Voice
                     await Task.Yield();
                 }
                 token.ThrowIfCancellationRequested();
-                if (web.result != UnityWebRequest.Result.Success || web.downloadHandler.data.Length > maxBytes)
-                    throw new InvalidOperationException("Voice gateway unavailable");
+                if (web.result != UnityWebRequest.Result.Success)
+                    throw new GatewayException(VoiceDiagnostics.RequestFailure(web.responseCode));
+                if (web.downloadHandler.data == null || web.downloadHandler.data.Length > maxBytes)
+                    throw new GatewayException("Шлюз вернул пустой или слишком большой ответ.");
                 return web.downloadHandler.data;
             }
         }

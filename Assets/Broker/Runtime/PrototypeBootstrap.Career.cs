@@ -48,7 +48,7 @@ namespace Broker.Runtime
             }
             Label(372, 540, 696, 66, "Итоговый баланс: $" + career.Balance + ". Репутация: " + career.Reputation + "/100.\nЦель: выйти без долга и сохранить не меньше 40 репутации.", theme.Text);
             Label(372, 624, 696, 60, (saveSucceeded ? "" : "ВНИМАНИЕ: ") + saveNotice, theme.Small);
-            if (Button(372, 704, 696, 52, "Новая кампания (сбросить прогресс)", true, true)) NewCareer();
+            if (Button(372, 704, 696, 52, "Новая кампания (сбросить прогресс)", true, true)) RequestConfirmation(ConfirmationKind.NewCareer);
             if (!saveSucceeded && Button(372, 778, 696, 44, "Повторить сохранение")) SaveCareer();
         }
     }

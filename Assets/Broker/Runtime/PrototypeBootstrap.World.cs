@@ -10,7 +10,7 @@ namespace Broker.Runtime
         private int staffTargetIndex;
         private void OnWorldInteraction(OfficeInteractable target)
         {
-            if (intro || busy || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
+            if (intro || busy || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
             if (navigation.Open(target.Station, target.EmployeeIndex))
             {
                 staffTargetIndex = day.SelectedClientIndex;
@@ -19,7 +19,7 @@ namespace Broker.Runtime
         }
         private void EnterWorld()
         {
-            if (busy || voice.Recording || voice.Working) return;
+            if (busy || UtilityOverlayOpen || voice.Recording || voice.Working) return;
             navigation.Close(); voice.Cancel();
             office.Player.SetControl(!intro && !day.DayEnded && day.PendingEvent == null && OfficeInput.Available);
             office.Player.Capture();
@@ -135,12 +135,13 @@ namespace Broker.Runtime
         }
         private void DrawPausePanel()
         {
-            Panel(340, 220, 760, 510, "ПАУЗА / РЫНОК ПОДОЖДЁТ");
+            Panel(340, 172, 760, 616, "ПАУЗА / РЫНОК ПОДОЖДЁТ");
             Label(372, 288, 696, 60, "День " + day.DayNumber + "/3 в собственной конторе.", theme.Title);
             Label(372, 376, 696, 100, "Подойдите к столу, сотруднику, кофемашине или двери и нажмите E.\n\nКурсор освобождается в меню. Время на паузе, пока открыто это окно.", theme.Text);
             if (Button(372, 520, 696, 52, "Продолжить / Esc", true, true)) EnterWorld();
-            if (Button(372, 594, 696, 52, "Журнал офиса")) showNews = true;
-            if (Button(372, 668, 696, 44, "Начать текущий день заново")) Restart();
+            if (Button(372, 584, 696, 48, "Журнал офиса")) showNews = true;
+            if (Button(372, 646, 696, 48, "Проверка микрофона и связи")) OpenVoiceSetup();
+            if (Button(372, 708, 696, 44, "Начать текущий день заново")) RequestConfirmation(ConfirmationKind.RestartDay);
         }
     }
 }
