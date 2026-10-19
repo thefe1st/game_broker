@@ -47,6 +47,7 @@ namespace Broker.Runtime
                 var r = reports[i];
                 Label(320, 456 + i * 44, 800, 36, "0" + r.day + "     $" + r.balance + "     " + r.deals + "/3 сделки     репутация " + r.reputation, theme.Text);
             }
+            if (day.CityWorkTaken) Label(320, 568, 800, 24, day.CityWorkTitle + (day.CityStage == CityWorkStage.Completed ? " · сдано" : " · без награды"), theme.Small);
             Label(320, 600, 800, 72, career.Won ? saveNotice : (career.Balance < 0 ? "Остался долг. " : "Репутация ниже 40. ") + saveNotice, theme.Small);
             if (Button(320, 704, 800, 56, "Новая кампания", true, true)) RequestConfirmation(ConfirmationKind.NewCareer);
             if (!saveSucceeded && Button(320, 776, 800, 48, "Повторить сохранение")) SaveCareer();

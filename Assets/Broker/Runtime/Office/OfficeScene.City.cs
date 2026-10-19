@@ -68,6 +68,7 @@ namespace Broker.Runtime.Office
                 Box("Plaza / bench seat", new Vector3(x, ground + 0.48f, 17), new Vector3(3, 0.16f, 0.75f), wood);
                 Box("Plaza / bench base", new Vector3(x, ground + 0.2f, 17), new Vector3(2.4f, 0.4f, 0.5f), concrete);
             }
+            BuildCityActivities(concrete, cityLight);
             // Elevator portals are explicit prototype transitions; the end-day door stays separate.
             var entry = Box("City / office elevator", new Vector3(0, ground + 1.35f, 8.2f), new Vector3(2.5f, 2.7f, 0.35f), navy);
             Interactable(entry, OfficeStation.ReturnOffice, "Лифт в офис", "Вернуться в Мойка Капитал");

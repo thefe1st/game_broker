@@ -68,6 +68,7 @@ namespace Broker.Runtime
             MetricCard(40, 320, 264, "Команда", day.TeamMorale + "%");
             MetricCard(40, 456, 264, "Обязательства", "$" + day.TotalExpenses);
             Label(48, 616, 248, 54, day.DayTitle, theme.Heading);
+            Label(48, 692, 248, 116, day.CityWorkStatus, theme.Small);
         }
         private void DrawCallWorkspace()
         {

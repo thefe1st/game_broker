@@ -6,7 +6,7 @@ namespace Broker.Core
 {
     public enum CallStatus { NotStarted, Active, Closed }
 
-    public sealed class BrokerDay
+    public sealed partial class BrokerDay
     {
         public const int Rent = 100;
         public const int Payroll = 240;
@@ -257,7 +257,7 @@ namespace Broker.Core
             foreach (var c in clients) if (c.Call != CallStatus.Closed) c.Trust = Math.Min(4, c.Trust + 1);
             return "Куплен золотистый телефон. -90 денег, +1 доверия незавершённых клиентов. Слышно по-прежнему так себе.";
         }
-        public void AdvanceTime(float seconds)
+        public void AdvanceTime(float seconds, bool inCity = false)
         {
             if (DayEnded || PendingEvent != null || seconds <= 0 || float.IsNaN(seconds) || float.IsInfinity(seconds)) return;
             float actual = Math.Min(seconds, RemainingSeconds);
@@ -282,7 +282,9 @@ namespace Broker.Core
                 else { worker.Morale = Math.Min(100, worker.Morale + 15); Notify(worker.Name + ": Перерыв окончен. +15 настроения."); }
                 worker.Work = WorkKind.Idle;
             }
+            // The closing bell wins ties: an uncollected city errand never pays automatically.
             if (RemainingSeconds <= 0) { EndDay(); return; }
+            AdvanceCityActivity(actual, inCity);
             MaybeEvent();
             if (PendingEvent == null) OfficeBanter();
         }
@@ -341,6 +343,7 @@ namespace Broker.Core
         {
             if (DayEnded) return;
             DayEnded = true; PendingEvent = null;
+            ExpireCityActivity();
             foreach (var client in clients) if (client.Call == CallStatus.Active) client.Call = CallStatus.Closed;
             foreach (var worker in employees) worker.Work = WorkKind.Idle;
         }

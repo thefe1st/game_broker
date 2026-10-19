@@ -15,6 +15,7 @@ namespace Broker.Runtime
             {
                 CancelPending(); office.VisitCity(target.Station == OfficeStation.Street); EnterWorld(); return;
             }
+            if ((target.Station == OfficeStation.CityContact || target.Station == OfficeStation.CityPickup) && !office.IsInCity) return;
             if (navigation.Open(target.Station, target.EmployeeIndex))
             {
                 staffTargetIndex = day.SelectedClientIndex;
@@ -60,10 +61,15 @@ namespace Broker.Runtime
             if (!OfficeInput.Available) target = "Ввод недоступен · открой рабочий экран";
             else if (!player.Captured) target = "Нажми в окне Game";
             else if (player.Target != null) target = player.Target.Title.Split('/')[0].Trim();
-            else target = office.IsInCity ? "Лифт — обратно в офис" : "Телефон — звонки";
+            else target = office.IsInCity ? "Бюро — у лифта · Павильон — слева" : "Телефон — звонки";
             Panel(420, 784, 600, 88, "");
             if (player.Target != null) { Paint(new Rect(444, 804, 48, 48), theme.Border); Label(459, 811, 32, 36, "E", theme.Heading); }
             Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
+            if (office.IsInCity && day.CityWorkTaken)
+            {
+                Panel(352, 136, 736, 88, "");
+                Label(376, 152, 688, 60, day.CityWorkStatus, theme.Small);
+            }
             if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
                 Label(420, 896, 600, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.Small);
             else if (officeNews.Count > 0 && Time.realtimeSinceStartupAsDouble < toastUntil)
@@ -82,6 +88,8 @@ namespace Broker.Runtime
                 case OfficeView.Upgrade: DrawShopPanel(true); break;
                 case OfficeView.Exit: DrawExitPanel(); break;
                 case OfficeView.Pause: DrawPausePanel(); break;
+                case OfficeView.CityContact: DrawCityPanel(false); break;
+                case OfficeView.CityPickup: DrawCityPanel(true); break;
             }
         }
         private void DrawEmployeePanel()
@@ -120,6 +128,8 @@ namespace Broker.Runtime
             MetricCard(592, 344, 248, "Счета", "$" + day.TotalExpenses);
             MetricCard(864, 344, 256, "Остаток / долг", "$" + day.FinalBalance);
             Label(320, 488, 800, 32, "Звонки и поручения остановятся. Итоги сохранятся.", theme.Small);
+            if (day.CityWorkTaken && day.CityStage != CityWorkStage.Completed)
+                Label(320, 600, 800, 32, "Дело квартала не сдано: награды не будет, оплата не вернётся.", theme.Small);
             if (Button(320, 552, 800, 56, "Закрыть контору", true, true)) { CancelPending(); day.EndDay(); }
             if (Button(320, 640, 800, 56, "Ещё поработать · Esc")) EnterWorld();
         }

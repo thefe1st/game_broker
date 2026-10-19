@@ -207,6 +207,7 @@ namespace Broker.Runtime.Office
         public void Refresh(BrokerDay day)
         {
             if (day == null) return;
+            RefreshCityActivities(day);
             phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
             Camera active = overview.enabled ? overview : Player.Eye;
             for (int i = 0; i < 2; i++)

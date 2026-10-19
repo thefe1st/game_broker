@@ -56,7 +56,7 @@ namespace Broker.Runtime
                 if (navigation.IsExploring) { navigation.Pause(); voice.Cancel(); }
                 else { CancelPending(); EnterWorld(); }
             }
-            if (!intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime);
+            if (!intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
             bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
@@ -229,6 +229,7 @@ namespace Broker.Runtime
             MetricCard(592, 304, 248, "Сделки", day.DealsCount + " / 3");
             MetricCard(864, 304, 256, "Репутация", day.Reputation + "/100");
             Label(320, 448, 800, 28, "Утро + доход − покупки − счета", theme.Small);
+            if (day.CityWorkTaken) Label(320, 536, 800, 24, day.CityWorkTitle + (day.CityStage == CityWorkStage.Completed ? " · сдано" : " · без награды"), theme.Small);
             Label(320, 488, 800, 48, "$" + day.OpeningCash + " + $" + day.Earned + " − $" + day.Spent + " − $" + day.TotalExpenses + " = $" + day.FinalBalance, theme.Heading);
             Label(320, 560, 800, 52, saveNotice, theme.Small);
             bool settled = career.CompletedDays == day.DayNumber;
