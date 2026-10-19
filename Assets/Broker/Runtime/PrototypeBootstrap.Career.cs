@@ -8,6 +8,12 @@ namespace Broker.Runtime
     {
         private CareerState career;
         private CareerStorage storage;
+        private EmploymentState employment;
+        private EmploymentStorage employmentStorage;
+        private CareerMode mode = CareerMode.Employee;
+        private bool selectingMode = true;
+        private bool IsEmployeeMode => mode == CareerMode.Employee;
+        private bool CurrentCareerFinished => IsEmployeeMode ? employment.IsIntroComplete : career.IsFinished;
         private string saveNotice = "Прогресс сохраняется после завершения рабочего дня.";
         private bool saveSucceeded = true;
 
@@ -15,23 +21,42 @@ namespace Broker.Runtime
         {
             storage = new CareerStorage(Path.Combine(Application.persistentDataPath, "broker-career-v1.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<CareerSave>(text));
-            if (!storage.TryLoad(out career, out string notice)) career = new CareerState();
+            employmentStorage = new EmploymentStorage(Path.Combine(Application.persistentDataPath, "broker-employee-intro-v1.json"),
+                value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<EmploymentSave>(text));
+            LoadMode(CareerMode.Employee);
+            selectingMode = true;
+        }
+        private void LoadMode(CareerMode selected)
+        {
+            mode = selected; saveSucceeded = true; saveNotice = "Прогресс сохраняется только между днями. Текущий день при выходе начнётся заново.";
+            string notice;
+            if (IsEmployeeMode)
+            {
+                if (!employmentStorage.TryLoad(out employment, out notice)) employment = new EmploymentState();
+                if (career == null) career = new CareerState();
+            }
+            else
+            {
+                if (!storage.TryLoad(out career, out notice)) career = new CareerState();
+            }
             if (!string.IsNullOrEmpty(notice)) saveNotice = notice;
-            else if (career.CompletedDays > 0) saveNotice = "Загружено завершённых дней: " + career.CompletedDays + ". Незавершённый день начинается заново.";
-            Restart();
+            selectingMode = false; Restart();
         }
         private void SettleCareerDay()
         {
-            if (career.CompleteDay(day)) SaveCareer();
+            bool settled = IsEmployeeMode ? employment.CompleteDay(day) : career.CompleteDay(day);
+            if (settled) SaveCareer();
         }
         private void SaveCareer()
         {
-            saveSucceeded = storage.TrySave(career, out saveNotice);
+            saveSucceeded = IsEmployeeMode ? employmentStorage.TrySave(employment, out saveNotice) : storage.TrySave(career, out saveNotice);
             News((saveSucceeded ? "Сохранение: " : "ВНИМАНИЕ: ") + saveNotice);
         }
         private void NewCareer()
         {
-            CancelPending(); career = new CareerState(); SaveCareer(); Restart();
+            CancelPending();
+            if (IsEmployeeMode) employment = new EmploymentState(); else career = new CareerState();
+            SaveCareer(); Restart();
         }
         private void DrawCareerFinal()
         {
@@ -47,7 +72,7 @@ namespace Broker.Runtime
                 var r = reports[i];
                 Label(320, 456 + i * 44, 800, 36, "0" + r.day + "     $" + r.balance + "     " + r.deals + "/3 сделки     репутация " + r.reputation, theme.Text);
             }
-            if (day.CityWorkTaken) Label(320, 568, 800, 24, day.CityWorkTitle + (day.CityStage == CityWorkStage.Completed ? " · сдано" : " · без награды"), theme.Small);
+            if (saveSucceeded && Button(320, 776, 800, 48, "Выбрать режим")) selectingMode = true;
             Label(320, 600, 800, 72, career.Won ? saveNotice : (career.Balance < 0 ? "Остался долг. " : "Репутация ниже 40. ") + saveNotice, theme.Small);
             if (Button(320, 704, 800, 56, "Новая кампания", true, true)) RequestConfirmation(ConfirmationKind.NewCareer);
             if (!saveSucceeded && Button(320, 776, 800, 48, "Повторить сохранение")) SaveCareer();

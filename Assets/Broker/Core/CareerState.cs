@@ -48,7 +48,7 @@ namespace Broker.Core
         }
         public bool CompleteDay(BrokerDay day)
         {
-            if (day == null || !day.DayEnded || IsFinished || day.DayNumber != NextDay) return false;
+            if (day == null || day.Mode != CareerMode.Owner || !day.DayEnded || IsFinished || day.DayNumber != NextDay) return false;
             int expectedCash = Math.Max(0, Balance), expectedDebt = Math.Max(0, -Balance);
             if (day.OpeningCash != expectedCash || day.CarryDebt != expectedDebt) return false;
             var report = new CareerDayReport {

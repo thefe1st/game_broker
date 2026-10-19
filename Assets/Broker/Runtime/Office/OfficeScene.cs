@@ -97,7 +97,7 @@ namespace Broker.Runtime.Office
                 point.color = new Color(1, 0.88f, 0.69f);
             }
             BuildCity();
-            BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor();
+            BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor(); BuildSupervisor();
             Box("Plant pot", new Vector3(5.3f, 0.32f, 3.3f), new Vector3(0.6f, 0.64f, 0.6f), brass);
             Box("Plant stem", new Vector3(5.3f, 0.96f, 3.3f), new Vector3(0.08f, 0.8f, 0.08f), wood, false);
             for (int i = 0; i < 4; i++)
@@ -119,6 +119,7 @@ namespace Broker.Runtime.Office
         {
             var desktop = Box("Director desk - interact", new Vector3(1, 0.78f, -1.2f), new Vector3(3.6f, 0.16f, 1.25f), wood);
             Interactable(desktop, OfficeStation.Desk, "Рабочее место директора", "Сесть за стол и открыть клиентскую базу");
+            playerDesk = desktop.GetComponent<OfficeInteractable>();
             foreach (float x in new[] { -0.5f, 2.5f }) Box("Director desk leg", new Vector3(x, 0.35f, -1.2f), new Vector3(0.16f, 0.7f, 1.1f), navy);
             Box("Desk front panel", new Vector3(1, 0.45f, -0.7f), new Vector3(3.3f, 0.55f, 0.08f), wood);
             var monitor = Box("Director monitor", new Vector3(0.7f, 1.25f, -1.0f), new Vector3(1, 0.64f, 0.1f), ink);
@@ -131,7 +132,7 @@ namespace Broker.Runtime.Office
             var handset = Box("Handset", new Vector3(2.2f, 1.07f, -1.45f), new Vector3(0.72f, 0.12f, 0.19f), phoneMaterial);
             handset.transform.SetParent(phone.transform, true);
             Box("Director papers", new Vector3(-0.1f, 0.9f, -1.5f), new Vector3(0.48f, 0.07f, 0.35f), cream, false);
-            Chair(1, 0.05f); Text("Director title", "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР", new Vector3(1, 0.5f, -1.86f), 48, 0.025f, new Color(0.94f, 0.82f, 0.58f));
+            Chair(1, 0.05f); roleLabel = Text("Director title", "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР", new Vector3(1, 0.5f, -1.86f), 48, 0.025f, new Color(0.94f, 0.82f, 0.58f));
         }
         private void Chair(float x, float z)
         {
@@ -180,11 +181,12 @@ namespace Broker.Runtime.Office
         }
         private void BuildUpgrade()
         {
-            Box("Premium display pedestal", new Vector3(5.0f, 0.55f, -2.6f), new Vector3(0.85f, 1.1f, 0.85f), navy);
+            ownerDisplay.Add(Box("Premium display pedestal", new Vector3(5.0f, 0.55f, -2.6f), new Vector3(0.85f, 1.1f, 0.85f), navy));
             var sample = Box("Golden phone display - interact", new Vector3(5.0f, 1.18f, -2.6f), new Vector3(0.65f, 0.16f, 0.42f), brass);
+            ownerDisplay.Add(sample);
             Interactable(sample, OfficeStation.Upgrade, "Телефон для серьёзного человека", "Посмотреть улучшение за $90");
             var receiver = Box("Display handset", new Vector3(5.0f, 1.32f, -2.6f), new Vector3(0.74f, 0.12f, 0.2f), brass); receiver.transform.SetParent(sample.transform, true);
-            Text("Upgrade price", "$90 / СОЛИДНОСТЬ", new Vector3(5, 0.75f, -3.04f), 48, 0.023f, new Color(0.96f, 0.82f, 0.56f));
+            ownerDisplay.Add(Text("Upgrade price", "$90 / СОЛИДНОСТЬ", new Vector3(5, 0.75f, -3.04f), 48, 0.023f, new Color(0.96f, 0.82f, 0.56f)).gameObject);
         }
         private void BuildDoor()
         {
@@ -207,15 +209,16 @@ namespace Broker.Runtime.Office
         public void Refresh(BrokerDay day)
         {
             if (day == null) return;
-            RefreshCityActivities(day);
+            // City errands are hidden; retained implementation is not part of this scene.
             phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
             Camera active = overview.enabled ? overview : Player.Eye;
+            if (employeeMode) supervisorLabel.transform.rotation = active.transform.rotation;
             for (int i = 0; i < 2; i++)
             {
                 var worker = day.Employees[i]; bool working = worker.Work == WorkKind.Leads || worker.Work == WorkKind.Research;
                 screens[i].sharedMaterial = working ? green : amber;
                 workerLabels[i].transform.rotation = active.transform.rotation;
-                workerLabels[i].text = worker.Name + " / " + (worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
+                workerLabels[i].text = worker.Name + " / " + (employeeMode ? "КОЛЛЕГА" : worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
                 heads[i].localRotation = Quaternion.Euler(0, working ? Mathf.Sin(Time.unscaledTime * 1.7f + i) * 8 : 0, 0);
                 for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? -22 + Mathf.Sin(Time.unscaledTime * 3 + a) * 5 : 0, 0, 0);
             }

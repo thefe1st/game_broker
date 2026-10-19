@@ -10,12 +10,12 @@ namespace Broker.Runtime
         private int staffTargetIndex;
         private void OnWorldInteraction(OfficeInteractable target)
         {
-            if (intro || busy || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
+            if (selectingMode || intro || busy || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
             if (target.Station == OfficeStation.Street || target.Station == OfficeStation.ReturnOffice)
             {
                 CancelPending(); office.VisitCity(target.Station == OfficeStation.Street); EnterWorld(); return;
             }
-            if ((target.Station == OfficeStation.CityContact || target.Station == OfficeStation.CityPickup) && !office.IsInCity) return;
+            if (target.Station == OfficeStation.CityContact || target.Station == OfficeStation.CityPickup) return; // Temporarily hidden, not deleted.
             if (navigation.Open(target.Station, target.EmployeeIndex))
             {
                 staffTargetIndex = day.SelectedClientIndex;
@@ -50,10 +50,10 @@ namespace Broker.Runtime
         private void DrawWorldHUD()
         {
             Panel(32, 32, 320, 80, ""); Label(56, 44, 272, 32, "МОЙКА КАПИТАЛ", theme.Heading);
-            Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : "Офис · день " + day.DayNumber, theme.Small);
+            Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : (IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.Small);
             Panel(616, 32, 208, 80, ""); Label(648, 48, 160, 44, ClockText(), theme.Title);
-            Panel(1104, 32, 304, 80, ""); Label(1128, 44, 256, 36, "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
-            Meter(1128, 96, 256, day.Cash / (float)day.TotalExpenses, theme.Accent);
+            Panel(1104, 32, 304, 80, ""); Label(1128, 44, 256, 36, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
+            Meter(1128, 96, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Accent);
             if (!navigation.IsExploring || day.PendingEvent != null) return;
             var player = office.Player;
             Paint(new Rect(718, 478, 4, 4), player.Target != null ? theme.Accent : theme.Ink);
@@ -61,15 +61,10 @@ namespace Broker.Runtime
             if (!OfficeInput.Available) target = "Ввод недоступен · открой рабочий экран";
             else if (!player.Captured) target = "Нажми в окне Game";
             else if (player.Target != null) target = player.Target.Title.Split('/')[0].Trim();
-            else target = office.IsInCity ? "Бюро — у лифта · Павильон — слева" : "Телефон — звонки";
+            else target = office.IsInCity ? "Прогулка · лифт ведёт в офис" : "Телефон — звонки";
             Panel(420, 784, 600, 88, "");
             if (player.Target != null) { Paint(new Rect(444, 804, 48, 48), theme.Border); Label(459, 811, 32, 36, "E", theme.Heading); }
             Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
-            if (office.IsInCity && day.CityWorkTaken)
-            {
-                Panel(352, 136, 736, 88, "");
-                Label(376, 152, 688, 60, day.CityWorkStatus, theme.Small);
-            }
             if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
                 Label(420, 896, 600, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.Small);
             else if (officeNews.Count > 0 && Time.realtimeSinceStartupAsDouble < toastUntil)
@@ -83,13 +78,14 @@ namespace Broker.Runtime
             Scrim();
             switch (navigation.View)
             {
-                case OfficeView.Employee: DrawEmployeePanel(); break;
-                case OfficeView.Coffee: DrawShopPanel(false); break;
-                case OfficeView.Upgrade: DrawShopPanel(true); break;
+                case OfficeView.Employee: if (IsEmployeeMode) DrawColleaguePanel(); else DrawEmployeePanel(); break;
+                case OfficeView.Supervisor: DrawSupervisorPanel(); break;
+                case OfficeView.Coffee: if (IsEmployeeMode) DrawEmployerPropertyPanel(); else DrawShopPanel(false); break;
+                case OfficeView.Upgrade: if (IsEmployeeMode) DrawEmployerPropertyPanel(); else DrawShopPanel(true); break;
                 case OfficeView.Exit: DrawExitPanel(); break;
                 case OfficeView.Pause: DrawPausePanel(); break;
-                case OfficeView.CityContact: DrawCityPanel(false); break;
-                case OfficeView.CityPickup: DrawCityPanel(true); break;
+
+
             }
         }
         private void DrawEmployeePanel()
@@ -123,13 +119,12 @@ namespace Broker.Runtime
         }
         private void DrawExitPanel()
         {
+            if (IsEmployeeMode) { DrawEmploymentExit(); return; }
             Panel(280, 220, 880, 520, ""); Label(320, 260, 800, 48, "Закончить день?", theme.Title);
             MetricCard(320, 344, 248, "Касса", "$" + day.Cash);
             MetricCard(592, 344, 248, "Счета", "$" + day.TotalExpenses);
             MetricCard(864, 344, 256, "Остаток / долг", "$" + day.FinalBalance);
             Label(320, 488, 800, 32, "Звонки и поручения остановятся. Итоги сохранятся.", theme.Small);
-            if (day.CityWorkTaken && day.CityStage != CityWorkStage.Completed)
-                Label(320, 600, 800, 32, "Дело квартала не сдано: награды не будет, оплата не вернётся.", theme.Small);
             if (Button(320, 552, 800, 56, "Закрыть контору", true, true)) { CancelPending(); day.EndDay(); }
             if (Button(320, 640, 800, 56, "Ещё поработать · Esc")) EnterWorld();
         }
@@ -140,7 +135,8 @@ namespace Broker.Runtime
             if (Button(400, 384, 640, 56, "Журнал")) showNews = true;
             if (Button(400, 464, 640, 56, "Микрофон и связь")) OpenVoiceSetup();
             if (Button(400, 544, 640, 56, "Начать день заново")) RequestConfirmation(ConfirmationKind.RestartDay);
-            Label(400, 664, 640, 64, "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
+            if (Button(400, 624, 640, 48, "Выбрать режим")) RequestConfirmation(ConfirmationKind.SelectMode);
+            Label(400, 700, 640, 64, "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
         }
     }
 }

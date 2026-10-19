@@ -29,3 +29,6 @@ TestResults/
 
 # Headless voice-flow checks (uses explicit Unity test doubles)
 !Tools/VoiceChecks/VoiceChecks.csproj
+
+# SDK-bundled Roslyn syntax checks; not a Unity build
+!Tools/SyntaxChecks/SyntaxChecks.csproj

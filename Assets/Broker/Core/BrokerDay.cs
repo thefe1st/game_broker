@@ -23,9 +23,9 @@ namespace Broker.Core
         public int DayNumber { get; }
         public int OpeningCash { get; }
         public int CarryDebt { get; }
-        public int DailyRent => Rent + (DayNumber - 1) * 20;
-        public int DailyPayroll => Payroll + (DayNumber - 1) * 20;
-        public string DayTitle => DayNumber == 1 ? "Большие амбиции" : DayNumber == 2 ? "Вам уже перезванивают" : "Проверка на солидность";
+        public int DailyRent => IsEmployee ? 0 : Rent + (DayNumber - 1) * 20;
+        public int DailyPayroll => IsEmployee ? 0 : Payroll + (DayNumber - 1) * 20;
+        public string DayTitle => IsEmployee ? EmploymentTitle : DayNumber == 1 ? "Большие амбиции" : DayNumber == 2 ? "Вам уже перезванивают" : "Проверка на солидность";
         public int SelectedClientIndex { get; private set; }
         public ClientRecord Current => clients[SelectedClientIndex];
         public int Cash { get; private set; }
@@ -52,16 +52,18 @@ namespace Broker.Core
         public int TeamMorale => (employees[0].Morale + employees[1].Morale) / 2;
 
         public BrokerDay(int dayNumber = 1, int openingCash = 0, int reputation = 50, bool goldenPhone = false,
-            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0)
+            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner)
         {
-            if (dayNumber < 1 || dayNumber > 3 || openingCash < 0 || openingCash > 100000 || reputation < 0 || reputation > 100
+            if (!Enum.IsDefined(typeof(CareerMode), mode) || (mode == CareerMode.Employee && (carryDebt != 0 || goldenPhone))
+                || dayNumber < 1 || dayNumber > 3 || openingCash < 0 || openingCash > 100000 || reputation < 0 || reputation > 100
                 || carryDebt < 0 || carryDebt > 100000 || (relationshipBonuses != null && relationshipBonuses.Length != 3)
                 || (returning != null && returning.Length != 3)) throw new ArgumentException("Invalid day opening state");
-            DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
+            Mode = mode; DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
             Reputation = reputation; HasGoldenPhone = goldenPhone;
             clients = new List<ClientRecord> {
                 new ClientRecord("boris", "Борис", "Владелец трёх автомоек", "Оборудование через год. Не любит жаргон и боится вложить всё. Нужен резерв для бизнеса.", 150, 1),
-                new ClientRecord("inna", "Инна", "Бывший финансовый директор", "Проверяет цифры, годовой срок и письменные условия. Подготовка досье поможет доверию.", 220, 0),
+                new ClientRecord("inna", "Инна", "Бывший финансовый директор", IsEmployee ? "Проверяет цифры, годовой срок и письменные условия. Раскройте условия и ответьте на вопрос о договоре."
+                    : "Проверяет цифры, годовой срок и письменные условия. Подготовка досье поможет доверию.", 220, 0),
                 new ClientRecord("artem", "Артём", "Наследник с большими планами", "Хочет персональный отчёт и живой контакт после сделки. Обещания эксклюзивной доходности не помогут.", 180, 2)
             };
             for (int i = 0; i < clients.Count; i++)
@@ -73,7 +75,8 @@ namespace Broker.Core
             }
             employees = new List<EmployeeRecord> { new EmployeeRecord("Лена", "Досье за 20 секунд. Верит в порядок, но не в ваш галстук."), new EmployeeRecord("Макс", "Побочные продажи приносят 55. Энтузиазма больше, чем осторожности.") };
             Clients = clients.AsReadOnly(); Employees = employees.AsReadOnly();
-            Notify("Лена: День " + DayNumber + ". На обязательства нужно $" + TotalExpenses + ". На визитках у нас уже холдинг.");
+            if (IsEmployee) Notify(SupervisorBrief);
+            else Notify("Лена: День " + DayNumber + ". На обязательства нужно $" + TotalExpenses + ". На визитках у нас уже холдинг.");
             if (CarryDebt > 0) Notify("Бухгалтерия: Долг $" + CarryDebt + " перенесён в счёт этого дня. Второй раз из кассы его не списываем.");
         }
 
@@ -131,7 +134,9 @@ namespace Broker.Core
                     case ConversationStage.Service: return "Дальше: обсуди персональный отчёт или личное сопровождение.";
                     case ConversationStage.Proposal: return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
                     case ConversationStage.Objection: return ClientConversation.Hint(Current.Id);
-                    case ConversationStage.Trust: return "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
+                    case ConversationStage.Trust: return IsEmployee
+                        ? "Не хватает доверия. Если раньше давили, скажите «Решение за вами». Потерю доверия от ложных гарантий так не исправить."
+                        : "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
                     default: return "Вопрос клиента закрыт. Можно завершить сделку.";
                 }
             }
@@ -215,14 +220,19 @@ namespace Broker.Core
                 return Current.Name + ": " + ClientConversation.Objection(Current.Id);
             }
             if (!Current.ObjectionResolved) return Current.Name + ": Мой вопрос всё ещё открыт. " + ClientConversation.Objection(Current.Id);
-            if (Trust < 2) return Current.Name + ": Пока не доверяю. Подготовьте досье или вернёмся к разговору без давления.";
+            if (Trust < 2) return Current.Name + (IsEmployee ? ": Пока не доверяю. Если раньше торопили — дайте мне подумать. Одной вежливостью ложные гарантии не исправить."
+                : ": Пока не доверяю. Подготовьте досье или вернёмся к разговору без давления.");
             Current.DealClosed = true; Current.Call = CallStatus.Closed;
-            Credit(Current.Commission); Reputation = Math.Min(100, Reputation + 5);
-            Notify("Бухгалтерия: +" + Current.Commission + " комиссии. Сделок: " + DealsCount + "/3.");
+            FirmRevenue += Current.Commission;
+            int payout = IsEmployee ? PersonalPayout(Current.Commission) : Current.Commission;
+            Credit(payout); Reputation = Math.Min(100, Reputation + 5);
+            Notify(IsEmployee ? "Бухгалтерия: фирме начислено $" + Current.Commission + ", вам выплачено $" + payout + " (20%)."
+                : "Бухгалтерия: +" + Current.Commission + " комиссии. Сделок: " + DealsCount + "/3.");
             string agreement = Current.Id == "boris" ? "Договорились. Начнём с небольшой суммы, резерв остаётся у мойки."
                 : Current.Id == "inna" ? "Условия согласованы. Год, комиссия, риск и письменный договор. Теперь можно работать."
                 : "Договорились. Личный контакт записал. Если ответит робот, назову его вашим именем.";
-            return Current.Name + ": " + agreement + "\nКомиссия: +" + Current.Commission + ". Все деньги и продукты вымышлены.";
+            return Current.Name + ": " + agreement + (IsEmployee ? "\nКомиссия фирмы: $" + Current.Commission + ". Лично вам: +$" + payout + " (20%)."
+                : "\nКомиссия: +" + Current.Commission + ".") + " Все деньги и продукты вымышлены.";
         }
         public string EndCall()
         {
@@ -232,6 +242,7 @@ namespace Broker.Core
         }
         public string AssignTask(int workerIndex, WorkKind work, int clientIndex)
         {
+            if (IsEmployee) return "Лена и Макс — ваши коллеги, не подчинённые. Звонки ведите лично.";
             if (DayEnded || PendingEvent != null || workerIndex < 0 || workerIndex >= employees.Count
                 || clientIndex < 0 || clientIndex >= clients.Count || work == WorkKind.Idle || !Enum.IsDefined(typeof(WorkKind), work)) return "Поручение недоступно.";
             var worker = employees[workerIndex];
@@ -247,11 +258,13 @@ namespace Broker.Core
         }
         public string BuyCoffee()
         {
+            if (IsEmployee) return "Офисные закупки оплачивает работодатель. Личные деньги не списаны.";
             if (DayEnded || PendingEvent != null || CoffeeBought || Cash < 40) return "Кофе недоступен: нужен 40, покупка один раз за день.";
             Spend(40); CoffeeBought = true; ChangeMorale(20); return "Команда получила кофе. -40 денег, +20 настроения. Теперь хотя бы бодро паникуем.";
         }
         public string BuyGoldenPhone()
         {
+            if (IsEmployee) return "Улучшениями офиса занимается работодатель. Личные деньги не списаны.";
             if (DayEnded || PendingEvent != null || HasGoldenPhone || Cash < 90) return "Телефон недоступен: нужен 90, покупка один раз.";
             Spend(90); HasGoldenPhone = true;
             foreach (var c in clients) if (c.Call != CallStatus.Closed) c.Trust = Math.Min(4, c.Trust + 1);
@@ -284,9 +297,9 @@ namespace Broker.Core
             }
             // The closing bell wins ties: an uncollected city errand never pays automatically.
             if (RemainingSeconds <= 0) { EndDay(); return; }
-            AdvanceCityActivity(actual, inCity);
-            MaybeEvent();
-            if (PendingEvent == null) OfficeBanter();
+            if (!IsEmployee) AdvanceCityActivity(actual, inCity);
+            if (!IsEmployee) MaybeEvent();
+            if (PendingEvent == null && !IsEmployee) OfficeBanter();
         }
         private void OfficeBanter()
         {

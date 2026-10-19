@@ -40,7 +40,7 @@ namespace Broker.Runtime
         {
             office = new GameObject("First-person broker office").AddComponent<OfficeScene>();
             office.Player.OnInteraction = OnWorldInteraction;
-            office.Player.OnFocusLost = () => { if (!intro && !day.DayEnded && navigation.IsExploring) navigation.Pause(); };
+            office.Player.OnFocusLost = () => { if (!selectingMode && !intro && !day.DayEnded && navigation.IsExploring) navigation.Pause(); };
             voice = gameObject.AddComponent<VoiceSession>();
             voice.OnTranscript = text => { if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text; };
             InitializeCareer();
@@ -51,14 +51,14 @@ namespace Broker.Runtime
             canvasOffset = new Vector2((Screen.width - 1440 * canvasScale) / 2, (Screen.height - 960 * canvasScale) / 2);
             bool escape = OfficeInput.EscapePressed();
             if (UtilityOverlayOpen && escape) CloseUtilityOverlay();
-            else if (!intro && !day.DayEnded && !showNews && day.PendingEvent == null && escape)
+            else if (!selectingMode && !intro && !day.DayEnded && !showNews && day.PendingEvent == null && escape)
             {
                 if (navigation.IsExploring) { navigation.Pause(); voice.Cancel(); }
                 else { CancelPending(); EnterWorld(); }
             }
-            if (!intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
+            if (!selectingMode && !intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
-            bool blocked = intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
+            bool blocked = selectingMode || intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
             office.WorldMotionEnabled = !blocked && navigation.RunsClock && !busy && !voice.Working;
             office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
@@ -73,17 +73,19 @@ namespace Broker.Runtime
         private void Restart()
         {
             CancelPending(); showVoiceSetup = false; showCallLog = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
-            if (career.IsFinished)
+            if (CurrentCareerFinished)
             {
                 // Presentation-only day: the actual final ledger is stored in CareerState.
-                day = new BrokerDay(3, Math.Max(0, career.Balance), career.Reputation, career.GoldenPhone);
+                day = IsEmployeeMode ? new BrokerDay(3, employment.PersonalSavings, employment.Reputation, mode: CareerMode.Employee)
+                    : new BrokerDay(3, Math.Max(0, career.Balance), career.Reputation, career.GoldenPhone);
                 day.EndDay(); lastDayEnded = true; intro = false;
             }
-            else { day = career.CreateDay(); lastDayEnded = false; intro = true; }
+            else { day = IsEmployeeMode ? employment.CreateDay() : career.CreateDay(); lastDayEnded = false; intro = true; }
             showNews = false; newsScroll = Vector2.zero;
             foreach (var history in histories) history.Clear();
             foreach (var conversation in conversations) conversation.Clear();
             officeNews.Clear(); message = ""; scroll = Vector2.zero; DrainNews();
+            office.ConfigureCareerMode(mode);
             navigation.Reset(); staffTargetIndex = 0; office.Player.SetControl(false); office.ResetPlayer();
         }
         private void DrainNews()
@@ -166,6 +168,11 @@ namespace Broker.Runtime
                 GUI.matrix = previous;
                 return;
             }
+            if (selectingMode)
+            {
+                GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
+                DrawModeSelection(); GUI.matrix = previous; return;
+            }
             if (navigation.View != OfficeView.Desk)
             {
                 GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
@@ -182,6 +189,7 @@ namespace Broker.Runtime
         private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.035f, 0.055f, 0.09f, 0.86f)); }
         private void DrawIntro()
         {
+            if (IsEmployeeMode) { DrawEmploymentIntro(); return; }
             Scrim(); Panel(280, 112, 880, 736, "");
             Label(320, 152, 800, 32, "ДЕНЬ " + day.DayNumber + " / 3", theme.Tag);
             Label(320, 208, 800, 132, day.DayNumber == 1 ? "МАЛЕНЬКАЯ КОНТОРА.\nБОЛЬШИЕ АМБИЦИИ." : "СЕГОДНЯ ВАС\nУЖЕ ПОМНЯТ.", theme.Display);
@@ -221,6 +229,7 @@ namespace Broker.Runtime
         }
         private void DrawResults()
         {
+            if (IsEmployeeMode) { DrawEmploymentResults(); return; }
             if (career.IsFinished) { DrawCareerFinal(); return; }
             Scrim(); Panel(280, 112, 880, 736, "");
             Label(320, 152, 800, 28, "ДЕНЬ " + day.DayNumber + " ЗАКРЫТ", theme.Tag);
@@ -229,7 +238,7 @@ namespace Broker.Runtime
             MetricCard(592, 304, 248, "Сделки", day.DealsCount + " / 3");
             MetricCard(864, 304, 256, "Репутация", day.Reputation + "/100");
             Label(320, 448, 800, 28, "Утро + доход − покупки − счета", theme.Small);
-            if (day.CityWorkTaken) Label(320, 536, 800, 24, day.CityWorkTitle + (day.CityStage == CityWorkStage.Completed ? " · сдано" : " · без награды"), theme.Small);
+
             Label(320, 488, 800, 48, "$" + day.OpeningCash + " + $" + day.Earned + " − $" + day.Spent + " − $" + day.TotalExpenses + " = $" + day.FinalBalance, theme.Heading);
             Label(320, 560, 800, 52, saveNotice, theme.Small);
             bool settled = career.CompletedDays == day.DayNumber;

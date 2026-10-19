@@ -4,7 +4,7 @@ namespace Broker.Runtime
 {
     public sealed partial class PrototypeBootstrap
     {
-        private enum ConfirmationKind { None, RestartDay, NewCareer }
+        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode }
         private ConfirmationKind confirmation;
         private bool showVoiceSetup;
         private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || confirmation != ConfirmationKind.None;
@@ -30,10 +30,18 @@ namespace Broker.Runtime
         private void DrawConfirmation()
         {
             Scrim(); Panel(340, 220, 760, 510, "ПОДТВЕРЖДЕНИЕ / НИЧЕГО ЕЩЁ НЕ СБРОШЕНО");
+            if (confirmation == ConfirmationKind.SelectMode)
+            {
+                Label(372, 290, 696, 64, "Вернуться к выбору режима?", theme.Title);
+                Label(372, 386, 696, 112, "Незавершённый день будет начат заново. Завершённые дни обоих режимов останутся в отдельных сохранениях. При ошибке записи сначала повторите сохранение.", theme.Text);
+                if (Button(372, 546, 696, 52, "Остаться / Esc", true, true)) CloseUtilityOverlay();
+                if (Button(372, 626, 696, 52, "Выбрать режим", saveSucceeded)) { CloseUtilityOverlay(); selectingMode = true; }
+                return;
+            }
             bool wholeCareer = confirmation == ConfirmationKind.NewCareer;
             Label(372, 290, 696, 64, wholeCareer ? "Начать новую кампанию?" : "Начать этот день заново?", theme.Title);
             Label(372, 386, 696, 112, wholeCareer
-                ? "Текущая кампания будет заменена новой: деньги, долг, отношения и результаты дней сбросятся. Отменить это действие из игры нельзя."
+                ? (IsEmployeeMode ? "Будет сброшена только вводная глава наёмного брокера: личные деньги, отношения и результаты. Сохранение владельца не изменится." : "Будет сброшена только кампания владельца: деньги, долг, отношения и результаты. Сохранение наёмного брокера не изменится.")
                 : "Все действия текущего дня будут потеряны: звонки, покупки и поручения. Завершённые дни сохранятся. Утро текущего дня начнётся заново.", theme.Text);
             if (Button(372, 546, 696, 52, "Нет, вернуться / Esc", true, true)) CloseUtilityOverlay();
             if (Button(372, 626, 696, 52, wholeCareer ? "Да, сбросить кампанию" : "Да, начать день заново"))

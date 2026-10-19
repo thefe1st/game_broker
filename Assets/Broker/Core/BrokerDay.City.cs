@@ -55,7 +55,7 @@ namespace Broker.Core
                 }
             }
         }
-        private bool CanChangeCityWork => !DayEnded && PendingEvent == null && Call != CallStatus.Active;
+        private bool CanChangeCityWork => !IsEmployee && !DayEnded && PendingEvent == null && Call != CallStatus.Active;
         public string StartCityWork(CityWorkKind kind)
         {
             if (!CanChangeCityWork) return "Сначала завершите звонок или текущее происшествие.";
