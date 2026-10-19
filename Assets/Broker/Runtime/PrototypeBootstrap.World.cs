@@ -24,7 +24,7 @@ namespace Broker.Runtime
         }
         private void EnterWorld()
         {
-            if (busy || UtilityOverlayOpen || voice.Recording || voice.Working) return;
+            if (!ApplicationActive || busy || UtilityOverlayOpen || voice.Recording || voice.Working) return;
             navigation.Close(); voice.Cancel();
             office.Player.SetControl(!intro && !day.DayEnded && day.PendingEvent == null && OfficeInput.Available);
             office.Player.Capture();
@@ -139,7 +139,7 @@ namespace Broker.Runtime
         private void DrawPausePanel()
         {
             Panel(360, 156, 720, 648, ""); Label(400, 196, 640, 56, "Рынок подождёт.", theme.Title);
-            if (Button(400, 296, 640, 64, "Продолжить · Esc", true, true)) EnterWorld();
+            if (Button(400, 296, 640, 64, "Продолжить · Esc", ApplicationActive, true)) ResumeGameplay();
             if (Button(400, 384, 640, 56, "Журнал")) showNews = true;
             if (Button(400, 464, 640, 56, "Микрофон и связь")) OpenVoiceSetup();
             if (Button(400, 544, 640, 56, "Начать день заново")) RequestConfirmation(ConfirmationKind.RestartDay);

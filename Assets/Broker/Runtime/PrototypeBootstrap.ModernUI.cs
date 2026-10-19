@@ -113,8 +113,8 @@ namespace Broker.Runtime
                 { if (voice.Recording) voice.FinishRecording(); else voice.BeginRecording(); }
             }
             else if (Button(692, 764, 300, 56, "Проверить микрофон", !busy && !voice.Working)) OpenVoiceSetup();
-            if (Button(1008, 764, 360, 56, voice.Recording || voice.Working ? "Остановить голос" : "Завершить звонок", day.Call == CallStatus.Active || voice.Recording || voice.Working))
-            { if (voice.Recording || voice.Working) voice.Cancel(); else { CancelPending(); PresentClientReply(day.EndCall()); } }
+            if (Button(1008, 764, 360, 56, voice.Recording || voice.Working ? "Остановить голос" : "Завершить звонок", (day.Call == CallStatus.Active && !busy) || voice.Recording || voice.Working))
+            { if (voice.Recording || voice.Working) voice.Cancel(); else RequestConfirmation(ConfirmationKind.EndCall); }
         }
         private void StageChip(ref float x, string caption, bool done)
         {

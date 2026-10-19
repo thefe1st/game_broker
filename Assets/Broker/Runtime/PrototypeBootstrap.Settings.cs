@@ -4,7 +4,7 @@ namespace Broker.Runtime
 {
     public sealed partial class PrototypeBootstrap
     {
-        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode }
+        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode, EndCall }
         private ConfirmationKind confirmation;
         private bool showVoiceSetup;
         private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || confirmation != ConfirmationKind.None;
@@ -29,13 +29,25 @@ namespace Broker.Runtime
 
         private void DrawConfirmation()
         {
-            Scrim(); Panel(340, 220, 760, 510, "ПОДТВЕРЖДЕНИЕ / НИЧЕГО ЕЩЁ НЕ СБРОШЕНО");
+            Scrim(); Panel(340, 220, 760, 510, "ПОДТВЕРЖДЕНИЕ / ВРЕМЯ НА ПАУЗЕ");
             if (confirmation == ConfirmationKind.SelectMode)
             {
                 Label(372, 290, 696, 64, "Вернуться к выбору режима?", theme.Title);
                 Label(372, 386, 696, 112, "Незавершённый день будет начат заново. Завершённые дни обоих режимов останутся в отдельных сохранениях. При ошибке записи сначала повторите сохранение.", theme.Text);
                 if (Button(372, 546, 696, 52, "Остаться / Esc", true, true)) CloseUtilityOverlay();
                 if (Button(372, 626, 696, 52, "Выбрать режим", saveSucceeded)) { CloseUtilityOverlay(); selectingMode = true; }
+                return;
+            }
+            if (confirmation == ConfirmationKind.EndCall)
+            {
+                Label(372, 290, 696, 64, "Завершить звонок: " + day.Current.Name + "?", theme.Title);
+                Label(372, 386, 696, 112, "Сегодня этому клиенту больше не позвонить. Сделка не заключена, комиссия не начислится. Можно вернуться в разговор — его условия и черновик сохранятся.", theme.Text);
+                if (Button(372, 546, 696, 52, "Продолжить разговор / Esc", true, true)) CloseUtilityOverlay();
+                if (Button(372, 626, 696, 52, "Да, завершить без сделки", day.Call == Broker.Core.CallStatus.Active && !day.DayEnded))
+                {
+                    CloseUtilityOverlay(); CancelPending(); message = "";
+                    PresentClientReply(day.EndCall());
+                }
                 return;
             }
             bool wholeCareer = confirmation == ConfirmationKind.NewCareer;

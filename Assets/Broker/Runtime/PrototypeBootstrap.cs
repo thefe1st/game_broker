@@ -18,6 +18,9 @@ namespace Broker.Runtime
         private CancellationTokenSource pending;
         private int revision;
         private bool busy, useGateway, voiceEnabled, lastDayEnded, showNews, intro = true;
+        private bool applicationFocused = true, applicationPaused;
+        private bool ApplicationActive => applicationFocused && !applicationPaused;
+        private OfficeView pauseReturnView = OfficeView.Explore;
         private Vector2 newsScroll;
         private double toastUntil;
         private VoiceSession voice;
@@ -40,7 +43,7 @@ namespace Broker.Runtime
         {
             office = new GameObject("First-person broker office").AddComponent<OfficeScene>();
             office.Player.OnInteraction = OnWorldInteraction;
-            office.Player.OnFocusLost = () => { if (!selectingMode && !intro && !day.DayEnded && navigation.IsExploring) navigation.Pause(); };
+            office.Player.OnFocusLost = SuspendForApplication;
             voice = gameObject.AddComponent<VoiceSession>();
             voice.OnTranscript = text => { if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text; };
             InitializeCareer();
@@ -49,20 +52,50 @@ namespace Broker.Runtime
         {
             canvasScale = Mathf.Max(0.1f, Mathf.Min(Screen.width / 1440f, Screen.height / 960f));
             canvasOffset = new Vector2((Screen.width - 1440 * canvasScale) / 2, (Screen.height - 960 * canvasScale) / 2);
-            bool escape = OfficeInput.EscapePressed();
+            bool escape = OfficeInput.EscapePressed() && ApplicationActive;
             if (UtilityOverlayOpen && escape) CloseUtilityOverlay();
             else if (!selectingMode && !intro && !day.DayEnded && !showNews && day.PendingEvent == null && escape)
             {
-                if (navigation.IsExploring) { navigation.Pause(); voice.Cancel(); }
+                if (navigation.IsExploring) PauseGameplay();
+                else if (navigation.View == OfficeView.Pause) ResumeGameplay();
                 else { CancelPending(); EnterWorld(); }
             }
-            if (!selectingMode && !intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
+            if (ApplicationActive && !selectingMode && !intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
             if (day.DayEnded && !lastDayEnded) { CancelPending(); SettleCareerDay(); lastDayEnded = true; }
-            bool blocked = selectingMode || intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
+            bool blocked = !ApplicationActive || selectingMode || intro || showNews || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null;
             office.Player.SetControl(navigation.IsExploring && !blocked && OfficeInput.Available);
             office.WorldMotionEnabled = !blocked && navigation.RunsClock && !busy && !voice.Working;
             office.Present(navigation.View == OfficeView.Desk, canvasScale, canvasOffset);
             DrainNews(); office.Refresh(day);
+        }
+        private void OnApplicationFocus(bool focus)
+        {
+            applicationFocused = focus;
+            if (!focus) SuspendForApplication();
+        }
+        private void OnApplicationPause(bool paused)
+        {
+            applicationPaused = paused;
+            if (paused) SuspendForApplication();
+        }
+        private void SuspendForApplication()
+        {
+            // Called independently of the walking controller: desk input disables that controller.
+            voice?.Cancel();
+            if (office != null) office.Player.SetControl(false);
+            if (day != null && !selectingMode && !intro && !day.DayEnded && navigation.RunsClock) PauseGameplay();
+        }
+        private void PauseGameplay()
+        {
+            if (navigation.View != OfficeView.Pause) pauseReturnView = navigation.View;
+            navigation.Pause(); voice?.Cancel();
+            if (office != null) office.Player.SetControl(false);
+        }
+        private void ResumeGameplay()
+        {
+            if (!ApplicationActive || UtilityOverlayOpen) return;
+            if (pauseReturnView == OfficeView.Desk) navigation.Open(OfficeStation.Desk);
+            else EnterWorld();
         }
         private void OnDestroy()
         {
@@ -86,7 +119,7 @@ namespace Broker.Runtime
             foreach (var conversation in conversations) conversation.Clear();
             officeNews.Clear(); message = ""; scroll = Vector2.zero; DrainNews();
             office.ConfigureCareerMode(mode);
-            navigation.Reset(); staffTargetIndex = 0; office.Player.SetControl(false); office.ResetPlayer();
+            navigation.Reset(); pauseReturnView = OfficeView.Explore; staffTargetIndex = 0; office.Player.SetControl(false); office.ResetPlayer();
         }
         private void DrainNews()
         {
@@ -111,11 +144,11 @@ namespace Broker.Runtime
             Add(reply.StartsWith(prefix, StringComparison.Ordinal) ? reply : prefix + reply);
             History.Add(new DialogueTurn("client", reply));
             while (History.Count > 12) History.RemoveAt(0);
-            if (voiceEnabled && !day.DayEnded && day.PendingEvent == null) voice.PlayReply(reply);
+            if (voiceEnabled && ApplicationActive && navigation.View != OfficeView.Pause && !day.DayEnded && day.PendingEvent == null) voice.PlayReply(reply);
         }
         private async void SendMessageToClient()
         {
-            if (busy || intro || day.DayEnded || day.PendingEvent != null || day.Call != CallStatus.Active
+            if (!ApplicationActive || busy || intro || day.DayEnded || day.PendingEvent != null || day.Call != CallStatus.Active
                 || string.IsNullOrWhiteSpace(message) || voice.Recording || voice.Working) return;
             voice.Cancel();
             string input = message.Trim(); message = ""; Add("Вы: " + input);

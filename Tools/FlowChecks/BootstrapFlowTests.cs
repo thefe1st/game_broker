@@ -22,6 +22,7 @@ namespace Broker.FlowChecks
         private void Set(string name, object value) => typeof(PrototypeBootstrap).GetField(name, Flags).SetValue(game, value);
         private object Call(string name, params object[] args) => typeof(PrototypeBootstrap).GetMethod(name, Flags).Invoke(game, args);
         private BrokerDay Day => Get<BrokerDay>("day");
+        private bool OverlayOpen => (bool)typeof(PrototypeBootstrap).GetProperty("UtilityOverlayOpen", Flags).GetValue(game);
         private void Frame() { Call("Update"); Call("OnGUI"); }
         private void Click(string label) { GUI.Click = label; Call("OnGUI"); Assert.That(GUI.Click, Is.Null, "Expected enabled button: " + label); }
         private void Begin() { Click("Начать / продолжить вводную главу"); Click("Начать рабочий день"); }
@@ -149,6 +150,107 @@ namespace Broker.FlowChecks
             Begin(); Get<OfficeScene>("office").VisitCity(true);
             Interact(OfficeStation.CityContact); Interact(OfficeStation.CityPickup);
             Assert.That(Get<OfficeNavigation>("navigation").IsExploring, Is.True); Assert.That(Day.CityWorkTaken, Is.False);
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void EndCallCancellationKeepsAttemptDraftConditionsAndClock(bool escape)
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); Day.Say("Какая цель? Есть риск убытка. Комиссия 2%.");
+            Set("message", "Мой неотправленный ответ"); float remaining = Day.RemainingSeconds;
+            Click("Завершить звонок"); Frame();
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.Active)); Assert.That(Day.RemainingSeconds, Is.EqualTo(remaining));
+            Assert.That(GUI.Labels, Does.Contain("Завершить звонок: Борис?"));
+            if (escape) { OfficeInput.Escape = true; Call("Update"); } else Click("Продолжить разговор / Esc");
+            Assert.That(OverlayOpen, Is.False);
+            Assert.That(Get<string>("message"), Is.EqualTo("Мой неотправленный ответ"));
+            Assert.That(Day.NeedsKnown && Day.RisksExplained && Day.FeesExplained, Is.True);
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.Active)); Assert.That(Day.Cash, Is.Zero);
+        }
+        [Test] public void ConfirmedCallEndConsumesOnlyThisAttemptWithoutPaying()
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); Set("message", "Не отправлено");
+            Click("Завершить звонок"); Click("Да, завершить без сделки");
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.Closed)); Assert.That(Get<string>("message"), Is.Empty);
+            Assert.That(Day.Cash, Is.Zero); Assert.That(Day.DealsCount, Is.Zero);
+            Day.StartCall(); Assert.That(Day.Call, Is.EqualTo(CallStatus.Closed));
+            Click("Следующий клиент"); Assert.That(Day.SelectedClientIndex, Is.EqualTo(1));
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.NotStarted));
+        }
+        [Test] public void CannotEndCallWhileDialogueRequestIsBusy()
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); Set("busy", true);
+            GUI.Click = "Завершить звонок"; Call("OnGUI");
+            Assert.That(GUI.Click, Is.EqualTo("Завершить звонок")); GUI.Click = null;
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.Active)); Assert.That(OverlayOpen, Is.False);
+        }
+        [Test] public void VoiceStopDoesNotEndCallOrAskToEndIt()
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); var voice = Get<VoiceSession>("voice"); voice.BeginRecording(true);
+            Assert.That(voice.Recording, Is.True); Click("Остановить голос");
+            Assert.That(voice.Recording, Is.False); Assert.That(Day.Call, Is.EqualTo(CallStatus.Active));
+            Assert.That(OverlayOpen, Is.False);
+        }
+        [TestCase(false, false)] [TestCase(false, true)] [TestCase(true, false)] [TestCase(true, true)]
+        public void ApplicationSuspensionPausesDeskOrWorldAndRequiresExplicitResume(bool atDesk, bool usePause)
+        {
+            Begin(); if (atDesk) Interact(OfficeStation.Desk);
+            Day.StartCall(); Set("message", "Сохранённый черновик"); float remaining = Day.RemainingSeconds;
+            string callback = usePause ? "OnApplicationPause" : "OnApplicationFocus";
+            Call(callback, usePause); for (int i = 0; i < 3; i++) Frame();
+            Assert.That(Day.RemainingSeconds, Is.EqualTo(remaining));
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
+            Assert.That(Get<OfficeScene>("office").WorldMotionEnabled, Is.False);
+            Assert.That(Get<OfficeScene>("office").Player.ControlEnabled, Is.False);
+            Call(callback, !usePause); Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(remaining));
+            Click("Продолжить · Esc");
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(atDesk ? OfficeView.Desk : OfficeView.Explore));
+            Assert.That(Get<string>("message"), Is.EqualTo("Сохранённый черновик")); Assert.That(Day.Call, Is.EqualTo(CallStatus.Active));
+            Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(remaining - 1)); Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void FocusAndPauseCallbacksAreIndependentAndRepeatedPauseKeepsDeskDestination(bool pauseFirst)
+        {
+            Begin(); Interact(OfficeStation.Desk);
+            if (pauseFirst) { Call("OnApplicationPause", true); Call("OnApplicationFocus", false); }
+            else { Call("OnApplicationFocus", false); Call("OnApplicationPause", true); }
+            Call("OnApplicationFocus", true); Call("ResumeGameplay"); Frame();
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
+            Assert.That(Day.RemainingSeconds, Is.EqualTo(600));
+            Call("OnApplicationPause", false); OfficeInput.Escape = true; Call("Update");
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Desk));
+        }
+        [Test] public void ApplicationSuspensionStopsRecordingAndDoesNotRestartIt()
+        {
+            Begin(); Interact(OfficeStation.Desk); var voice = Get<VoiceSession>("voice"); voice.BeginRecording(true);
+            Assert.That(voice.Recording, Is.True); Call("OnApplicationFocus", false);
+            Assert.That(voice.Recording, Is.False); Assert.That(voice.Working, Is.False);
+            Call("OnApplicationFocus", true); Click("Продолжить · Esc");
+            Assert.That(voice.Recording, Is.False); Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
+        [Test] public void FocusLossKeepsCallConfirmationAndReturnsThroughPause()
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); Click("Завершить звонок");
+            Call("OnApplicationFocus", false); Call("OnApplicationFocus", true);
+            Click("Продолжить разговор / Esc");
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
+            Click("Продолжить · Esc"); Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Desk));
+            Assert.That(Day.Call, Is.EqualTo(CallStatus.Active));
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void ReplyDuringSuspensionOrPauseIsDisplayedWithoutStartingSpeechRequest(bool focusLost)
+        {
+            Begin(); Interact(OfficeStation.Desk); Day.StartCall(); Set("voiceEnabled", true);
+            if (focusLost) Call("OnApplicationFocus", false); else Call("PauseGameplay");
+            Call("PresentClientReply", "Текст ответа во время паузы");
+            Assert.That(UnityWebRequest.Sent, Is.Zero);
+            var logs = Get<System.Collections.Generic.List<string>[]>("conversations");
+            Assert.That(logs[0], Does.Contain("Борис: Текст ответа во время паузы"));
+        }
+        [TestCase("NewCareer")] [TestCase("RestartDay")]
+        public void CancelDestructiveConfirmationKeepsEarnedMoneyAndSameDay(string kind)
+        {
+            Begin(); Sell(Day, 0); var same = Day; Confirm(kind); Click("Нет, вернуться / Esc");
+            Assert.That(Day, Is.SameAs(same)); Assert.That(Day.Cash, Is.EqualTo(30));
+            Assert.That(Directory.GetFiles(folder), Is.Empty);
         }
         [Test] public void FailedWriteBlocksModeSwitchAndCanBeRetriedWithoutDuplicatePayout()
         {
