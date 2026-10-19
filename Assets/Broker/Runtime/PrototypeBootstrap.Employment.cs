@@ -10,18 +10,21 @@ namespace Broker.Runtime
             Scrim(); Panel(200, 96, 1040, 768, "");
             Label(240, 132, 960, 28, "АЛЛО, ЭТО ДЕНЬГИ / РЕЖИМЫ ПРОТОТИПА", theme.Tag);
             Label(240, 184, 960, 64, "С чего начнём?", theme.Display);
-            Label(240, 276, 960, 40, "Наёмный брокер — новая вводная глава", theme.Title);
-            Label(240, 336, 960, 76, "Три вводных дня: личные звонки, начальник и 20% комиссии. Лена и Макс — коллеги. Дальнейшая карьера и песочница пока не реализованы.", theme.Text);
-            if (Button(240, 436, 960, 56, "Начать / продолжить вводную главу", true, true)) LoadMode(CareerMode.Employee);
-            Label(240, 540, 960, 40, "Владелец — прежний прототип", theme.Title);
-            Label(240, 600, 960, 64, "Три дня управления: сотрудники, счета и покупки. Прежнее сохранение загружается без миграции. Это отдельный режим, не карьерная развилка.", theme.Text);
-            if (Button(240, 688, 960, 56, "Открыть кампанию владельца")) LoadMode(CareerMode.Owner);
-            Label(240, 788, 960, 40, "Режимы хранят прогресс отдельно. Переключение ничего не сбрасывает.", theme.Small);
+            Label(240, 256, 960, 40, "Наёмный брокер — вводная глава", theme.Title);
+            Label(240, 304, 960, 44, "Три дня обучения: личные звонки, начальник и 20% комиссии. Лена и Макс — коллеги.", theme.Text);
+            if (Button(240, 360, 960, 44, "Начать / продолжить вводную главу", true, true)) LoadMode(CareerMode.Employee);
+            Label(240, 432, 960, 40, "Рабочие дни — продолжение после вступления", theme.Title);
+            Label(240, 480, 960, 44, string.IsNullOrEmpty(workLoadNotice) ? "Три контакта в день из шести; отношения и отчёты сохраняются. Своей фирмы пока нет." : workLoadNotice, theme.Small);
+            if (Button(240, 536, 960, 44, workCareer != null ? "Продолжить рабочие дни" : "Начать рабочие дни с дня 4", workCareer != null || employment.IsIntroComplete)) RequestWorkDays();
+            Label(240, 608, 960, 40, "Владелец — прежний прототип", theme.Title);
+            Label(240, 656, 960, 44, "Три дня управления. Прежнее сохранение без миграции. Это не карьерная развилка.", theme.Text);
+            if (Button(240, 712, 960, 44, "Открыть кампанию владельца")) LoadMode(CareerMode.Owner);
+            Label(240, 788, 960, 40, "У режимов отдельные сохранения. Для нового продолжения завершите вводную главу.", theme.Small);
         }
         private void DrawEmploymentIntro()
         {
             Scrim(); Panel(200, 96, 1040, 768, "");
-            Label(240, 132, 960, 28, "НАЁМНЫЙ БРОКЕР / ВВОДНЫЙ ДЕНЬ " + day.DayNumber + " ИЗ 3", theme.Tag);
+            Label(240, 132, 960, 28, IsWorkMode ? "НАЁМНЫЙ БРОКЕР / РАБОЧИЙ ДЕНЬ " + day.DayNumber : "НАЁМНЫЙ БРОКЕР / ВВОДНЫЙ ДЕНЬ " + day.DayNumber + " ИЗ 3", theme.Tag);
             Label(240, 184, 960, 64, day.EmploymentTitle, theme.Title);
             Label(240, 280, 960, 120, day.SupervisorBrief, theme.Text);
             MetricCard(240, 432, 296, "Личные накопления", "$" + day.OpeningCash);
@@ -42,7 +45,7 @@ namespace Broker.Runtime
             MetricCard(704, 448, 304, "Лично вам сегодня", "$" + day.Earned);
             MetricCard(1032, 448, 336, "Осталось фирме", "$" + day.FirmRetained);
             Label(376, 596, 992, 112, day.SupervisorFeedback, theme.Text);
-            Label(376, 748, 992, 64, "Цель обучения — личные продажи с раскрытием условий. Управление командой, повышение и открытие фирмы будут отдельными этапами.", theme.Small);
+            Label(376, 748, 992, 64, IsWorkMode ? "Работа продолжается с постоянной базой. Управление командой, повышение и своя фирма пока не реализованы." : "Цель обучения — личные продажи с раскрытием условий. Управление командой, повышение и открытие фирмы будут отдельными этапами.", theme.Small);
         }
         private void DrawSupervisorPanel()
         {
@@ -75,7 +78,7 @@ namespace Broker.Runtime
             MetricCard(1064, 184, 336, "Осталось фирме", "$" + day.FirmRetained);
             Panel(344, 324, 1056, 524, "");
             Label(376, 360, 992, 44, "Связь / внешние функции необязательны", theme.Heading);
-            Label(376, 432, 992, 80, "Каждая сделка оплачивается один раз: $150 / $220 / $180 фирме, из них $30 / $44 / $36 лично вам. Можно играть полностью локально.", theme.Text);
+            Label(376, 432, 992, 80, "Каждая сделка оплачивается один раз. Личная выплата — 20% указанной комиссии клиента. Остальное остаётся работодателю. Можно играть полностью локально.", theme.Text);
             bool before = GUI.enabled; GUI.enabled = before && !busy && day.Call != CallStatus.Active;
             useGateway = GUI.Toggle(new Rect(376, 544, 448, 52), useGateway, (useGateway ? "Вкл" : "Выкл") + " · ИИ-формулировки", theme.Button); GUI.enabled = before;
             bool next = GUI.Toggle(new Rect(856, 544, 512, 52), voiceEnabled, (voiceEnabled ? "Вкл" : "Выкл") + " · Голос → внешний API", theme.Button);
@@ -96,6 +99,7 @@ namespace Broker.Runtime
         }
         private void DrawEmploymentResults()
         {
+            if (IsWorkMode) { DrawWorkResults(); return; }
             var report = employment.LastReport;
             if (report == null) return;
             bool complete = employment.IsIntroComplete;
@@ -114,7 +118,7 @@ namespace Broker.Runtime
                     Label(240, 408 + i * 38, 960, 32, "День " + r.day + " · фирме $" + r.firmRevenue + " · лично +$" + r.personalEarned + " · " + r.deals + "/3 сделки", theme.Small);
                 }
                 Label(240, 532, 960, 48, "Отношения: Борис " + Signed(saved.relationships[0]) + " · Инна " + Signed(saved.relationships[1]) + " · Артём " + Signed(saved.relationships[2]), theme.Small);
-                Label(240, 588, 960, 72, "Дальнейшая работа, карьерный выбор и песочница ещё не реализованы. Накопления сохранены отдельно. Автоматического перехода в свою фирму нет.", theme.Text);
+                Label(240, 588, 960, 72, "Доступно продолжение: повторяемые рабочие дни, шесть клиентов и отношения. Перенос — по кнопке ниже в отдельный файл. Своей фирмы и карьерной развилки пока нет.", theme.Text);
             }
             else
             {
@@ -128,6 +132,7 @@ namespace Broker.Runtime
             if (Button(736, 740, 464, 48, saveSucceeded ? "Новая вводная глава" : "Повторить сохранение"))
             { if (saveSucceeded) RequestConfirmation(ConfirmationKind.NewCareer); else SaveCareer(); }
             if (!complete && Button(240, 812, 960, 40, "Выбрать режим", saveSucceeded)) selectingMode = true;
+            if (complete && Button(240, 812, 960, 40, "Перейти к рабочим дням", saveSucceeded)) RequestWorkDays();
         }
         private static string Signed(int value) => value > 0 ? "+" + value : value.ToString();
     }

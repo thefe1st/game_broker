@@ -9,14 +9,14 @@ namespace Broker.Core
             switch (stage)
             {
                 case ConversationStage.AwaitingCall: return "Начни звонок";
-                case ConversationStage.Report: return "Обсуди вчерашний отчёт";
+                case ConversationStage.Report: return "Обсуди прошлый отчёт";
                 case ConversationStage.Goal: return "Узнай цель клиента";
                 case ConversationStage.Risk: return "Расскажи о риске";
                 case ConversationStage.Fee: return "Назови комиссию 2%";
                 case ConversationStage.Term: return "Срок — один год";
                 case ConversationStage.Service: return "Предложи личное сопровождение";
                 case ConversationStage.Proposal: return "Предложи сделку";
-                case ConversationStage.Objection: return clientId == "boris" ? "Оставьте резерв" : clientId == "inna" ? "Условия — письменно" : "Останься на связи";
+                case ConversationStage.Objection: return ClientConversation.AnswerIntent(clientId) == DialogueIntent.Reserve ? "Оставьте резерв" : ClientConversation.AnswerIntent(clientId) == DialogueIntent.Written ? "Условия — письменно" : "Останься на связи";
                 case ConversationStage.Trust: return "Нужно больше доверия";
                 case ConversationStage.Ready: return "Можно закрыть сделку";
                 case ConversationStage.Closed: return "Выбери следующего клиента";

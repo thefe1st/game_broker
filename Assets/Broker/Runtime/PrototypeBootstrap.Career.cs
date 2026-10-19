@@ -6,14 +6,18 @@ namespace Broker.Runtime
 {
     public sealed partial class PrototypeBootstrap
     {
+        private WorkCareerState workCareer;
+        private WorkCareerStorage workStorage;
+        private string workLoadNotice = "";
         private CareerState career;
         private CareerStorage storage;
         private EmploymentState employment;
         private EmploymentStorage employmentStorage;
         private CareerMode mode = CareerMode.Employee;
         private bool selectingMode = true;
-        private bool IsEmployeeMode => mode == CareerMode.Employee;
-        private bool CurrentCareerFinished => IsEmployeeMode ? employment.IsIntroComplete : career.IsFinished;
+        private bool IsWorkMode => mode == CareerMode.EmployeeWork;
+        private bool IsEmployeeMode => mode != CareerMode.Owner;
+        private bool CurrentCareerFinished => !IsWorkMode && (IsEmployeeMode ? employment.IsIntroComplete : career.IsFinished);
         private string saveNotice = "Прогресс сохраняется после завершения рабочего дня.";
         private bool saveSucceeded = true;
 
@@ -23,14 +27,20 @@ namespace Broker.Runtime
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<CareerSave>(text));
             employmentStorage = new EmploymentStorage(Path.Combine(Application.persistentDataPath, "broker-employee-intro-v1.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<EmploymentSave>(text));
+            workStorage = new WorkCareerStorage(Path.Combine(Application.persistentDataPath, "broker-employee-work-v1.json"),
+                value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<WorkCareerSave>(text));
+            workStorage.TryLoad(out workCareer, out workLoadNotice);
             LoadMode(CareerMode.Employee);
             selectingMode = true;
         }
         private void LoadMode(CareerMode selected)
         {
+            if (selected == CareerMode.EmployeeWork && !workStorage.TryLoad(out workCareer, out workLoadNotice))
+            { selectingMode = true; return; }
             mode = selected; saveSucceeded = true; saveNotice = "Прогресс сохраняется только между днями. Текущий день при выходе начнётся заново.";
             string notice;
-            if (IsEmployeeMode)
+            if (IsWorkMode) notice = workLoadNotice;
+            else if (IsEmployeeMode)
             {
                 if (!employmentStorage.TryLoad(out employment, out notice)) employment = new EmploymentState();
                 if (career == null) career = new CareerState();
@@ -44,18 +54,19 @@ namespace Broker.Runtime
         }
         private void SettleCareerDay()
         {
-            bool settled = IsEmployeeMode ? employment.CompleteDay(day) : career.CompleteDay(day);
+            bool settled = IsWorkMode ? workCareer.CompleteDay(day) : IsEmployeeMode ? employment.CompleteDay(day) : career.CompleteDay(day);
             if (settled) SaveCareer();
         }
         private void SaveCareer()
         {
-            saveSucceeded = IsEmployeeMode ? employmentStorage.TrySave(employment, out saveNotice) : storage.TrySave(career, out saveNotice);
+            saveSucceeded = IsWorkMode ? workStorage.TrySave(workCareer, out saveNotice) : IsEmployeeMode ? employmentStorage.TrySave(employment, out saveNotice) : storage.TrySave(career, out saveNotice);
             News((saveSucceeded ? "Сохранение: " : "ВНИМАНИЕ: ") + saveNotice);
         }
         private void NewCareer()
         {
             CancelPending();
-            if (IsEmployeeMode) employment = new EmploymentState(); else career = new CareerState();
+            if (IsWorkMode) workCareer = workCareer.RestartFromOrigin();
+            else if (IsEmployeeMode) employment = new EmploymentState(); else career = new CareerState();
             SaveCareer(); Restart();
         }
         private void DrawCareerFinal()

@@ -52,20 +52,21 @@ namespace Broker.Core
         public int TeamMorale => (employees[0].Morale + employees[1].Morale) / 2;
 
         public BrokerDay(int dayNumber = 1, int openingCash = 0, int reputation = 50, bool goldenPhone = false,
-            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner)
+            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner, string[] clientIds = null)
         {
-            if (!Enum.IsDefined(typeof(CareerMode), mode) || (mode == CareerMode.Employee && (carryDebt != 0 || goldenPhone))
-                || dayNumber < 1 || dayNumber > 3 || openingCash < 0 || openingCash > 100000 || reputation < 0 || reputation > 100
+            if (!Enum.IsDefined(typeof(CareerMode), mode) || (mode != CareerMode.Owner && (carryDebt != 0 || goldenPhone))
+                || dayNumber < 1 || (mode == CareerMode.EmployeeWork ? dayNumber < 4 : dayNumber > 3)
+                || openingCash < 0 || openingCash > (mode == CareerMode.EmployeeWork ? int.MaxValue - 1000 : 100000)
+                || reputation < 0 || reputation > 100
                 || carryDebt < 0 || carryDebt > 100000 || (relationshipBonuses != null && relationshipBonuses.Length != 3)
-                || (returning != null && returning.Length != 3)) throw new ArgumentException("Invalid day opening state");
+                || (returning != null && returning.Length != 3)
+                || (mode != CareerMode.EmployeeWork && clientIds != null)
+                || (mode == CareerMode.EmployeeWork && !ValidAppointments(dayNumber, clientIds))) throw new ArgumentException("Invalid day opening state");
             Mode = mode; DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
             Reputation = reputation; HasGoldenPhone = goldenPhone;
-            clients = new List<ClientRecord> {
-                new ClientRecord("boris", "Борис", "Владелец трёх автомоек", "Оборудование через год. Не любит жаргон и боится вложить всё. Нужен резерв для бизнеса.", 150, 1),
-                new ClientRecord("inna", "Инна", "Бывший финансовый директор", IsEmployee ? "Проверяет цифры, годовой срок и письменные условия. Раскройте условия и ответьте на вопрос о договоре."
-                    : "Проверяет цифры, годовой срок и письменные условия. Подготовка досье поможет доверию.", 220, 0),
-                new ClientRecord("artem", "Артём", "Наследник с большими планами", "Хочет персональный отчёт и живой контакт после сделки. Обещания эксклюзивной доходности не помогут.", 180, 2)
-            };
+            string[] ids = clientIds ?? new[] { "boris", "inna", "artem" };
+            clients = new List<ClientRecord>();
+            foreach (string id in ids) clients.Add(ClientCatalog.Create(id, IsEmployee));
             for (int i = 0; i < clients.Count; i++)
             {
                 int bonus = relationshipBonuses == null ? 0 : Math.Max(-1, Math.Min(2, relationshipBonuses[i]));
@@ -80,6 +81,13 @@ namespace Broker.Core
             if (CarryDebt > 0) Notify("Бухгалтерия: Долг $" + CarryDebt + " перенесён в счёт этого дня. Второй раз из кассы его не списываем.");
         }
 
+        private static bool ValidAppointments(int day, string[] ids)
+        {
+            if (day < 4 || ids == null || ids.Length != 3) return false;
+            string[] expected = ClientCatalog.Appointments(day);
+            for (int i = 0; i < 3; i++) if (ids[i] != expected[i]) return false;
+            return true;
+        }
         public bool SelectClient(int index)
         {
             if (DayEnded || PendingEvent != null || Call == CallStatus.Active || index < 0 || index >= clients.Count) return false;
@@ -94,7 +102,11 @@ namespace Broker.Core
                 return Current.Name + ": " + (Current.Id == "boris"
                     ? "Снова вы. Мойки работают, а что с прошлым разговором? Сначала отчёт, потом новые предложения."
                     : Current.Id == "inna" ? "Прошлые условия помню. Сначала обсудим отчёт, потом новую сделку."
-                    : "Моё имя ещё помните? Тогда сначала персональный отчёт по прошлому разговору.");
+                    : Current.Id == "artem" ? "Моё имя ещё помните? Тогда сначала персональный отчёт по прошлому разговору."
+                    : "Сначала обсудим отчёт по прошлой сделке. Новое предложение — после него.");
+            if (Current.Id == "vera") return "Вера: У меня пациенты записываются по времени. Давайте и условия запишем, а не будем лечить их потом.";
+            if (Current.Id == "denis") return "Денис: Вторая печь нужна через год. Первая должна дожить до этого разговора. Что предлагаете?";
+            if (Current.Id == "oksana") return "Оксана: Красивый буклет вижу. Кто будет со мной работать после перевода денег и где это написано?";
             if (Current.Id == "inna") return "Инна: Давайте без вступления. Комиссия, риски, срок — именно в таком порядке.";
             if (Current.Id == "artem") return "Артём: А у вас есть что-нибудь для особенных клиентов? Только не называйте меня обычным.";
             return "Борис: У меня три автомойки. Чем ваши бумажки лучше четвёртой?";
@@ -110,8 +122,8 @@ namespace Broker.Core
                 if (!NeedsKnown) return ConversationStage.Goal;
                 if (!RisksExplained) return ConversationStage.Risk;
                 if (!FeesExplained) return ConversationStage.Fee;
-                if (Current.Id == "inna" && !Current.SpecialDiscussed) return ConversationStage.Term;
-                if (Current.Id == "artem" && !Current.SpecialDiscussed) return ConversationStage.Service;
+                if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed) return ConversationStage.Term;
+                if (ClientCatalog.NeedsService(Current.Id) && !Current.SpecialDiscussed) return ConversationStage.Service;
                 if (!Current.ObjectionRaised) return ConversationStage.Proposal;
                 if (!Current.ObjectionResolved) return ConversationStage.Objection;
                 return Trust < 2 ? ConversationStage.Trust : ConversationStage.Ready;
@@ -181,12 +193,12 @@ namespace Broker.Core
             { Current.RisksExplained = true; answers.Add(ClientConversation.Risk(Current.Id)); }
             if (!FeesExplained && DialogueRules.Has(facts, DialogueIntent.Fee))
             { Current.FeesExplained = true; answers.Add(ClientConversation.Fee(Current.Id)); }
-            if (Current.Id == "inna" && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Year))
+            if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Year))
             {
                 Current.Trust = Math.Min(4, Trust + 1); Current.SpecialDiscussed = true;
                 answers.Add("Год — понятный срок. Не вечность, замаскированная мелким шрифтом.");
             }
-            if (Current.Id == "artem" && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Personal))
+            if (ClientCatalog.NeedsService(Current.Id) && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Personal))
             { Current.SpecialDiscussed = true; answers.Add("Персональное сопровождение? Уже лучше. Только имя не перепутайте."); }
             if (Current.ObjectionRaised && !Current.ObjectionResolved && !pressure
                 && DialogueRules.Has(facts, ClientConversation.AnswerIntent(Current.Id)))
@@ -212,8 +224,8 @@ namespace Broker.Core
             if (!NeedsKnown) return Current.Name + ": Вы даже не спросили, зачем мне это.";
             if (!RisksExplained) return Current.Name + ": Сначала расскажите, что может пойти не так.";
             if (!FeesExplained) return Current.Name + ": А ваша комиссия какая?";
-            if (Current.Id == "inna" && !Current.SpecialDiscussed) return "Инна: А срок вложения мы так и не обсудили.";
-            if (Current.Id == "artem" && !Current.SpecialDiscussed) return "Артём: Где обещанное личное внимание? Расскажите о персональном отчёте.";
+            if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed) return Current.Name + ": А срок вложения мы так и не обсудили.";
+            if (ClientCatalog.NeedsService(Current.Id) && !Current.SpecialDiscussed) return Current.Name + ": Где обещанное личное внимание? Расскажите о персональном отчёте.";
             if (!Current.ObjectionRaised)
             {
                 Current.ObjectionRaised = true;
@@ -228,7 +240,7 @@ namespace Broker.Core
             Credit(payout); Reputation = Math.Min(100, Reputation + 5);
             Notify(IsEmployee ? "Бухгалтерия: фирме начислено $" + Current.Commission + ", вам выплачено $" + payout + " (20%)."
                 : "Бухгалтерия: +" + Current.Commission + " комиссии. Сделок: " + DealsCount + "/3.");
-            string agreement = Current.Id == "boris" ? "Договорились. Начнём с небольшой суммы, резерв остаётся у мойки."
+            string agreement = ClientCatalog.Index(Current.Id) >= 3 ? "Договорились. Условия и мой вопрос разобрали. В следующий раз начнём с отчёта, не с рекламы." : Current.Id == "boris" ? "Договорились. Начнём с небольшой суммы, резерв остаётся у мойки."
                 : Current.Id == "inna" ? "Условия согласованы. Год, комиссия, риск и письменный договор. Теперь можно работать."
                 : "Договорились. Личный контакт записал. Если ответит робот, назову его вашим именем.";
             return Current.Name + ": " + agreement + (IsEmployee ? "\nКомиссия фирмы: $" + Current.Commission + ". Лично вам: +$" + payout + " (20%)."

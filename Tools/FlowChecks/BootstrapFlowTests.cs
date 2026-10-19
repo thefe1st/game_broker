@@ -252,6 +252,101 @@ namespace Broker.FlowChecks
             Assert.That(Day, Is.SameAs(same)); Assert.That(Day.Cash, Is.EqualTo(30));
             Assert.That(Directory.GetFiles(folder), Is.Empty);
         }
+        private void CompleteIntroForWork(bool sell = false)
+        {
+            Begin();
+            for (int n = 0; n < 3; n++)
+            {
+                if (sell) for (int i = 0; i < 3; i++) Sell(Day, i);
+                Day.EndDay(); Frame(); if (n < 2) { Click("Следующий день"); Click("Начать рабочий день"); }
+            }
+        }
+        private void StartWork(bool sellIntro = false)
+        { CompleteIntroForWork(sellIntro); Click("Перейти к рабочим дням"); Click("Да, начать рабочие дни"); Click("Начать рабочий день"); }
+        [Test] public void NewContinuationIsLockedUntilIntroCompletes()
+        {
+            GUI.Click = "Начать рабочие дни с дня 4"; Call("OnGUI"); Assert.That(GUI.Click, Is.Not.Null); GUI.Click = null;
+            Assert.That(Directory.GetFiles(folder), Is.Empty);
+        }
+        [Test] public void CancelTransferDoesNotCreateContinuationFile()
+        {
+            CompleteIntroForWork(); string before = File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json"));
+            Click("Перейти к рабочим дням"); Click("Нет, вернуться / Esc");
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v1.json")), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json")), Is.EqualTo(before));
+            Assert.That(Day.DayEnded, Is.True);
+        }
+        [Test] public void ExplicitTransferStartsDayFourWithSavingsAndSeparateFile()
+        {
+            CompleteIntroForWork(true); string introPath = Path.Combine(folder, "broker-employee-intro-v1.json"); string before = File.ReadAllText(introPath);
+            Click("Перейти к рабочим дням"); Click("Да, начать рабочие дни");
+            Assert.That(Day.Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.DayNumber, Is.EqualTo(4)); Assert.That(Day.Cash, Is.EqualTo(330));
+            Assert.That(Get<OfficeScene>("office").Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.Clients[1].Id, Is.EqualTo("vera"));
+            Assert.That(Day.Clients[0].Returning, Is.True); Assert.That(Get<bool>("intro"), Is.True);
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v1.json")), Is.True); Assert.That(File.ReadAllText(introPath), Is.EqualTo(before));
+        }
+        [Test] public void WorkDeskUsesEmployeeTabsAndNoThreeDayCapHeader()
+        {
+            StartWork(); Interact(OfficeStation.Desk); GUI.Labels.Clear(); Frame();
+            Assert.That(GUI.Labels, Does.Contain("День 4 · работа")); Assert.That(GUI.Labels, Does.Contain("Начальник"));
+            Assert.That(GUI.Labels, Does.Not.Contain("Команда")); Assert.That(GUI.Labels, Does.Contain("Вера"));
+            Assert.That(GUI.Labels, Does.Contain("Отношения 0")); Assert.That(GUI.Labels, Does.Not.Contain("Первый контакт"));
+        }
+        [Test] public void WorkSettlementRunsOnceAndNextDayRotatesClients()
+        {
+            StartWork(); Sell(Day, 0); Day.EndDay(); for (int i = 0; i < 4; i++) Frame();
+            Assert.That(Get<WorkCareerState>("workCareer").PersonalSavings, Is.EqualTo(30));
+            Click("Следующий рабочий день"); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.OpeningCash, Is.EqualTo(30));
+            Assert.That(Day.Clients[0].Id, Is.EqualTo("inna")); Assert.That(Day.Clients[2].Id, Is.EqualTo("vera"));
+        }
+        [Test] public void WorkCanReloadAfterIntroHasBeenReset()
+        {
+            StartWork(); Day.EndDay(); Frame(); Call("LoadMode", CareerMode.Employee); Call("NewCareer");
+            Assert.That(Get<EmploymentState>("employment").CompletedDays, Is.Zero);
+            Call("LoadMode", CareerMode.EmployeeWork); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.IsRepeatingWork, Is.True);
+        }
+        [Test] public void ExistingWorkIsContinuedInsteadOfOverwrittenByAnotherIntroTransfer()
+        {
+            StartWork(); Sell(Day, 0); Day.EndDay(); Frame(); Call("LoadMode", CareerMode.Employee);
+            Click("Перейти к рабочим дням"); Assert.That(OverlayOpen, Is.False);
+            Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.OpeningCash, Is.EqualTo(30));
+        }
+        [Test] public void ResetWorkUsesTransferOriginAndDoesNotResetCompletedIntro()
+        {
+            StartWork(true); Sell(Day, 0); Day.EndDay(); Frame();
+            Click("Сбросить рабочие дни"); Click("Да, сбросить кампанию");
+            Assert.That(Day.DayNumber, Is.EqualTo(4)); Assert.That(Day.Cash, Is.EqualTo(330));
+            Assert.That(Get<EmploymentState>("employment").CompletedDays, Is.EqualTo(3));
+        }
+        [Test] public void FreshBootstrapCanContinueWorkEvenAfterIntroIsReset()
+        {
+            StartWork(); Sell(Day, 0); Day.EndDay(); Frame(); Call("LoadMode", CareerMode.Employee); Call("NewCareer");
+            Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake");
+            Assert.That(Get<bool>("selectingMode"), Is.True); Click("Продолжить рабочие дни");
+            Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.Cash, Is.EqualTo(30)); Assert.That(Day.IsRepeatingWork, Is.True);
+        }
+        [Test] public void InitialTransferWriteFailureStaysOnConfirmationAndCanRetry()
+        {
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v1.json"); Directory.CreateDirectory(path);
+            Click("Перейти к рабочим дням"); Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.True);
+            Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee)); Directory.Delete(path);
+            Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.False); Assert.That(Day.DayNumber, Is.EqualTo(4));
+        }
+        [Test] public void FailedWorkSaveBlocksModeSwitchUntilRetryWithoutDuplicatePayout()
+        {
+            StartWork(); string path = Path.Combine(folder, "broker-employee-work-v1.json"); File.Delete(path); Directory.CreateDirectory(path);
+            Sell(Day, 0); Day.EndDay(); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.False);
+            GUI.Click = "Выбрать режим"; Call("OnGUI"); Assert.That(GUI.Click, Is.Not.Null); GUI.Click = null;
+            Assert.That(Get<bool>("selectingMode"), Is.False); Directory.Delete(path);
+            Click("Повторить сохранение"); Assert.That(Get<bool>("saveSucceeded"), Is.True);
+            Assert.That(Get<WorkCareerState>("workCareer").PersonalSavings, Is.EqualTo(30));
+        }
+        [Test] public void WorkProgressesPastDaySevenWithoutIntroFinalScreen()
+        {
+            StartWork(); for (int n = 0; n < 10; n++) { Day.EndDay(); Frame(); Click("Следующий рабочий день"); Click("Начать рабочий день"); }
+            Assert.That(Day.DayNumber, Is.EqualTo(14)); Assert.That(Get<WorkCareerState>("workCareer").CompletedDays, Is.EqualTo(10));
+            Assert.That(Get<WorkCareerState>("workCareer").Capture().reports.Length, Is.EqualTo(7)); Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
         [Test] public void FailedWriteBlocksModeSwitchAndCanBeRetriedWithoutDuplicatePayout()
         {
             Begin(); Sell(Day, 0);

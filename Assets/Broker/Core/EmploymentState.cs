@@ -45,7 +45,7 @@ namespace Broker.Core
         }
         public bool CompleteDay(BrokerDay day)
         {
-            if (day == null || !day.IsEmployee || !day.DayEnded || IsIntroComplete || day.DayNumber != CompletedDays + 1
+            if (day == null || day.Mode != CareerMode.Employee || !day.DayEnded || IsIntroComplete || day.DayNumber != CompletedDays + 1
                 || day.OpeningCash != PersonalSavings || day.CarryDebt != 0 || day.Spent != 0 || day.TotalExpenses != 0) return false;
             var r = new EmploymentDayReport { day = day.DayNumber, openingSavings = day.OpeningCash,
                 firmRevenue = day.FirmRevenue, personalEarned = day.Earned, savings = day.Cash,

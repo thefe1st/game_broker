@@ -113,7 +113,7 @@ namespace Broker.Runtime
                     : new BrokerDay(3, Math.Max(0, career.Balance), career.Reputation, career.GoldenPhone);
                 day.EndDay(); lastDayEnded = true; intro = false;
             }
-            else { day = IsEmployeeMode ? employment.CreateDay() : career.CreateDay(); lastDayEnded = false; intro = true; }
+            else { day = IsWorkMode ? workCareer.CreateDay() : IsEmployeeMode ? employment.CreateDay() : career.CreateDay(); lastDayEnded = false; intro = true; }
             showNews = false; newsScroll = Vector2.zero;
             foreach (var history in histories) history.Clear();
             foreach (var conversation in conversations) conversation.Clear();

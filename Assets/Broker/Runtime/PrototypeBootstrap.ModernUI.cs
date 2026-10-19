@@ -27,7 +27,7 @@ namespace Broker.Runtime
             Panel(40, 32, 56, 56, ""); Label(48, 42, 48, 36, "МК", theme.Heading);
             Label(112, 34, 264, 32, "МОЙКА КАПИТАЛ", theme.Heading);
             Label(112, 68, 264, 24, IsEmployeeMode ? "Наёмный брокер · личные продажи" : "Операционная система конторы", theme.Small);
-            Label(580, 32, 180, 44, ClockText(), theme.Title); Label(580, 74, 180, 24, "День " + day.DayNumber + " / 3", theme.Small);
+            Label(580, 32, 180, 44, ClockText(), theme.Title); Label(580, 74, 180, 24, "День " + day.DayNumber + (IsWorkMode ? " · работа" : " / 3"), theme.Small);
             Label(816, 32, 250, 44, "$" + day.Cash, theme.Title); Label(816, 74, 250, 24, IsEmployeeMode ? "Ваши накопления · ставка 20%" : "из $" + day.TotalExpenses + " к закрытию", theme.Small);
             Label(1104, 32, 120, 40, day.Reputation + "/100", theme.Heading); Label(1104, 72, 120, 24, "Репутация", theme.Small);
             if (Button(1240, 40, 160, 48, "Встать · Esc")) { CancelPending(); EnterWorld(); }
@@ -46,6 +46,7 @@ namespace Broker.Runtime
         private void DrawClientRail()
         {
             Label(40, 128, 264, 32, "Клиенты", theme.Heading);
+            var relationships = IsWorkMode ? workCareer.Clients : null;
             for (int i = 0; i < day.Clients.Count; i++)
             {
                 var c = day.Clients[i]; float y = 184 + i * 140;
@@ -55,7 +56,8 @@ namespace Broker.Runtime
                 if (selected) Paint(new Rect(48, y + 16, 3, 88), theme.Accent);
                 Label(60, y + 16, 160, 32, c.Name, theme.Heading);
                 Label(224, y + 20, 68, 24, "$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(c.Commission) : c.Commission), theme.Small);
-                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.Returning ? "Вернулся за отчётом" : "Первый контакт", theme.Small);
+                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.Returning ? "Вернулся за отчётом" : IsWorkMode ? "Готов к звонку" : "Первый контакт", theme.Small);
+                if (relationships != null) Label(60, y + 96, 220, 22, "Отношения " + Signed(relationships[ClientCatalog.Index(c.Id)].relationship), theme.Small);
             }
             Panel(40, 632, 264, 168, ""); Label(64, 656, 216, 28, IsEmployeeMode ? "Ориентир · без штрафа" : "План дня", theme.Small);
             Label(64, 696, 216, 44, day.DealsCount + " / " + (IsEmployeeMode ? day.SalesTarget : 3) + " сделки", theme.Title);
@@ -83,7 +85,7 @@ namespace Broker.Runtime
             for (int i = 0; i < 4; i++) Paint(new Rect(1184 + i * 46, 252, 34, 6), i < day.Trust ? theme.Accent : theme.Border);
             float chipX = 376;
             StageChip(ref chipX, "Цель", day.NeedsKnown); StageChip(ref chipX, "Риск", day.RisksExplained); StageChip(ref chipX, "2%", day.FeesExplained);
-            if (day.Current.Id != "boris") StageChip(ref chipX, day.Current.Id == "inna" ? "Срок" : "Сервис", day.Current.SpecialDiscussed);
+            if (ClientCatalog.NeedsYear(day.Current.Id) || ClientCatalog.NeedsService(day.Current.Id)) StageChip(ref chipX, ClientCatalog.NeedsYear(day.Current.Id) ? "Срок" : "Сервис", day.Current.SpecialDiscussed);
             if (day.Current.Returning) StageChip(ref chipX, "Отчёт", day.Current.ReportReviewed);
             StageChip(ref chipX, "Вопрос", day.Current.ObjectionResolved);
             Label(376, 360, 760, 40, BrokerPresentation.ShortHint(day.ConversationStep, day.Current.Id), theme.Heading);

@@ -41,7 +41,7 @@ namespace Broker.Runtime.Office
         }
         public void ConfigureCareerMode(CareerMode mode)
         {
-            employeeMode = mode == CareerMode.Employee;
+            employeeMode = mode != CareerMode.Owner;
             supervisorRoot.SetActive(employeeMode);
             foreach (var obj in ownerDisplay) obj.SetActive(!employeeMode);
             roleLabel.text = employeeMode ? "БРОКЕР / ЛИЧНЫЕ ПРОДАЖИ" : "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР";

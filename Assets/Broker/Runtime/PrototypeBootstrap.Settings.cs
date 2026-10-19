@@ -4,7 +4,7 @@ namespace Broker.Runtime
 {
     public sealed partial class PrototypeBootstrap
     {
-        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode, EndCall }
+        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode, EndCall, StartWork }
         private ConfirmationKind confirmation;
         private bool showVoiceSetup;
         private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || confirmation != ConfirmationKind.None;
@@ -30,10 +30,18 @@ namespace Broker.Runtime
         private void DrawConfirmation()
         {
             Scrim(); Panel(340, 220, 760, 510, "ПОДТВЕРЖДЕНИЕ / ВРЕМЯ НА ПАУЗЕ");
+            if (confirmation == ConfirmationKind.StartWork)
+            {
+                Label(372, 290, 696, 64, "Начать рабочие дни с дня 4?", theme.Title);
+                Label(372, 386, 696, 128, "Накопления, репутация и отношения скопируются из завершённого вступления. Новый режим пишет в отдельный файл; исходные три дня и кампания владельца не меняются. " + workLoadNotice, theme.Small);
+                if (Button(372, 546, 696, 52, "Нет, вернуться / Esc", true, true)) CloseUtilityOverlay();
+                if (Button(372, 626, 696, 52, "Да, начать рабочие дни", employment.IsIntroComplete)) StartWorkFromIntro();
+                return;
+            }
             if (confirmation == ConfirmationKind.SelectMode)
             {
                 Label(372, 290, 696, 64, "Вернуться к выбору режима?", theme.Title);
-                Label(372, 386, 696, 112, "Незавершённый день будет начат заново. Завершённые дни обоих режимов останутся в отдельных сохранениях. При ошибке записи сначала повторите сохранение.", theme.Text);
+                Label(372, 386, 696, 112, "Незавершённый день будет начат заново. Завершённые дни всех режимов останутся в отдельных сохранениях. При ошибке записи сначала повторите сохранение.", theme.Text);
                 if (Button(372, 546, 696, 52, "Остаться / Esc", true, true)) CloseUtilityOverlay();
                 if (Button(372, 626, 696, 52, "Выбрать режим", saveSucceeded)) { CloseUtilityOverlay(); selectingMode = true; }
                 return;
@@ -51,9 +59,9 @@ namespace Broker.Runtime
                 return;
             }
             bool wholeCareer = confirmation == ConfirmationKind.NewCareer;
-            Label(372, 290, 696, 64, wholeCareer ? "Начать новую кампанию?" : "Начать этот день заново?", theme.Title);
+            Label(372, 290, 696, 64, wholeCareer ? (IsWorkMode ? "Сбросить рабочие дни?" : "Начать новую кампанию?") : "Начать этот день заново?", theme.Title);
             Label(372, 386, 696, 112, wholeCareer
-                ? (IsEmployeeMode ? "Будет сброшена только вводная глава наёмного брокера: личные деньги, отношения и результаты. Сохранение владельца не изменится." : "Будет сброшена только кампания владельца: деньги, долг, отношения и результаты. Сохранение наёмного брокера не изменится.")
+                ? (IsWorkMode ? "Рабочие дни вернутся к перенесённому состоянию перед днём 4. Вводная глава и кампания владельца не изменятся. Новые клиенты и заработок продолжения будут сброшены." : IsEmployeeMode ? "Будет сброшена только вводная глава наёмного брокера: личные деньги, отношения и результаты. Сохранение владельца не изменится." : "Будет сброшена только кампания владельца: деньги, долг, отношения и результаты. Сохранение наёмного брокера не изменится.")
                 : "Все действия текущего дня будут потеряны: звонки, покупки и поручения. Завершённые дни сохранятся. Утро текущего дня начнётся заново.", theme.Text);
             if (Button(372, 546, 696, 52, "Нет, вернуться / Esc", true, true)) CloseUtilityOverlay();
             if (Button(372, 626, 696, 52, wholeCareer ? "Да, сбросить кампанию" : "Да, начать день заново"))
