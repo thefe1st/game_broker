@@ -65,6 +65,14 @@ namespace Broker.Runtime
             Panel(420, 784, 600, 88, "");
             if (player.Target != null) { Paint(new Rect(444, 804, 48, 48), theme.Border); Label(459, 811, 32, 36, "E", theme.Heading); }
             Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
+            if (IsEmployeeMode)
+            {
+                string guidance = office.IsInCity ? "Вернитесь в офис через лифт. " + day.EmploymentNextAction : day.EmploymentNextAction;
+                float guidanceHeight = Mathf.Max(56, theme.Small.CalcHeight(new GUIContent(guidance), 624));
+                Panel(384, 136, 672, guidanceHeight + 68, "");
+                Label(408, 152, 624, 24, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.Tag);
+                Label(408, 192, 624, guidanceHeight, guidance, theme.Small);
+            }
             if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
                 Label(420, 896, 600, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.Small);
             else if (officeNews.Count > 0 && Time.realtimeSinceStartupAsDouble < toastUntil)

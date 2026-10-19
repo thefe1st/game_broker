@@ -24,6 +24,30 @@ namespace Broker.Core
             : DealsCount >= SalesTarget
                 ? "Орлов: Ориентир выполнен. Теперь важно, чтобы завтра клиент снова взял трубку."
                 : "Орлов: Пока " + DealsCount + " из " + SalesTarget + ". Это ориентир, не штраф из личного кармана. Не закрывайте вопросы клиента красивыми обещаниями.";
+        // Read-only guidance. It never selects a client or awards money by itself.
+        public int RecommendedClientIndex
+        {
+            get
+            {
+                if (DayEnded) return -1;
+                if (Call == CallStatus.Active) return SelectedClientIndex;
+                for (int i = 0; i < Clients.Count; i++) if (Clients[i].Call == CallStatus.NotStarted) return i;
+                return -1;
+            }
+        }
+        public string EmploymentNextAction
+        {
+            get
+            {
+                if (DayEnded) return "День завершён. Посмотрите расчёт личной комиссии.";
+                if (Call == CallStatus.Active) return Current.Name + ": " + NextConversationStep;
+                int next = RecommendedClientIndex;
+                if (next < 0) return "Все три звонка завершены. Подойдите к входной двери и подтвердите окончание дня.";
+                string lead = DealsCount >= SalesTarget ? "Ориентир выполнен; можно продолжить. " : "";
+                return lead + "За рабочим столом выберите «" + Clients[next].Name + "» и нажмите «Позвонить»."
+                    + (Clients[next].Returning ? " Сначала обсудите вчерашний отчёт." : " Начните с цели клиента.");
+            }
+        }
         public string ColleagueAdvice(int index) => index == 0
             ? "Лена: Я такой же брокер, как вы. Откройте досье в звонке: Инне нужен годовой срок и письменный договор. Я не ваш аналитический отдел — поручения будут, когда появится своя команда."
             : "Макс: План давит, понимаю. Но «последний шанс» клиент слышал и вчера. Сначала выясните, что ему нужно. Борису оставьте резерв, Артёму — живой контакт после сделки.";

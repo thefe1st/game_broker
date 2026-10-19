@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Broker/Core/*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/PrototypeBootstrap*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Voice/*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Dialogue/*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Office/OfficeInteractable.cs" />
+    <Compile Include="../VoiceChecks/UnityFakes.cs" />
+    <Compile Include="*.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+</Project>

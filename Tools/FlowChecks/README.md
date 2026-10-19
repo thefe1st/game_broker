@@ -1,0 +1,27 @@
+# Bootstrap flow checks — explicit test doubles
+
+Run from repository root:
+
+```bash
+dotnet test Tools/FlowChecks/FlowChecks.csproj
+```
+
+This project compiles the **actual Core, PrototypeBootstrap partials, VoiceSession,
+Dialogue providers and OfficeInteractable** with narrow substitutes for UnityEngine,
+OfficeScene, player controls and BrokerTheme. `GUI.Click` consumes one enabled
+button label; labels are recorded, not rendered. Lifecycle methods are invoked
+explicitly. JSON is serialized through System.Text.Json, NOT Unity JsonUtility.
+
+Tests exercise menu/intro/panel clock gates, confirmation/cancellation, next-client
+selection, exactly-once day settlement, savings carry, mode reset isolation,
+completed-intro reload, hidden-city routing and failed-save retry. Default flow
+must not send provider requests.
+
+This is NOT a Unity compile or build. The actual scene geometry, font metrics,
+GUI event ordering, input backend, renderer, colliders, audio, JsonUtility and
+OS file replacement behavior need separate checks in Unity. Passing tests only
+support the specific modeled controller flows, not every runtime interaction.
+
+Shared narrow voice doubles live in `Tools/VoiceChecks/UnityFakes.cs`.
+`BootstrapFakes.cs` extends them only in this project. The voice-only suite does
+not compile the scene/GUI substitutes.

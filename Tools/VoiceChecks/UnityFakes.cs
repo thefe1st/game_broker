@@ -12,7 +12,7 @@ namespace UnityEngine
         public static T FindFirstObjectByType<T>() where T : class => null;
         public static void Destroy(Object value) { if (value != null) value.Destroyed = true; }
     }
-    public class GameObject
+    public partial class GameObject
     {
         public T AddComponent<T>() where T : new() => new T();
     }
@@ -51,17 +51,17 @@ namespace UnityEngine
         public static int GetPosition(string device) => Position;
         public static void End(string device) { Ends++; }
     }
-    public static class Mathf { public static int Clamp(int value, int min, int max) => Math.Clamp(value, min, max); }
-    public static class Time { public static double realtimeSinceStartupAsDouble; }
+    public static partial class Mathf { public static int Clamp(int value, int min, int max) => Math.Clamp(value, min, max); }
+    public static partial class Time { public static double realtimeSinceStartupAsDouble; }
     public enum UserAuthorization { Microphone }
     public class AsyncOperation { public volatile bool isDone = true; }
-    public static class Application
+    public static partial class Application
     {
         public static bool Authorized = true;
         public static bool HasUserAuthorization(UserAuthorization value) => Authorized;
         public static AsyncOperation RequestUserAuthorization(UserAuthorization value) => new AsyncOperation();
     }
-    public static class JsonUtility
+    public static partial class JsonUtility
     {
         private static readonly JsonSerializerOptions Options = new JsonSerializerOptions { IncludeFields = true };
         public static string ToJson(object value) => JsonSerializer.Serialize(value, Options);

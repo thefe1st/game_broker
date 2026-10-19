@@ -32,3 +32,6 @@ TestResults/
 
 # SDK-bundled Roslyn syntax checks; not a Unity build
 !Tools/SyntaxChecks/SyntaxChecks.csproj
+
+# Bootstrap flow tests with explicit scene/GUI doubles
+!Tools/FlowChecks/FlowChecks.csproj

@@ -37,7 +37,7 @@ namespace Broker.Core
         }
         public bool TrySave(EmploymentState state, out string notice)
         {
-            notice = ""; string temporary = SavePath + ".tmp";
+            notice = ""; string temporary = SavePath + ".tmp"; bool preservedUnreadable = false;
             try
             {
                 if (state == null || !EmploymentState.TryRestore(state.Capture(), out _)) throw new InvalidDataException();
@@ -47,12 +47,36 @@ namespace Broker.Core
                 if (!EmploymentState.TryRestore(decode(json), out _)) throw new InvalidDataException();
                 Directory.CreateDirectory(Path.GetDirectoryName(SavePath));
                 File.WriteAllText(temporary, json, new UTF8Encoding(false));
-                if (File.Exists(SavePath)) File.Replace(temporary, SavePath, SavePath + ".bak");
+                if (File.Exists(SavePath))
+                {
+                    // When the primary is damaged, retain the last usable backup instead of
+                    // backing up the corrupt bytes on top of it during the first recovery save.
+                    bool validPrimary = IsValidFile(SavePath);
+                    if (!validPrimary)
+                    {
+                        // Also preserve unknown-version files byte-for-byte. If copying fails,
+                        // abort the write rather than silently discard the user's old progress.
+                        File.Copy(SavePath, SavePath + ".unreadable-" + Guid.NewGuid().ToString("N"));
+                        preservedUnreadable = true;
+                    }
+                    File.Replace(temporary, SavePath, validPrimary ? SavePath + ".bak" : null);
+                }
                 else File.Move(temporary, SavePath);
-                notice = "Прогресс между днями сохранён."; return true;
+                notice = preservedUnreadable ? "Прогресс сохранён. Прежний нечитаемый файл оставлен отдельно (.unreadable-*); резервная копия сохранена." : "Прогресс между днями сохранён."; return true;
             }
             catch { notice = "Не удалось сохранить прогресс на диск. В текущем запуске можно продолжить."; return false; }
             finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
         }
+        private bool IsValidFile(string path)
+        {
+            try
+            {
+                var file = new FileInfo(path);
+                return file.Exists && file.Length > 0 && file.Length <= MaxBytes
+                    && EmploymentState.TryRestore(decode(File.ReadAllText(path, Encoding.UTF8)), out _);
+            }
+            catch { return false; }
+        }
+
     }
 }

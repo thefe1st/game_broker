@@ -59,7 +59,10 @@ namespace Broker.Runtime
             }
             Panel(40, 632, 264, 168, ""); Label(64, 656, 216, 28, IsEmployeeMode ? "Ориентир · без штрафа" : "План дня", theme.Small);
             Label(64, 696, 216, 44, day.DealsCount + " / " + (IsEmployeeMode ? day.SalesTarget : 3) + " сделки", theme.Title);
-            Meter(64, 768, 216, day.DealsCount / (float)(IsEmployeeMode ? day.SalesTarget : 3), theme.Accent);
+            Meter(64, IsEmployeeMode ? 744 : 768, 216, day.DealsCount / (float)(IsEmployeeMode ? day.SalesTarget : 3), theme.Accent);
+            if (IsEmployeeMode && Button(64, 756, 216, 36, "Следующий клиент", day.RecommendedClientIndex >= 0
+                && day.Call != CallStatus.Active && !busy && !voice.Recording && !voice.Working))
+            { CancelPending(); day.SelectClient(day.RecommendedClientIndex); message = ""; replyScroll = Vector2.zero; }
         }
         private void DrawDayRail()
         {

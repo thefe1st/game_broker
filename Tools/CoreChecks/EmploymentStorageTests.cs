@@ -70,5 +70,31 @@ namespace Broker.Tests
             Assert.That(Store().TrySave(c, out _), Is.True); Assert.That(Store().TryLoad(out var loaded, out _), Is.True);
             Assert.That(loaded.IsIntroComplete, Is.True); Assert.Throws<InvalidOperationException>(() => loaded.CreateDay());
         }
+        [Test] public void RecoverySaveDoesNotReplaceHealthyBackupWithDamagedPrimary()
+        {
+            Store().TrySave(new EmploymentState(), out _); Store().TrySave(CompletedDay(), out _);
+            string backup = File.ReadAllText(path + ".bak");
+            File.WriteAllText(path, "{broken");
+            Assert.That(Store().TryLoad(out var recovered, out _), Is.True);
+            Assert.That(Store().TrySave(recovered, out _), Is.True);
+            Assert.That(File.ReadAllText(path + ".bak"), Is.EqualTo(backup));
+            var preserved = Directory.GetFiles(folder, "*.unreadable-*");
+            Assert.That(preserved.Length, Is.EqualTo(1)); Assert.That(File.ReadAllText(preserved[0]), Is.EqualTo("{broken"));
+            File.WriteAllText(path, "{broken-again");
+            Assert.That(Store().TryLoad(out var again, out _), Is.True);
+            Assert.That(again.CompletedDays, Is.Zero);
+        }
+
+        [Test] public void UnknownVersionIsPreservedBeforeNewProgressWrite()
+        {
+            string future = "{\"schemaVersion\":99,\"futureProgress\":\"do not delete\"}";
+            File.WriteAllText(path, future);
+            Assert.That(Store().TryLoad(out _, out _), Is.False);
+            Assert.That(Store().TrySave(new EmploymentState(), out var notice), Is.True);
+            var preserved = Directory.GetFiles(folder, "*.unreadable-*");
+            Assert.That(preserved.Length, Is.EqualTo(1)); Assert.That(File.ReadAllText(preserved[0]), Is.EqualTo(future));
+            Assert.That(notice, Does.Contain("нечитаемый")); Assert.That(Store().TryLoad(out _, out _), Is.True);
+        }
+
     }
 }
