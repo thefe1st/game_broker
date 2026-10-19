@@ -33,7 +33,7 @@ namespace Broker.Runtime
             {
                 var c = clients[i];
                 Label(240 + (i / 3) * 488, 412 + (i % 3) * 44, 472, 40,
-                    ClientCatalog.Create(c.id).Name + " · отношения " + Signed(c.relationship) + (c.awaitingReport ? " · ждёт отчёт" : ""), theme.Small);
+                    ClientCatalog.Create(c.id).Name + " · отношения " + Signed(c.relationship) + (c.awaitingReport ? " · ждёт отчёт" : "") + (c.complaintPending ? " · претензия" : ""), theme.Small);
             }
             Label(240, 556, 960, 52, "За рабочие дни: " + workCareer.CompletedDays + " дней, " + workCareer.TotalDeals + " сделок. Фирме сегодня $" + report.firmRevenue + ". Ориентир — без штрафов.", theme.Small);
             var next = ClientCatalog.Appointments(workCareer.NextDayNumber);

@@ -62,7 +62,7 @@ namespace Broker.Runtime
                 if (selected) Paint(new Rect(48, y + 16, 3, 88), theme.Accent);
                 Label(60, y + 16, 160, 32, c.Name, theme.Heading);
                 Label(224, y + 20, 68, 24, "$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(c.Commission) : c.Commission), theme.Small);
-                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.Returning ? "Вернулся за отчётом" : IsWorkMode ? "Готов к звонку" : "Первый контакт", theme.Small);
+                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.ComplaintPending && !c.ComplaintResolved ? "Есть претензия" : c.Returning ? "Вернулся за отчётом" : IsWorkMode ? "Готов к звонку" : "Первый контакт", theme.Small);
                 if (relationships != null) Label(60, y + 96, 220, 22, "Отношения " + Signed(relationships[ClientCatalog.Index(c.Id)].relationship), theme.Small);
             }
             Panel(40, 632, 264, 168, ""); Label(64, 656, 216, 28, IsEmployeeMode ? "Ориентир · без штрафа" : "План дня", theme.Small);
@@ -89,11 +89,12 @@ namespace Broker.Runtime
             Label(472, 262, 650, 28, day.Current.Role, theme.Small);
             Label(1184, 212, 184, 24, "Доверие " + day.Trust + "/4", theme.Small);
             for (int i = 0; i < 4; i++) Paint(new Rect(1184 + i * 46, 252, 34, 6), i < day.Trust ? theme.Accent : theme.Border);
-            float chipX = 376;
-            StageChip(ref chipX, "Цель", day.NeedsKnown); StageChip(ref chipX, "Риск", day.RisksExplained); StageChip(ref chipX, "2%", day.FeesExplained);
-            if (ClientCatalog.NeedsYear(day.Current.Id) || ClientCatalog.NeedsService(day.Current.Id)) StageChip(ref chipX, ClientCatalog.NeedsYear(day.Current.Id) ? "Срок" : "Сервис", day.Current.SpecialDiscussed);
-            if (day.Current.Returning) StageChip(ref chipX, "Отчёт", day.Current.ReportReviewed);
-            StageChip(ref chipX, "Вопрос", day.Current.ObjectionResolved);
+            float chipX = 376; float chipWidth = day.Current.ComplaintPending ? 128 : 152;
+            StageChip(ref chipX, "Цель", day.NeedsKnown, chipWidth); StageChip(ref chipX, "Риск", day.RisksExplained, chipWidth); StageChip(ref chipX, "2%", day.FeesExplained, chipWidth);
+            if (ClientCatalog.NeedsYear(day.Current.Id) || ClientCatalog.NeedsService(day.Current.Id)) StageChip(ref chipX, ClientCatalog.NeedsYear(day.Current.Id) ? "Срок" : "Сервис", day.Current.SpecialDiscussed, chipWidth);
+            if (day.Current.Returning) StageChip(ref chipX, "Отчёт", day.Current.ReportReviewed, chipWidth);
+            StageChip(ref chipX, "Вопрос", day.Current.ObjectionResolved, chipWidth);
+            if (day.Current.ComplaintPending) StageChip(ref chipX, "Спор", day.Current.ComplaintResolved, chipWidth);
             Label(376, 360, 760, 40, BrokerPresentation.ShortHint(day.ConversationStep, day.Current.Id), theme.Heading);
             if (Button(1144, 352, 104, 44, "История", !busy && !voice.Working && !voice.Recording)) OpenCallLog(false);
             if (Button(1264, 352, 104, 44, "Досье", !busy && !voice.Working && !voice.Recording)) OpenCallLog(true);
@@ -124,10 +125,10 @@ namespace Broker.Runtime
             if (Button(1008, 764, 360, 56, voice.Recording || voice.Working ? "Остановить голос" : "Завершить звонок", (day.Call == CallStatus.Active && !busy) || voice.Recording || voice.Working))
             { if (voice.Recording || voice.Working) voice.Cancel(); else RequestConfirmation(ConfirmationKind.EndCall); }
         }
-        private void StageChip(ref float x, string caption, bool done)
+        private void StageChip(ref float x, string caption, bool done, float width = 152)
         {
-            Paint(new Rect(x, 312, 152, 32), done ? BrokerTheme.Hex("#244D4D") : BrokerTheme.Hex("#25354A"));
-            Label(x + 12, 316, 128, 24, caption + (done ? " · OK" : " · —"), theme.Small); x += 164;
+            Paint(new Rect(x, 312, width, 32), done ? BrokerTheme.Hex("#244D4D") : BrokerTheme.Hex("#25354A"));
+            Label(x + 12, 316, width - 24, 24, caption + (done ? " · OK" : " · —"), theme.Small); x += width + 12;
         }
         private string LatestClientReply()
         {

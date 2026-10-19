@@ -27,8 +27,9 @@ namespace Broker.Runtime
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<CareerSave>(text));
             employmentStorage = new EmploymentStorage(Path.Combine(Application.persistentDataPath, "broker-employee-intro-v1.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<EmploymentSave>(text));
-            workStorage = new WorkCareerStorage(Path.Combine(Application.persistentDataPath, "broker-employee-work-v1.json"),
-                value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<WorkCareerSave>(text));
+            workStorage = new WorkCareerStorage(Path.Combine(Application.persistentDataPath, "broker-employee-work-v2.json"),
+                value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<WorkCareerSave>(text),
+                Path.Combine(Application.persistentDataPath, "broker-employee-work-v1.json"));
             workStorage.TryLoad(out workCareer, out workLoadNotice);
             LoadMode(CareerMode.Employee);
             selectingMode = true;

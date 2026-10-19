@@ -19,6 +19,11 @@ namespace Broker.Core
         public bool SpecialDiscussed { get; internal set; }
         public bool Researched { get; internal set; }
         public bool Returning { get; internal set; }
+        public bool ComplaintPending { get; internal set; }
+        public bool ComplaintAcknowledged { get; internal set; }
+        public bool ComplaintRiskExplained { get; internal set; }
+        public bool ComplaintResolved { get; internal set; }
+        public bool FalseGuaranteeMade { get; internal set; }
         public bool ReportReviewed { get; internal set; } = true;
         public bool DealClosed { get; internal set; }
         public bool ObjectionRaised { get; internal set; }

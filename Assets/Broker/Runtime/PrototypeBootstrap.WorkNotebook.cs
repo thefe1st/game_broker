@@ -50,7 +50,8 @@ namespace Broker.Runtime
                     var profile = ClientCatalog.Create(client.id);
                     y = NotebookLine(y, profile.Name + " / " + profile.Role, theme.Heading, draw, 34);
                     y = NotebookLine(y, "По завершённым дням: отношения " + Signed(client.relationship) + " · сделок " + client.deals
-                        + (client.awaitingReport ? " · остался отчёт по сделке" : " · необсуждённых отчётов нет"), theme.Small, draw);
+                        + (client.awaitingReport ? " · остался отчёт по сделке" : " · необсуждённых отчётов нет")
+                        + (client.complaintPending ? " · ПРЕТЕНЗИЯ К ГАРАНТИИ" : " · претензий нет"), theme.Small, draw);
                     y = NotebookLine(y, WorkNotebookToday(client), theme.Small, draw);
                     y = NotebookLine(y, "Комиссия фирмы $" + profile.Commission + " · лично вам $" + BrokerDay.PersonalPayout(profile.Commission) + " (20%). " + profile.Brief, theme.Small, draw);
                     y += 24;
@@ -70,7 +71,9 @@ namespace Broker.Runtime
                     + ". Комиссия фирмы $" + report.firmRevenue + ", после вашей выплаты осталось $" + (report.firmRevenue - report.personalEarned) + ".", theme.Small, draw);
                 for (int c = 0; c < report.clientIds.Length; c++)
                     y = NotebookLine(y, ClientCatalog.Create(report.clientIds[c]).Name + ": "
-                        + (report.sold[c] ? "сделка" : report.closed[c] ? "звонок без сделки" : "не звонили"), theme.Small, draw);
+                        + (report.sold[c] ? "сделка" : report.closed[c] ? "звонок без сделки" : "не звонили")
+                        + (report.guaranteed[c] ? " · ложная гарантия: претензия на следующий звонок" : "")
+                        + (report.complaintResolved[c] ? " · претензия урегулирована" : ""), theme.Small, draw);
                 y += 24;
             }
             return y;
@@ -82,7 +85,10 @@ namespace Broker.Runtime
                 if (c.Id != client.id) continue;
                 string state = c.DealClosed ? "сделка закрыта" : c.Call == CallStatus.Active ? "на линии"
                     : c.Call == CallStatus.Closed ? "звонок завершён без сделки" : "ещё не звонили";
-                return "Сегодня в списке: " + state + (c.Returning
+                return "Сегодня в списке: " + state
+                    + (c.FalseGuaranteeMade ? ". Сегодня дана ложная гарантия; претензия останется на следующий звонок." : "")
+                    + (c.ComplaintPending ? (c.ComplaintResolved ? ". Претензия урегулирована сегодня." : ". Претензия ещё не урегулирована.") : "")
+                    + (c.Returning
                     ? (c.ReportReviewed ? ". Прошлый отчёт обсуждён сегодня." : ". Сначала обсудите прошлый отчёт.") : ".");
             }
             return "Сегодня не в списке. " + (client.lastSeenWorkDay == 0 ? "В рабочих днях ещё не появлялся."

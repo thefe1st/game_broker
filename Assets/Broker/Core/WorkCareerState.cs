@@ -6,7 +6,7 @@ namespace Broker.Core
     {
         public string id;
         public int relationship, deals, lastSeenWorkDay;
-        public bool awaitingReport;
+        public bool awaitingReport, complaintPending;
     }
     [Serializable] public sealed class WorkCheckpoint
     {
@@ -18,6 +18,7 @@ namespace Broker.Core
         public int day, openingSavings, firmRevenue, personalEarned, savings, deals, reputation;
         public string[] clientIds;
         public bool[] sold, closed, reportReviewed;
+        public bool[] guaranteed, complaintResolved;
     }
     [Serializable] public sealed class WorkCareerSave
     {
@@ -56,23 +57,23 @@ namespace Broker.Core
                 reputation = seed.reputation, clients = new WorkClientState[ids.Length] };
             for (int i = 0; i < ids.Length; i++) checkpoint.clients[i] = new WorkClientState { id = ids[i],
                 relationship = i < 3 ? seed.relationships[i] : 0, awaitingReport = i < 3 && seed.lastSold[i] };
-            var data = new WorkCareerSave { schemaVersion = 1, mode = "employee-work", origin = CopyCheckpoint(checkpoint), checkpoint = checkpoint, reports = new WorkDayReport[0] };
+            var data = new WorkCareerSave { schemaVersion = 2, mode = "employee-work", origin = CopyCheckpoint(checkpoint), checkpoint = checkpoint, reports = new WorkDayReport[0] };
             if (!TryRestore(data, out var state)) throw new InvalidOperationException("Invalid intro seed.");
             return state;
         }
         public WorkCareerState RestartFromOrigin()
         {
-            var data = new WorkCareerSave { schemaVersion = 1, mode = "employee-work", origin = CopyCheckpoint(save.origin),
+            var data = new WorkCareerSave { schemaVersion = 2, mode = "employee-work", origin = CopyCheckpoint(save.origin),
                 checkpoint = CopyCheckpoint(save.origin), reports = new WorkDayReport[0] };
             if (!TryRestore(data, out var state)) throw new InvalidOperationException("Invalid career origin.");
             return state;
         }
         public BrokerDay CreateDay()
         {
-            var ids = ClientCatalog.Appointments(NextDayNumber); var bonuses = new int[3]; var returns = new bool[3];
-            for (int i = 0; i < 3; i++) { var c = current.clients[ClientCatalog.Index(ids[i])]; bonuses[i] = c.relationship; returns[i] = c.awaitingReport; }
+            var ids = ClientCatalog.Appointments(NextDayNumber); var bonuses = new int[3]; var returns = new bool[3]; var complaints = new bool[3];
+            for (int i = 0; i < 3; i++) { var c = current.clients[ClientCatalog.Index(ids[i])]; bonuses[i] = c.relationship; returns[i] = c.awaitingReport; complaints[i] = c.complaintPending; }
             return new BrokerDay(NextDayNumber, PersonalSavings, Reputation, relationshipBonuses: bonuses,
-                returning: returns, mode: CareerMode.EmployeeWork, clientIds: ids);
+                returning: returns, mode: CareerMode.EmployeeWork, clientIds: ids, complaints: complaints);
         }
         public bool CompleteDay(BrokerDay day)
         {
@@ -80,9 +81,9 @@ namespace Broker.Core
                 || day.OpeningCash != PersonalSavings || day.CarryDebt != 0 || day.Spent != 0 || day.TotalExpenses != 0) return false;
             var r = new WorkDayReport { day = day.DayNumber, openingSavings = day.OpeningCash, firmRevenue = day.FirmRevenue,
                 personalEarned = day.Earned, savings = day.Cash, deals = day.DealsCount, reputation = day.Reputation,
-                clientIds = new string[3], sold = new bool[3], closed = new bool[3], reportReviewed = new bool[3] };
+                clientIds = new string[3], sold = new bool[3], closed = new bool[3], reportReviewed = new bool[3], guaranteed = new bool[3], complaintResolved = new bool[3] };
             for (int i = 0; i < 3; i++) { var c = day.Clients[i]; r.clientIds[i] = c.Id; r.sold[i] = c.DealClosed;
-                r.closed[i] = c.Call == CallStatus.Closed; r.reportReviewed[i] = c.ReportReviewed; }
+                r.closed[i] = c.Call == CallStatus.Closed; r.reportReviewed[i] = c.ReportReviewed; r.guaranteed[i] = c.FalseGuaranteeMade; r.complaintResolved[i] = c.ComplaintResolved; }
             var candidate = Capture(); int length = candidate.reports.Length;
             if (length == HistoryDays)
             {
@@ -99,23 +100,47 @@ namespace Broker.Core
             state = null;
             try
             {
-                if (data == null || data.schemaVersion != 1 || data.mode != "employee-work" || !ValidCheckpoint(data.checkpoint)
+                if (data != null && data.schemaVersion == 1)
+                {
+                    if (!LegacyComplaintFieldsEmpty(data)) return false;
+                    data = Copy(data); data.schemaVersion = 2;
+                }
+                if (data == null || data.schemaVersion != 2 || data.mode != "employee-work" || !ValidCheckpoint(data.checkpoint)
                     || !ValidCheckpoint(data.origin) || data.origin.completedWorkDays != 0
                     || data.origin.startingSavings != data.checkpoint.startingSavings
                     || (data.checkpoint.completedWorkDays == 0 && !SameCheckpoint(data.origin, data.checkpoint))
                     || data.reports == null || data.reports.Length > HistoryDays
                     || (data.checkpoint.completedWorkDays > 0 && data.reports.Length != HistoryDays)) return false;
+                foreach (var client in data.origin.clients) if (client.complaintPending) return false;
                 var result = CopyCheckpoint(data.checkpoint);
                 foreach (var r in data.reports) if (!Apply(result, r)) return false;
                 state = new WorkCareerState(data, result); return true;
             }
             catch (OverflowException) { return false; }
         }
+        private static bool LegacyComplaintFieldsEmpty(WorkCareerSave s)
+        {
+            if (!ValidCheckpoint(s.origin) || !ValidCheckpoint(s.checkpoint) || s.reports == null || s.reports.Length > HistoryDays) return false;
+            foreach (var c in s.origin.clients) if (c.complaintPending) return false;
+            foreach (var c in s.checkpoint.clients) if (c.complaintPending) return false;
+            foreach (var r in s.reports)
+            {
+                if (r == null || r.clientIds == null || r.sold == null || r.closed == null || r.reportReviewed == null) return false;
+                foreach (var flags in new[] { r.guaranteed, r.complaintResolved })
+                {
+                    if (flags == null) continue;
+                    if (flags.Length != 3) return false;
+                    foreach (bool flag in flags) if (flag) return false;
+                }
+            }
+            return true;
+        }
         private static bool SameCheckpoint(WorkCheckpoint a, WorkCheckpoint b)
         {
             if (a.savings != b.savings || a.reputation != b.reputation) return false;
             for (int i = 0; i < 6; i++) if (a.clients[i].relationship != b.clients[i].relationship
-                || a.clients[i].awaitingReport != b.clients[i].awaitingReport) return false;
+                || a.clients[i].awaitingReport != b.clients[i].awaitingReport
+                || a.clients[i].complaintPending != b.clients[i].complaintPending) return false;
             return true;
         }
         private static bool ValidCheckpoint(WorkCheckpoint c)
@@ -139,6 +164,7 @@ namespace Broker.Core
             if (r == null || r.day != c.completedWorkDays + 4 || r.openingSavings != c.savings
                 || r.clientIds == null || r.clientIds.Length != 3 || r.sold == null || r.sold.Length != 3
                 || r.closed == null || r.closed.Length != 3 || r.reportReviewed == null || r.reportReviewed.Length != 3
+                || r.guaranteed == null || r.guaranteed.Length != 3 || r.complaintResolved == null || r.complaintResolved.Length != 3
                 || r.reputation < 0 || r.reputation > 100) return false;
             string[] ids = ClientCatalog.Appointments(r.day); int earned = 0, gross = 0, deals = 0;
             for (int i = 0; i < 3; i++)
@@ -146,9 +172,15 @@ namespace Broker.Core
                 if (r.clientIds[i] != ids[i] || (r.sold[i] && (!r.closed[i] || !r.reportReviewed[i]))) return false;
                 var client = c.clients[ClientCatalog.Index(ids[i])];
                 if (!client.awaitingReport && !r.reportReviewed[i]) return false;
+                if (r.complaintResolved[i] && (!client.complaintPending || !r.closed[i] || r.guaranteed[i])) return false;
+                if (r.guaranteed[i] && !r.closed[i]) return false;
+                if (r.sold[i] && client.complaintPending && !r.complaintResolved[i]) return false;
                 if (r.sold[i]) { int commission = ClientCatalog.Create(ids[i]).Commission;
                     deals++; gross += commission; earned += BrokerDay.PersonalPayout(commission); client.deals = checked(client.deals + 1); }
-                client.relationship = Math.Max(-1, Math.Min(2, client.relationship + (r.sold[i] ? 1 : r.closed[i] ? -1 : 0)));
+                int change = r.sold[i] ? 1 : r.complaintResolved[i] ? 0 : r.closed[i] ? -1 : 0;
+                change += (r.complaintResolved[i] ? 1 : 0) - (r.guaranteed[i] ? 1 : 0);
+                client.relationship = Math.Max(-1, Math.Min(2, client.relationship + change));
+                client.complaintPending = r.guaranteed[i] || (client.complaintPending && !r.complaintResolved[i]);
                 client.awaitingReport = r.sold[i] || (client.awaitingReport && !r.reportReviewed[i]);
                 client.lastSeenWorkDay = checked(c.completedWorkDays + 1);
             }
@@ -157,7 +189,7 @@ namespace Broker.Core
             return ValidCheckpoint(c);
         }
         private static WorkClientState CopyClient(WorkClientState c) => new WorkClientState {
-            id = c.id, relationship = c.relationship, deals = c.deals, lastSeenWorkDay = c.lastSeenWorkDay, awaitingReport = c.awaitingReport };
+            id = c.id, relationship = c.relationship, deals = c.deals, lastSeenWorkDay = c.lastSeenWorkDay, awaitingReport = c.awaitingReport, complaintPending = c.complaintPending };
         private static WorkCheckpoint CopyCheckpoint(WorkCheckpoint c)
         {
             var result = new WorkCheckpoint { completedWorkDays = c.completedWorkDays, startingSavings = c.startingSavings,
@@ -166,7 +198,9 @@ namespace Broker.Core
         }
         private static WorkDayReport CopyReport(WorkDayReport r) => new WorkDayReport { day = r.day, openingSavings = r.openingSavings,
             firmRevenue = r.firmRevenue, personalEarned = r.personalEarned, savings = r.savings, deals = r.deals, reputation = r.reputation,
-            clientIds = (string[])r.clientIds.Clone(), sold = (bool[])r.sold.Clone(), closed = (bool[])r.closed.Clone(), reportReviewed = (bool[])r.reportReviewed.Clone() };
+            clientIds = (string[])r.clientIds.Clone(), sold = (bool[])r.sold.Clone(), closed = (bool[])r.closed.Clone(), reportReviewed = (bool[])r.reportReviewed.Clone(),
+            guaranteed = r.guaranteed == null ? new bool[3] : (bool[])r.guaranteed.Clone(),
+            complaintResolved = r.complaintResolved == null ? new bool[3] : (bool[])r.complaintResolved.Clone() };
         private static WorkCareerSave Copy(WorkCareerSave s)
         {
             var copy = new WorkCareerSave { schemaVersion = s.schemaVersion, mode = s.mode, origin = CopyCheckpoint(s.origin), checkpoint = CopyCheckpoint(s.checkpoint), reports = new WorkDayReport[s.reports.Length] };

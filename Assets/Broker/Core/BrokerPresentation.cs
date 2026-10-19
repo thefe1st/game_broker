@@ -1,6 +1,6 @@
 namespace Broker.Core
 {
-    public enum ConversationStage { AwaitingCall, Report, Goal, Risk, Fee, Term, Service, Proposal, Objection, Trust, Ready, Closed, DayEnded }
+    public enum ConversationStage { AwaitingCall, Report, Goal, Risk, Fee, Term, Service, Proposal, Objection, Trust, Ready, Closed, DayEnded, Complaint }
 
     public static class BrokerPresentation
     {
@@ -9,6 +9,7 @@ namespace Broker.Core
             switch (stage)
             {
                 case ConversationStage.AwaitingCall: return "Начни звонок";
+                case ConversationStage.Complaint: return "Разбери претензию к гарантии";
                 case ConversationStage.Report: return "Обсуди прошлый отчёт";
                 case ConversationStage.Goal: return "Узнай цель клиента";
                 case ConversationStage.Risk: return "Расскажи о риске";

@@ -52,7 +52,7 @@ namespace Broker.Core
         public int TeamMorale => (employees[0].Morale + employees[1].Morale) / 2;
 
         public BrokerDay(int dayNumber = 1, int openingCash = 0, int reputation = 50, bool goldenPhone = false,
-            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner, string[] clientIds = null)
+            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner, string[] clientIds = null, bool[] complaints = null)
         {
             if (!Enum.IsDefined(typeof(CareerMode), mode) || (mode != CareerMode.Owner && (carryDebt != 0 || goldenPhone))
                 || dayNumber < 1 || (mode == CareerMode.EmployeeWork ? dayNumber < 4 : dayNumber > 3)
@@ -60,6 +60,7 @@ namespace Broker.Core
                 || reputation < 0 || reputation > 100
                 || carryDebt < 0 || carryDebt > 100000 || (relationshipBonuses != null && relationshipBonuses.Length != 3)
                 || (returning != null && returning.Length != 3)
+                || (complaints != null && (mode != CareerMode.EmployeeWork || complaints.Length != 3))
                 || (mode != CareerMode.EmployeeWork && clientIds != null)
                 || (mode == CareerMode.EmployeeWork && !ValidAppointments(dayNumber, clientIds))) throw new ArgumentException("Invalid day opening state");
             Mode = mode; DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
@@ -73,6 +74,7 @@ namespace Broker.Core
                 clients[i].Trust = Math.Max(0, Math.Min(4, clients[i].Trust + bonus + (goldenPhone ? 1 : 0)));
                 clients[i].Returning = returning != null && returning[i];
                 clients[i].ReportReviewed = !clients[i].Returning;
+                clients[i].ComplaintPending = complaints != null && complaints[i];
             }
             employees = new List<EmployeeRecord> { new EmployeeRecord("Лена", "Досье за 20 секунд. Верит в порядок, но не в ваш галстук."), new EmployeeRecord("Макс", "Побочные продажи приносят 55. Энтузиазма больше, чем осторожности.") };
             Clients = clients.AsReadOnly(); Employees = employees.AsReadOnly();
@@ -98,6 +100,8 @@ namespace Broker.Core
             if (DayEnded || PendingEvent != null) return "Сначала разберитесь с текущими делами.";
             if (Call != CallStatus.NotStarted) return "Этот звонок уже начат или завершён. Выберите другого клиента.";
             Current.Call = CallStatus.Active;
+            if (Current.ComplaintPending)
+                return Current.Name + ": В прошлый раз вы обещали гарантированную прибыль. Теперь предлагаете забыть? Сначала признайте ошибку и объясните риск: например, «Признаю ошибку. Есть риск убытка». Это претензия к обещанию, а не сообщение об убытке по продукту.";
             if (Current.Returning)
                 return Current.Name + ": " + (Current.Id == "boris"
                     ? "Снова вы. Мойки работают, а что с прошлым разговором? Сначала отчёт, потом новые предложения."
@@ -118,6 +122,7 @@ namespace Broker.Core
                 if (DayEnded) return ConversationStage.DayEnded;
                 if (Call == CallStatus.NotStarted) return ConversationStage.AwaitingCall;
                 if (Call == CallStatus.Closed) return ConversationStage.Closed;
+                if (Current.ComplaintPending && !Current.ComplaintResolved) return ConversationStage.Complaint;
                 if (!Current.ReportReviewed) return ConversationStage.Report;
                 if (!NeedsKnown) return ConversationStage.Goal;
                 if (!RisksExplained) return ConversationStage.Risk;
@@ -138,6 +143,10 @@ namespace Broker.Core
                     case ConversationStage.DayEnded: return "День завершён. Результаты — в итоговом отчёте.";
                     case ConversationStage.AwaitingCall: return "Позвони клиенту и выясни, для чего ему нужны деньги.";
                     case ConversationStage.Closed: return DealClosed ? "Сделка закрыта. Можно выбрать следующего клиента." : "Звонок завершён. Можно выбрать другого клиента.";
+                    case ConversationStage.Complaint: return Current.FalseGuaranteeMade
+                        ? "Вы повторили ложную гарантию. Претензия останется до следующего звонка; новой сделки сегодня не будет."
+                        : !Current.ComplaintAcknowledged ? "Признай ошибку: например, «Признаю ошибку». Одного «извините» недостаточно."
+                        : "Объясни риск заново: например, «Есть риск убытка». Затем можно обсудить отчёт и условия.";
                     case ConversationStage.Report: return "Сначала обсуди отчёт по прошлому разговору.";
                     case ConversationStage.Goal: return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
                     case ConversationStage.Risk: return "Дальше: объясни риск убытка, без обещаний гарантированной прибыли.";
@@ -162,11 +171,25 @@ namespace Broker.Core
             DialogueIntent facts = DialogueRules.Analyze(message);
             if (DialogueRules.Has(facts, DialogueIntent.Guarantee))
             {
+                if (IsRepeatingWork) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; }
                 Current.Trust = Math.Max(0, Trust - 1); Reputation = Math.Max(0, Reputation - 10);
-                if (Trust == 0) { Current.Call = CallStatus.Closed; return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно."; }
-                return Current.Name + ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска.";
+                string consequence = IsRepeatingWork ? " На следующем звонке вернёмся к этому обещанию: у меня претензия к гарантии." : "";
+                if (Trust == 0) { Current.Call = CallStatus.Closed; return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно." + consequence; }
+                return Current.Name + ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска." + consequence;
             }
             var answers = new List<string>();
+            if (Current.ComplaintPending && !Current.ComplaintResolved && !Current.FalseGuaranteeMade)
+            {
+                if (!Current.ComplaintAcknowledged && DialogueRules.Has(facts, DialogueIntent.AdmitError))
+                { Current.ComplaintAcknowledged = true; answers.Add("Ошибку признали. Теперь без прежних обещаний."); }
+                if (!Current.ComplaintRiskExplained && DialogueRules.Has(facts, DialogueIntent.Risk))
+                { Current.ComplaintRiskExplained = true; answers.Add("Риск убытка объяснили заново."); }
+                if (Current.ComplaintAcknowledged && Current.ComplaintRiskExplained)
+                {
+                    Current.ComplaintResolved = true; Current.Trust = Math.Min(4, Trust + 1);
+                    answers.Add("Претензию к гарантии урегулировали. Это не обещание доходности. Отчёт по прошлой сделке и новые условия всё ещё нужно обсудить.");
+                }
+            }
             bool pressure = DialogueRules.Has(facts, DialogueIntent.Pressure);
             if (pressure)
             {
@@ -220,6 +243,8 @@ namespace Broker.Core
         public string OfferDeal()
         {
             if (DayEnded || Call != CallStatus.Active || PendingEvent != null) return "Сейчас нет доступного звонка.";
+            if (Current.ComplaintPending && (!Current.ComplaintResolved || Current.FalseGuaranteeMade))
+                return Current.Name + ": Сначала разберём претензию к гарантии. " + NextConversationStep;
             if (!Current.ReportReviewed) return Current.Name + ": Сначала обсудим отчёт по прошлому разговору.";
             if (!NeedsKnown) return Current.Name + ": Вы даже не спросили, зачем мне это.";
             if (!RisksExplained) return Current.Name + ": Сначала расскажите, что может пойти не так.";

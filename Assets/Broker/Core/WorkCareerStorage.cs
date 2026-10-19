@@ -9,25 +9,36 @@ namespace Broker.Core
     {
         public const int MaxBytes = 65536;
         public string SavePath { get; }
+        private readonly string legacyPath;
         private readonly Func<WorkCareerSave, string> encode;
         private readonly Func<string, WorkCareerSave> decode;
-        public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer)
+        public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer, string legacyPath = null)
         {
-            SavePath = Path.GetFullPath(path); encode = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            SavePath = Path.GetFullPath(path); this.legacyPath = legacyPath == null ? null : Path.GetFullPath(legacyPath);
+            if (this.legacyPath == SavePath) throw new ArgumentException("Legacy path must be separate.");
+            encode = serializer ?? throw new ArgumentNullException(nameof(serializer));
             decode = deserializer ?? throw new ArgumentNullException(nameof(deserializer));
         }
         public bool TryLoad(out WorkCareerState state, out string notice)
         {
+            // Never roll back to v1 merely because a newer save is broken, unknown, or a directory.
+            bool newerExists = File.Exists(SavePath) || File.Exists(SavePath + ".bak")
+                || Directory.Exists(SavePath) || Directory.Exists(SavePath + ".bak");
+            bool legacy = !newerExists && legacyPath != null;
+            string source = legacy ? legacyPath : SavePath;
             state = null; notice = ""; bool found = false;
-            foreach (string path in new[] { SavePath, SavePath + ".bak" })
+            foreach (string path in new[] { source, source + ".bak" })
             {
                 try
                 {
+                    if (Directory.Exists(path)) { found = true; continue; }
                     if (!File.Exists(path)) continue;
                     found = true; long size = new FileInfo(path).Length;
                     if (size <= 0 || size > MaxBytes) continue;
-                    if (!WorkCareerState.TryRestore(decode(File.ReadAllText(path, Encoding.UTF8)), out state)) continue;
-                    if (path != SavePath) notice = "Восстановлена резервная копия: основной файл сохранения не прочитан.";
+                    var data = decode(File.ReadAllText(path, Encoding.UTF8));
+                    if ((legacy && (data == null || data.schemaVersion != 1)) || !WorkCareerState.TryRestore(data, out state)) continue;
+                    if (path != source) notice = "Восстановлена резервная копия: основной файл сохранения не прочитан. ";
+                    if (legacy) notice += "Загружена копия v1. После завершения дня прогресс запишется отдельно в v2; старые v1 и .bak не меняются.";
                     return true;
                 }
                 catch { state = null; }

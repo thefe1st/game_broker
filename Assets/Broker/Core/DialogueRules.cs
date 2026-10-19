@@ -9,7 +9,7 @@ namespace Broker.Core
     {
         None = 0, Needs = 1, Risk = 2, Fee = 4, Year = 8, Personal = 16, Report = 32,
         Guarantee = 64, Pressure = 128, Respect = 256, Reserve = 512, Written = 1024,
-        Contact = 2048, Jargon = 4096
+        Contact = 2048, Jargon = 4096, AdmitError = 8192
     }
 
     // Deterministic Russian phrase rules, NOT semantic understanding or a financial fact checker.
@@ -26,6 +26,9 @@ namespace Broker.Core
             foreach (string clause in clauses)
             {
                 if (UnsafePromise(clause)) result |= DialogueIntent.Guarantee;
+                if (!Match(clause, @"\bне\s+(?:призна|ошиб|был\s+неправ|я\s+ошиб)|\bне\s+моя\s+ошибка")
+                    && Match(clause, @"\bпризнаю\s+(?:свою\s+)?ошибку|\bя\s+ошиб(?:ся|лась)|\bя\s+был(?:а)?\s+неправ(?:а)?|\bмоя\s+ошибка"))
+                    result |= DialogueIntent.AdmitError;
                 if (!Denies(clause, @"цел\w*") && Match(clause, @"\bцел(?:ь|и|ях|ью|ям)\b|\bзачем\b|для\s+чего|чего\s+(?:вы\s+)?(?:хотите|ждете)|что\s+(?:для\s+вас\s+)?(?:важно|нужно)|на\s+что\s+(?:вам\s+)?(?:нужны|планируете)|какая\s+(?:у\s+вас\s+)?задача"))
                     result |= DialogueIntent.Needs;
                 if (HasRisk(clause))

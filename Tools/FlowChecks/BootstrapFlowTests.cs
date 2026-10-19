@@ -272,7 +272,7 @@ namespace Broker.FlowChecks
         {
             CompleteIntroForWork(); string before = File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json"));
             Click("Перейти к рабочим дням"); Click("Нет, вернуться / Esc");
-            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v1.json")), Is.False);
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v2.json")), Is.False);
             Assert.That(File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json")), Is.EqualTo(before));
             Assert.That(Day.DayEnded, Is.True);
         }
@@ -283,7 +283,7 @@ namespace Broker.FlowChecks
             Assert.That(Day.Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.DayNumber, Is.EqualTo(4)); Assert.That(Day.Cash, Is.EqualTo(330));
             Assert.That(Get<OfficeScene>("office").Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.Clients[1].Id, Is.EqualTo("vera"));
             Assert.That(Day.Clients[0].Returning, Is.True); Assert.That(Get<bool>("intro"), Is.True);
-            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v1.json")), Is.True); Assert.That(File.ReadAllText(introPath), Is.EqualTo(before));
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v2.json")), Is.True); Assert.That(File.ReadAllText(introPath), Is.EqualTo(before));
         }
         [Test] public void WorkDeskUsesEmployeeTabsAndNoThreeDayCapHeader()
         {
@@ -327,14 +327,14 @@ namespace Broker.FlowChecks
         }
         [Test] public void InitialTransferWriteFailureStaysOnConfirmationAndCanRetry()
         {
-            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v1.json"); Directory.CreateDirectory(path);
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v2.json"); Directory.CreateDirectory(path);
             Click("Перейти к рабочим дням"); Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.True);
             Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee)); Directory.Delete(path);
             Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.False); Assert.That(Day.DayNumber, Is.EqualTo(4));
         }
         [Test] public void FailedWorkSaveBlocksModeSwitchUntilRetryWithoutDuplicatePayout()
         {
-            StartWork(); string path = Path.Combine(folder, "broker-employee-work-v1.json"); File.Delete(path); Directory.CreateDirectory(path);
+            StartWork(); string path = Path.Combine(folder, "broker-employee-work-v2.json"); File.Delete(path); Directory.CreateDirectory(path);
             Sell(Day, 0); Day.EndDay(); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.False);
             GUI.Click = "Выбрать режим"; Call("OnGUI"); Assert.That(GUI.Click, Is.Not.Null); GUI.Click = null;
             Assert.That(Get<bool>("selectingMode"), Is.False); Directory.Delete(path);
@@ -442,6 +442,66 @@ namespace Broker.FlowChecks
             StartWork(); Interact(OfficeStation.Desk); Set("saveSucceeded", false); Click("База клиентов");
             Assert.That(NotebookText(), Does.Contain("есть незаписанный прогресс"));
             Assert.That(NotebookText(), Does.Contain("не гарантия записи на диск"));
+        }
+        private void ContinueWorkDay()
+        { Day.EndDay(); Frame(); Click("Следующий рабочий день"); Click("Начать рабочий день"); }
+        private void ReachBorisComplaint()
+        {
+            StartWork(); Day.StartCall(); Day.Say("Какая цель?"); Day.Say("Гарантирую прибыль");
+            ContinueWorkDay(); ContinueWorkDay(); ContinueWorkDay();
+            Assert.That(Day.DayNumber, Is.EqualTo(7)); Interact(OfficeStation.Desk);
+        }
+        [Test] public void ComplaintAppearsOnNextContactAndBlocksGuiProposal()
+        {
+            ReachBorisComplaint(); Click("Позвонить"); string text = NotebookText();
+            Assert.That(text, Does.Contain("Разбери претензию к гарантии")); Assert.That(text, Does.Contain("Спор · —"));
+            Set("message", "Какая цель? Есть риск убытка. Комиссия 2%."); Click("Сказать"); Click("Предложить сделку");
+            Assert.That(Day.DealClosed, Is.False); Assert.That(Day.Current.ObjectionRaised, Is.False); Assert.That(Day.Cash, Is.Zero);
+            Click("База клиентов"); Assert.That(NotebookText(), Does.Contain("ПРЕТЕНЗИЯ К ГАРАНТИИ"));
+            Assert.That(NotebookText(), Does.Contain("Претензия ещё не урегулирована"));
+            Click("История рабочих дней"); Assert.That(NotebookText(), Does.Contain("ложная гарантия: претензия на следующий звонок"));
+            Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
+        [Test] public void GuiRepairPersistsAfterSettlementAndFreshReloadWithoutAwardingMoney()
+        {
+            ReachBorisComplaint(); Click("Позвонить"); Set("message", "Признаю ошибку. Есть риск убытка."); Click("Сказать");
+            Assert.That(Day.Current.ComplaintResolved, Is.True); Assert.That(NotebookText(), Does.Contain("Спор · OK"));
+            Click("База клиентов"); Assert.That(NotebookText(), Does.Contain("Претензия урегулирована сегодня")); Click("Вернуться к работе / Esc");
+            Day.EndDay(); Frame(); Assert.That(Get<WorkCareerState>("workCareer").Clients[0].complaintPending, Is.False);
+            Assert.That(Get<WorkCareerState>("workCareer").Clients[0].relationship, Is.Zero);
+            Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake"); Click("Продолжить рабочие дни"); Click("Начать рабочий день");
+            Interact(OfficeStation.Desk); Click("История дней"); Assert.That(NotebookText(), Does.Contain("претензия урегулирована"));
+            Assert.That(Day.Cash, Is.Zero); Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
+        [Test] public void MidDayRestartDoesNotPersistAnUnsettledGuarantee()
+        {
+            StartWork(); Day.StartCall(); Day.Say("Гарантирую прибыль"); Call("Restart");
+            Assert.That(Day.Current.FalseGuaranteeMade || Day.Current.ComplaintPending, Is.False);
+            Assert.That(Get<WorkCareerState>("workCareer").Clients[0].complaintPending, Is.False);
+        }
+        [Test] public void FreshBootstrapReadsRealLegacyShapeWithoutTouchingV1AndLaterWritesV2()
+        {
+            StartWork(); Sell(Day, 0); Day.EndDay(); Frame();
+            string v2 = Path.Combine(folder, "broker-employee-work-v2.json"), v1 = Path.Combine(folder, "broker-employee-work-v1.json");
+            var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(v2)); node["schemaVersion"] = 1;
+            foreach (string key in new[] { "origin", "checkpoint" })
+                foreach (var c in node[key]["clients"].AsArray()) c.AsObject().Remove("complaintPending");
+            foreach (var r in node["reports"].AsArray()) { r.AsObject().Remove("guaranteed"); r.AsObject().Remove("complaintResolved"); }
+            string legacy = node.ToJsonString(); File.WriteAllText(v1, legacy); File.WriteAllText(v1 + ".bak", legacy);
+            File.Delete(v2); if (File.Exists(v2 + ".bak")) File.Delete(v2 + ".bak");
+            Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake"); Assert.That(NotebookText(), Does.Contain("копия v1"));
+            Click("Продолжить рабочие дни"); Click("Начать рабочий день"); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.Cash, Is.EqualTo(30));
+            Assert.That(File.Exists(v2), Is.False); Day.EndDay(); Frame(); Assert.That(File.Exists(v2), Is.True);
+            Assert.That(File.ReadAllText(v1), Is.EqualTo(legacy)); Assert.That(File.ReadAllText(v1 + ".bak"), Is.EqualTo(legacy));
+        }
+        [Test] public void FailedComplaintSaveRetriesOnceWithoutDuplicateRelationshipRecovery()
+        {
+            ReachBorisComplaint(); Day.StartCall(); Day.Say("Признаю ошибку. Есть риск убытка.");
+            string path = Path.Combine(folder, "broker-employee-work-v2.json"); File.Delete(path); Directory.CreateDirectory(path);
+            Day.EndDay(); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.False);
+            var c = Get<WorkCareerState>("workCareer"); Assert.That(c.Clients[0].relationship, Is.Zero);
+            Directory.Delete(path); Click("Повторить сохранение"); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.True);
+            Assert.That(c.Clients[0].relationship, Is.Zero); Assert.That(c.CompletedDays, Is.EqualTo(4)); Assert.That(c.PersonalSavings, Is.Zero);
         }
     }
 }

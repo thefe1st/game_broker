@@ -15,7 +15,7 @@ namespace Broker.Tests
         private WorkCareerStorage Store() => new WorkCareerStorage(path, Encode, Decode);
         private static WorkCareerState NewState() => WorkCareerState.FromIntro(WorkCareerTests.Intro(true));
         private static void Finish(WorkCareerState c) { var d = c.CreateDay(); WorkCareerTests.Sell(d, 1); d.EndDay(); Assert.That(c.CompleteDay(d), Is.True); }
-        [SetUp] public void Setup() { folder = Path.Combine(Path.GetTempPath(), "work-career-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-employee-work-v1.json"); }
+        [SetUp] public void Setup() { folder = Path.Combine(Path.GetTempPath(), "work-career-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-employee-work-v2.json"); }
         [TearDown] public void Cleanup() { Directory.Delete(folder, true); }
         [Test] public void MissingFileDoesNotCreateOne()
         { Assert.That(Store().TryLoad(out _, out var notice), Is.False); Assert.That(notice, Is.Empty); Assert.That(Directory.GetFiles(folder), Is.Empty); }
@@ -68,6 +68,68 @@ namespace Broker.Tests
             var c = NewState(); Store().TrySave(c, out _); Finish(c); Store().TrySave(c, out _); Store().TrySave(c.RestartFromOrigin(), out _);
             Assert.That(File.ReadAllText(intro), Is.EqualTo("intro main")); Assert.That(File.ReadAllText(intro + ".bak"), Is.EqualTo("intro backup"));
             Assert.That(File.ReadAllText(owner), Is.EqualTo("owner main")); Assert.That(File.ReadAllText(owner + ".bak"), Is.EqualTo("owner backup"));
+        }
+        private string LegacyPath => Path.Combine(folder, "broker-employee-work-v1.json");
+        private WorkCareerStorage WithLegacy() => new WorkCareerStorage(path, Encode, Decode, LegacyPath);
+        private static string LegacyJson(WorkCareerState c)
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Encode(c.Capture())); node["schemaVersion"] = 1;
+            foreach (string key in new[] { "origin", "checkpoint" })
+                foreach (var client in node[key]["clients"].AsArray()) client.AsObject().Remove("complaintPending");
+            foreach (var report in node["reports"].AsArray())
+            { report.AsObject().Remove("guaranteed"); report.AsObject().Remove("complaintResolved"); }
+            return node.ToJsonString();
+        }
+        [Test] public void LegacyImportLoadsWithoutWritesAndSavesOnlySeparateV2()
+        {
+            var c = NewState(); for (int n = 0; n < 12; n++) Finish(c);
+            string json = LegacyJson(c); File.WriteAllText(LegacyPath, json); File.WriteAllText(LegacyPath + ".bak", json);
+            Assert.That(WithLegacy().TryLoad(out var loaded, out var notice), Is.True);
+            Assert.That(notice, Does.Contain("копия v1")); Assert.That(File.Exists(path), Is.False);
+            Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings)); Assert.That(loaded.CompletedDays, Is.EqualTo(12));
+            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(2)); Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
+            Finish(loaded); WithLegacy().TrySave(loaded, out _); WithLegacy().TrySave(loaded.RestartFromOrigin(), out _);
+            Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo(json)); Assert.That(File.ReadAllText(LegacyPath + ".bak"), Is.EqualTo(json));
+            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(2));
+        }
+        [Test] public void LegacyBackupRecoveryDoesNotAlterDamagedPrimaryOrBackup()
+        {
+            string json = LegacyJson(NewState()); File.WriteAllText(LegacyPath, "broken"); File.WriteAllText(LegacyPath + ".bak", json);
+            Assert.That(WithLegacy().TryLoad(out var loaded, out var notice), Is.True); Assert.That(notice, Does.Contain("резервная"));
+            Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
+            Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo("broken")); Assert.That(File.ReadAllText(LegacyPath + ".bak"), Is.EqualTo(json));
+        }
+        [TestCase("{bad")] [TestCase("{\"schemaVersion\":99}")] [TestCase("")]
+        public void InvalidNewerFileNeverSilentlyRollsBackToLegacy(string text)
+        {
+            File.WriteAllText(LegacyPath, LegacyJson(NewState())); File.WriteAllText(path, text);
+            Assert.That(WithLegacy().TryLoad(out _, out _), Is.False); Assert.That(File.ReadAllText(path), Is.EqualTo(text));
+        }
+        [Test] public void NewerBackupTakesPrecedenceOverLegacyAndComplaintsSurvive()
+        {
+            File.WriteAllText(LegacyPath, LegacyJson(NewState())); var c = ComplaintTests.WithComplaint();
+            WithLegacy().TrySave(c, out _); WithLegacy().TrySave(c, out _); File.WriteAllText(path, "broken");
+            Assert.That(WithLegacy().TryLoad(out var loaded, out _), Is.True); Assert.That(loaded.Clients[0].complaintPending, Is.True);
+            Assert.That(WithLegacy().TrySave(loaded, out _), Is.True); Assert.That(WithLegacy().TryLoad(out loaded, out _), Is.True);
+            Assert.That(loaded.Clients[0].complaintPending, Is.True);
+        }
+        [Test] public void DirectoryAtNewerPathBlocksLegacyFallback()
+        {
+            File.WriteAllText(LegacyPath, LegacyJson(NewState())); Directory.CreateDirectory(path);
+            Assert.That(WithLegacy().TryLoad(out _, out _), Is.False); Assert.That(WithLegacy().TrySave(NewState(), out _), Is.False);
+        }
+        [Test] public void FutureOrWrongModeLegacyIsNotImported()
+        {
+            File.WriteAllText(LegacyPath, Encode(NewState().Capture())); Assert.That(WithLegacy().TryLoad(out _, out _), Is.False);
+            var node = System.Text.Json.Nodes.JsonNode.Parse(LegacyJson(NewState())); node["mode"] = "employee-intro";
+            File.WriteAllText(LegacyPath, node.ToJsonString()); Assert.That(WithLegacy().TryLoad(out _, out _), Is.False);
+        }
+        [Test] public void FailedImportWriteDoesNotTouchLegacyAndCanRetry()
+        {
+            string json = LegacyJson(NewState()); File.WriteAllText(LegacyPath, json); WithLegacy().TryLoad(out var loaded, out _);
+            Directory.CreateDirectory(path); Assert.That(WithLegacy().TrySave(loaded, out _), Is.False);
+            Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo(json)); Directory.Delete(path);
+            Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
         }
     }
 }
