@@ -105,7 +105,7 @@ namespace Broker.Runtime
         }
         private void Restart()
         {
-            CancelPending(); showVoiceSetup = false; showCallLog = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
+            CancelPending(); showVoiceSetup = false; showCallLog = false; showWorkNotebook = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
             if (CurrentCareerFinished)
             {
                 // Presentation-only day: the actual final ledger is stored in CareerState.
@@ -197,7 +197,7 @@ namespace Broker.Runtime
             {
                 GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
                 GUI.enabled = true;
-                if (showVoiceSetup) DrawVoiceSetup(); else if (showCallLog) DrawCallLog(); else DrawConfirmation();
+                if (showVoiceSetup) DrawVoiceSetup(); else if (showCallLog) DrawCallLog(); else if (showWorkNotebook) DrawWorkNotebook(); else DrawConfirmation();
                 GUI.matrix = previous;
                 return;
             }

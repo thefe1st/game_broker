@@ -184,5 +184,22 @@ namespace Broker.Tests
             Assert.That(restored.PersonalSavings, Is.EqualTo(434)); Assert.That(restored.NextDayNumber, Is.EqualTo(5));
             Assert.That(restored.CreateDay().Clients[2].Returning, Is.True);
         }
+        [Test] public void RecentReportsStartEmptyAndRemainChronologicalAfterPruning()
+        {
+            var c = WorkCareerState.FromIntro(Intro()); Assert.That(c.RecentReports, Is.Empty);
+            for (int n = 0; n < 10; n++) Finish(c);
+            var reports = c.RecentReports; Assert.That(reports.Length, Is.EqualTo(7));
+            for (int n = 0; n < 7; n++) Assert.That(reports[n].day, Is.EqualTo(n + 7));
+            Assert.That(c.CompletedDays, Is.EqualTo(10));
+        }
+        [Test] public void RecentReportsDeepCopiesEveryMutableReportArray()
+        {
+            var c = WorkCareerState.FromIntro(Intro()); Finish(c, true); var reports = c.RecentReports;
+            reports[0].day = -1; reports[0].clientIds[0] = "bad"; reports[0].sold[0] = false;
+            reports[0].closed[0] = false; reports[0].reportReviewed[0] = false; reports[0] = null;
+            var actual = c.RecentReports[0]; Assert.That(actual.day, Is.EqualTo(4));
+            Assert.That(actual.clientIds[0], Is.EqualTo("boris")); Assert.That(actual.sold[0] && actual.closed[0], Is.True);
+            Assert.That(WorkCareerState.TryRestore(c.Capture(), out _), Is.True);
+        }
     }
 }

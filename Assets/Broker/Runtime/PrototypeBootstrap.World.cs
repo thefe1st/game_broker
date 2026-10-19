@@ -140,7 +140,8 @@ namespace Broker.Runtime
         {
             Panel(360, 156, 720, 648, ""); Label(400, 196, 640, 56, "Рынок подождёт.", theme.Title);
             if (Button(400, 296, 640, 64, "Продолжить · Esc", ApplicationActive, true)) ResumeGameplay();
-            if (Button(400, 384, 640, 56, "Журнал")) showNews = true;
+            if (Button(400, 384, IsWorkMode ? 312 : 640, 56, "Журнал")) showNews = true;
+            if (IsWorkMode && Button(728, 384, 312, 56, "База клиентов", !busy && !voice.Working && !voice.Recording)) OpenWorkNotebook();
             if (Button(400, 464, 640, 56, "Микрофон и связь")) OpenVoiceSetup();
             if (Button(400, 544, 640, 56, "Начать день заново")) RequestConfirmation(ConfirmationKind.RestartDay);
             if (Button(400, 624, 640, 48, "Выбрать режим")) RequestConfirmation(ConfirmationKind.SelectMode);

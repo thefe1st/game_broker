@@ -358,5 +358,90 @@ namespace Broker.FlowChecks
             Click("Повторить сохранение"); Assert.That(Get<bool>("saveSucceeded"), Is.True);
             Assert.That(Get<EmploymentState>("employment").PersonalSavings, Is.EqualTo(30));
         }
+        private string NotebookText()
+        { GUI.Labels.Clear(); Call("OnGUI"); return string.Join("\n", GUI.Labels); }
+        [Test] public void NotebookListsSixClientsWithoutChangingFilesMoneyOrClock()
+        {
+            StartWork(); Interact(OfficeStation.Desk);
+            var paths = Directory.GetFiles(folder); var before = Array.ConvertAll(paths, File.ReadAllText);
+            float seconds = Day.RemainingSeconds; int cash = Day.Cash;
+            Click("База клиентов"); for (int n = 0; n < 4; n++) Frame(); string text = NotebookText();
+            foreach (string id in ClientCatalog.Ids) Assert.That(text, Does.Contain(ClientCatalog.Create(id).Name));
+            Assert.That(Day.Cash, Is.EqualTo(cash)); Assert.That(Day.RemainingSeconds, Is.EqualTo(seconds));
+            CollectionAssert.AreEquivalent(paths, Directory.GetFiles(folder));
+            for (int n = 0; n < paths.Length; n++) Assert.That(File.ReadAllText(paths[n]), Is.EqualTo(before[n]));
+            Assert.That(UnityWebRequest.Sent, Is.Zero); Assert.That(Get<OfficeScene>("office").Player.ControlEnabled, Is.False);
+        }
+        [Test] public void NotebookEscapePreservesActiveCallDraftAndConditions()
+        {
+            StartWork(); Interact(OfficeStation.Desk); Day.StartCall(); Day.Say("Какая цель? Есть риск убытка. Комиссия 2%.");
+            Set("message", "Неотправленный черновик"); string before = Day.Current.Id;
+            Click("База клиентов"); Assert.That(NotebookText(), Does.Contain("Сегодня в списке: на линии"));
+            OfficeInput.Escape = true; Call("Update"); Assert.That(OverlayOpen, Is.False);
+            Assert.That(Day.Current.Id, Is.EqualTo(before)); Assert.That(Day.Call, Is.EqualTo(CallStatus.Active));
+            Assert.That(Get<string>("message"), Is.EqualTo("Неотправленный черновик"));
+            Assert.That(Day.NeedsKnown && Day.RisksExplained && Day.FeesExplained, Is.True);
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Desk));
+        }
+        [Test] public void NotebookEmptyHistoryExcludesIntroAndTabsAreReadOnly()
+        {
+            StartWork(true); Interact(OfficeStation.Desk); Click("История дней");
+            Assert.That(NotebookText(), Does.Contain("Рабочие дни ещё не завершены"));
+            Click("База клиентов"); Assert.That(NotebookText(), Does.Contain("Сначала обсудите прошлый отчёт"));
+            Day.StartCall(); Day.Say("Обсудим отчёт по прошлой сделке.");
+            Assert.That(NotebookText(), Does.Contain("Прошлый отчёт обсуждён сегодня"));
+            Assert.That(Get<WorkCareerState>("workCareer").Clients[0].awaitingReport, Is.True);
+            Click("Вернуться к работе / Esc"); Assert.That(OverlayOpen, Is.False);
+        }
+        [Test] public void NotebookHistoryShowsPersonalAndEmployerMoneySeparately()
+        {
+            StartWork(); Sell(Day, 0); Day.EndDay(); Frame(); Click("Следующий рабочий день"); Click("Начать рабочий день");
+            Interact(OfficeStation.Desk); Click("История дней"); string text = NotebookText();
+            Assert.That(text, Does.Contain("День 4 · 1/3 сделки"));
+            Assert.That(text, Does.Contain("Лично: $0 + $30 = $30"));
+            Assert.That(text, Does.Contain("Комиссия фирмы $150, после вашей выплаты осталось $120"));
+            Assert.That(text, Does.Contain("Борис: сделка")); Assert.That(text, Does.Contain("Вера: не звонили"));
+        }
+        [Test] public void NotebookKeepsSevenRecentDaysNewestFirstAfterFreshReload()
+        {
+            StartWork(); for (int n = 0; n < 10; n++) { Day.EndDay(); Frame(); Click("Следующий рабочий день"); Click("Начать рабочий день"); }
+            Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake"); Click("Продолжить рабочие дни"); Click("Начать рабочий день");
+            Interact(OfficeStation.Desk); Click("История дней"); string text = NotebookText();
+            Assert.That(text, Does.Contain("Показано 7 из 10")); Assert.That(text, Does.Contain("Более ранние подробности свёрнуты"));
+            Assert.That(text.IndexOf("День 13 ·"), Is.LessThan(text.IndexOf("День 7 ·")));
+            Assert.That(text, Does.Not.Contain("День 4 ·"));
+        }
+        [Test] public void NotebookFromPauseReturnsToPauseAndRequiresExplicitResume()
+        {
+            StartWork(); OfficeInput.Escape = true; Call("Update"); Click("База клиентов");
+            Click("Вернуться к работе / Esc"); Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
+            float seconds = Day.RemainingSeconds; Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(seconds));
+            Click("Продолжить · Esc"); Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(seconds - 1));
+        }
+        [Test] public void NotebookFocusLossDoesNotResumeWorkAutomatically()
+        {
+            StartWork(); Interact(OfficeStation.Desk); Click("База клиентов"); float seconds = Day.RemainingSeconds;
+            Call("OnApplicationFocus", false); Frame(); Call("OnApplicationFocus", true);
+            Click("Вернуться к работе / Esc"); Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(seconds));
+            Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
+            Click("Продолжить · Esc"); Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Desk));
+        }
+        [TestCase("intro")] [TestCase("busy")] [TestCase("recording")] [TestCase("overlay")] [TestCase("focus")] [TestCase("ended")]
+        public void NotebookCannotOpenInUnsafeStates(string state)
+        {
+            if (state == "intro") Begin(); else StartWork();
+            if (state == "busy") Set("busy", true);
+            if (state == "recording") Get<VoiceSession>("voice").BeginRecording(true);
+            if (state == "overlay") Call("OpenVoiceSetup");
+            if (state == "focus") Call("OnApplicationFocus", false);
+            if (state == "ended") Day.EndDay();
+            Call("OpenWorkNotebook", false); Assert.That(Get<bool>("showWorkNotebook"), Is.False);
+        }
+        [Test] public void NotebookClearlyWarnsWhenCompletedProgressHasNotBeenSaved()
+        {
+            StartWork(); Interact(OfficeStation.Desk); Set("saveSucceeded", false); Click("База клиентов");
+            Assert.That(NotebookText(), Does.Contain("есть незаписанный прогресс"));
+            Assert.That(NotebookText(), Does.Contain("не гарантия записи на диск"));
+        }
     }
 }

@@ -37,6 +37,12 @@ namespace Broker.Runtime
             for (int i = 0; i < tabs.Length; i++)
                 if (Button(344 + i * 176, 120, 160, 48, tabs[i], !busy && !voice.Working && !voice.Recording, (int)deskPage == i))
                 { voice.Cancel(); deskPage = (DeskPage)i; GUI.FocusControl(null); }
+            if (IsWorkMode)
+            {
+                bool notebookReady = !busy && !voice.Working && !voice.Recording;
+                if (Button(888, 120, 240, 48, "База клиентов", notebookReady)) OpenWorkNotebook();
+                if (Button(1144, 120, 256, 48, "История дней", notebookReady)) OpenWorkNotebook(true);
+            }
             if (deskPage == DeskPage.Calls) { DrawClientRail(); DrawCallWorkspace(); }
             else { DrawDayRail(); if (deskPage == DeskPage.Team) { if (IsEmployeeMode) DrawSupervisorWorkspace(); else DrawTeamWorkspace(); } else DrawOfficeWorkspace(); }
             if (Button(40, 840, 264, 48, "Журнал офиса")) showNews = true;

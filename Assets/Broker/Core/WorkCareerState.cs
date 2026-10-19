@@ -41,6 +41,11 @@ namespace Broker.Core
         public int TotalDeals { get { int n = 0; foreach (var c in current.clients) n += c.deals; return n; } }
         public WorkDayReport LastReport => save.reports.Length == 0 ? null : CopyReport(save.reports[save.reports.Length - 1]);
         public WorkClientState[] Clients => CopyCheckpoint(current).clients;
+        public WorkDayReport[] RecentReports
+        {
+            get { var reports = new WorkDayReport[save.reports.Length];
+                for (int i = 0; i < reports.Length; i++) reports[i] = CopyReport(save.reports[i]); return reports; }
+        }
         private WorkCareerState(WorkCareerSave data, WorkCheckpoint result) { save = Copy(data); current = CopyCheckpoint(result); }
 
         public static WorkCareerState FromIntro(EmploymentState intro)
