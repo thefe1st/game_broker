@@ -9,7 +9,7 @@ namespace Broker.Tests
         [Test] public void CityPlanIsDeterministicAndBounded()
         {
             var a = new CityBlockPlan(); var b = new CityBlockPlan();
-            Assert.That(a.Buildings.Count, Is.EqualTo(18));
+            Assert.That(a.Buildings.Count, Is.EqualTo(14), "the two middle towers of the first rows give way to the Exchange");
             for (int i = 0; i < a.Buildings.Count; i++)
             {
                 var x = a.Buildings[i]; var y = b.Buildings[i];
@@ -33,17 +33,15 @@ namespace Broker.Tests
             Assert.That(CityBlockPlan.SpawnY, Is.GreaterThan(CityBlockPlan.GroundY));
             Assert.That(CityBlockPlan.TerrainTopY, Is.LessThan(CityBlockPlan.GroundY - 0.05f), "Scenery ground must not overlap the plaza floor");
         }
-        [TestCase(0)] [TestCase(1)] [TestCase(2)] [TestCase(3)]
-        public void VisualTrafficIsBoundedAndLoops(int lane)
+        [Test] public void TowersStayOffTheWalkableQuartersAndTheExchangePodium()
         {
-            for (int t = 0; t < 1000; t++) Assert.That(CityBlockPlan.TrafficX(t, lane), Is.InRange(-50, 50));
-            Assert.That(CityBlockPlan.TrafficX(0, lane), Is.EqualTo(CityBlockPlan.TrafficX(lane % 2 == 0 ? 20 : 50.0 / 3, lane)).Within(0.001));
-        }
-        [Test] public void InvalidTrafficInputsAreRejected()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => CityBlockPlan.TrafficX(double.NaN, 0));
-            Assert.Throws<ArgumentOutOfRangeException>(() => CityBlockPlan.TrafficX(-1, 0));
-            Assert.Throws<ArgumentOutOfRangeException>(() => CityBlockPlan.TrafficX(0, 4));
+            foreach (var b in new CityBlockPlan().Buildings)
+                for (float x = b.X - b.Width / 2 + 0.25f; x < b.X + b.Width / 2; x += 0.5f)
+                    for (float z = b.Z - b.Depth / 2 + 0.25f; z < b.Z + b.Depth / 2; z += 0.5f)
+                    {
+                        Assert.That(CityDistrictPlan.IsPedestrianArea(x, z), Is.False, "tower at " + b.X + "/" + b.Z);
+                        Assert.That(Math.Abs(x) > CityDistrictPlan.PodiumHalfWidth + 1 || z > CityDistrictPlan.PodiumMaxZ + 1 || z < CityDistrictPlan.StepsMinZ, Is.True);
+                    }
         }
         [Test] public void StreetPortalsAreNotMistakenForEndOfDayOrDeskViews()
         {

@@ -191,6 +191,7 @@ namespace Broker.Runtime.Office
         {
             if (day == null) return;
             // City errands are hidden; retained implementation is not part of this scene.
+            RefreshBoard(day);
             phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
             Camera active = overview.enabled ? overview : Player.Eye;
             if (employeeMode) supervisorLabel.transform.rotation = active.transform.rotation;

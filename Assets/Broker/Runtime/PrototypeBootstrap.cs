@@ -58,7 +58,7 @@ namespace Broker.Runtime
             {
                 if (navigation.IsExploring) PauseGameplay();
                 else if (navigation.View == OfficeView.Pause) ResumeGameplay();
-                else if (navigation.View == OfficeView.CityMap || navigation.View == OfficeView.CityCompanies) CloseCityInformation();
+                else if (IsCityInformation(navigation.View)) CloseCityInformation();
                 else { CancelPending(); EnterWorld(); }
             }
             if (ApplicationActive && !selectingMode && !intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);

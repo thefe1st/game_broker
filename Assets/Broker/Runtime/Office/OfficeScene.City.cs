@@ -4,10 +4,11 @@ using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
+    // Both quarters around the boulevard. This partial lays the floors and the invisible boundaries, the office tower
+    // with its elevator, the towers north of the boulevard and the hazy skyline, and drives the boulevard clock. The old
+    // district, the boulevard with its crossing, the Exchange, the café and the passers-by have their own partials.
     public sealed partial class OfficeScene
     {
-        private readonly Transform[] cityCars = new Transform[4];
-        private double cityElapsed;
         private bool previousFog;
         private Color previousFogColor;
         private FogMode previousFogMode;
@@ -16,6 +17,19 @@ namespace Broker.Runtime.Office
         public bool WorldMotionEnabled { get; set; } = true;
         public float MapX => Player == null ? CityBlockPlan.SpawnX : Player.transform.localPosition.x;
         public float MapZ => Player == null ? CityBlockPlan.SpawnZ : Player.transform.localPosition.z;
+        // Signal, cars and passers-by of the boulevard. Decoration: nothing here touches the day, money or clients.
+        public CityLife Life { get; private set; } = new CityLife();
+        // Signal state for the HUD while the player is near the crossing; null elsewhere and in the office.
+        public string CrossingHint => IsInCity && CityCrosswalk.Near(MapX, MapZ) ? Life.Hint : null;
+        // The button on the signal post: true when the press shortens the cars' green.
+        public bool RequestCrossing() { bool changed = Life.Signal.RequestWalk(); ShowCity(0); return changed; }
+        // A fresh boulevard clock: the cars' green just started, cars and passers-by at their starting places.
+        public void ResetCity() { Life = new CityLife(); ShowCity(1); }
+        public void AdvanceCity(double seconds)
+        {
+            Life.Advance(seconds, IsInCity, MapX, MapZ);
+            ShowCity((float)seconds);
+        }
 
         private void BuildCity()
         {
@@ -30,31 +44,32 @@ namespace Broker.Runtime.Office
             var facades = new[] { Surface("brick", "#FFFFFF", 2f, 0.12f), Surface("concrete", "#D9D2C6", 2f, 0.12f), Surface("plaster", "#FFFFFF", 2f, 0.12f) };
             const float ground = CityBlockPlan.GroundY;
             Box("City / outer meadow", new Vector3(0, ground - 0.45f, CityScenery.TerrainCenterZ), new Vector3(CityScenery.TerrainSize, 0.5f, CityScenery.TerrainSize), grass, false);
-            Box("City / terrain", new Vector3(0, CityBlockPlan.TerrainTopY - 0.25f, 59), new Vector3(120, 0.5f, 112), concrete, false);
+            Box("City / terrain", new Vector3(0, CityBlockPlan.TerrainTopY - 0.25f, 55), new Vector3(200, 0.5f, 140), concrete, false);
+            // Walkable floors: the plaza and the side streets at ground level, the north pavement and the square 12 cm up.
             Box("City / walkable plaza", new Vector3(0, ground - 0.12f, 18), new Vector3(32, 0.24f, 22), pavement);
             foreach (float x in new[] { -30f, 30f })
             {
                 Box("District / promenade wing", new Vector3(x, ground - 0.12f, 18), new Vector3(28, 0.24f, 22), pavement);
                 Box("District / side street sidewalk", new Vector3(x, ground - 0.12f, -2.5f), new Vector3(28, 0.24f, 19), pavement);
             }
-            Box("City / boulevard", new Vector3(0, ground + 0.015f, 35), new Vector3(112, 0.03f, 12), asphalt, false);
-            Box("City / far sidewalk", new Vector3(0, ground + 0.06f, 42.6f), new Vector3(112, 0.12f, 3.2f), pavement, false);
-            for (int lane = 0; lane < 3; lane++) for (int mark = 0; mark < 14; mark++)
-                Box("Road / lane marking", new Vector3(-47 + mark * 7, ground + 0.04f, 32 + lane * 3), new Vector3(2.4f, 0.02f, 0.09f), cream, false);
-            // Pedestrian wings share a floor; moving traffic remains behind a visible barrier.
-            foreach (float x in new[] { -44.5f, 44.5f })
-                Box("District / outer boundary", new Vector3(x, ground + 0.65f, 8), new Vector3(0.35f, 1.3f, 41), concrete);
+            const float northTop = ground + CityDistrictPlan.NorthFloorY;
+            Box("North / pavement", new Vector3(0, northTop - 0.06f, 42.9f), new Vector3(89, 0.12f, 3.2f), pavement);
+            Box("North / Exchange square", new Vector3(0, northTop - 0.06f, 49.65f), new Vector3(32, 0.12f, 10.3f), pavement);
+            // Old district: outer walls, the facades of the side streets and the office behind the plaza.
+            foreach (float x in new[] { -44.5f, 44.5f }) BoundaryHedge(x, 8, 41, 1, concrete);
             foreach (float x in new[] { -16.5f, 16.5f })
                 Box("District / inner boundary", new Vector3(x, ground + 1.5f, -2), new Vector3(0.35f, 3, 19), facades[0]);
             foreach (float x in new[] { -30f, 30f })
                 Box("District / south boundary", new Vector3(x, ground + 0.65f, -12), new Vector3(28, 1.3f, 0.35f), concrete);
-            var trafficBarrier = Box("Plaza / safety barrier", new Vector3(0, ground + 0.65f, 28.5f), new Vector3(89, 1.3f, 0.35f), concrete);
-            trafficBarrier.GetComponent<Renderer>().enabled = false;
-            Box("Plaza / boulevard curb", new Vector3(0, ground + 0.17f, 28.5f), new Vector3(89, 0.34f, 0.35f), concrete);
-            for (int post = 0; post < 25; post++)
-                Box("Plaza / railing post", new Vector3(-44 + post * 3.67f, ground + 0.8f, 28.5f), new Vector3(0.1f, 1.1f, 0.1f), metal, false);
-            Box("Plaza / railing", new Vector3(0, ground + 1.33f, 28.5f), new Vector3(89, 0.08f, 0.14f), metal, false);
             Box("Plaza / rear boundary", new Vector3(0, ground + 1.5f, 7.5f), new Vector3(31, 3, 0.4f), facades[0]);
+            // North side: walls at the ends of the pavement, invisible lines along the tower fronts and around the square.
+            foreach (float x in new[] { -44.5f, 44.5f }) BoundaryHedge(x, 42.9f, 3.2f, 2, concrete);
+            foreach (float x in new[] { -30.25f, 30.25f })
+                Blocker("North / tower line", new Vector3(x, ground + 0.75f, 44.65f), new Vector3(28.5f, 1.5f, 0.3f));
+            foreach (float x in new[] { -16.15f, 16.15f })
+                Blocker("North / square side", new Vector3(x, ground + 0.75f, 49.65f), new Vector3(0.3f, 1.5f, 10.3f));
+            foreach (float x in new[] { -14.3f, 14.3f })
+                Blocker("North / square back", new Vector3(x, ground + 0.75f, 54.95f), new Vector3(3.4f, 1.5f, 0.3f));
             // The office reads as the top floor of a building instead of floating above the plaza.
             PlaceVoxel("office block", () => VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false),
                 "City / office building", transform, new Vector3(0, ground, -2.35f), 180);
@@ -67,22 +82,13 @@ namespace Broker.Runtime.Office
                     "City / voxel tower " + number, transform, new Vector3(b.X, CityBlockPlan.TerrainTopY, b.Z));
                 number++;
             }
-            for (int i = 0; i < 6; i++)
-            {
-                float x = -12.5f + i * 5; int seed = i % 3;
-                Box("Plaza / planter", new Vector3(x, ground + 0.28f, 25.5f), new Vector3(2.2f, 0.56f, 1.25f), concrete).GetComponent<Renderer>().enabled = false;
-                PlaceVoxel("planter/" + seed, () => VoxelProps.Planter(seed), "Plaza / voxel planter", transform, new Vector3(x, ground, 25.5f));
-                PlaceVoxel("street lamp", VoxelProps.StreetLamp, "Street / voxel lamp", transform, new Vector3(x, ground, 27.9f));
-            }
-            foreach (float x in new[] { -9f, 9f })
-            {
-                Box("Plaza / bench seat", new Vector3(x, ground + 0.48f, 17), new Vector3(3, 0.16f, 0.75f), wood).GetComponent<Renderer>().enabled = false;
-                Box("Plaza / bench base", new Vector3(x, ground + 0.2f, 17), new Vector3(2.4f, 0.4f, 0.5f), concrete).GetComponent<Renderer>().enabled = false;
-                PlaceVoxel("plaza bench", () => VoxelProps.Bench(30, false), "Plaza / voxel bench", transform, new Vector3(x, ground, 17));
-            }
-            BuildDistrict(concrete, facades);
+            BuildDistrict(facades);
+            BuildBoulevard(asphalt, concrete, grass, metal);
+            BuildExchange();
+            BuildCafe();
+            BuildScenery(concrete, grass);
+            BuildCrowd();
             BuildSkyline();
-            // City errands are temporarily hidden by the approved career plan. Builder retained.
             // Elevator portals are explicit prototype transitions; the end-day door stays separate.
             var entry = Box("City / office elevator", new Vector3(0, ground + 1.35f, 8.2f), new Vector3(2.5f, 2.7f, 0.35f), navy);
             Interactable(entry, OfficeStation.ReturnOffice, "Лифт в офис", "Вернуться в Мойка Капитал");
@@ -94,14 +100,28 @@ namespace Broker.Runtime.Office
             Box("Office / elevator light", new Vector3(5.74f, 2.5f, -0.2f), new Vector3(0.05f, 0.06f, 1.15f), cityLight, false);
             var label = Text("Office / street sign", "КВАРТАЛ", new Vector3(5.72f, 1.8f, -0.2f), 48, 0.03f, new Color(0.98f, 0.93f, 0.82f));
             label.transform.localEulerAngles = new Vector3(0, 90, 0);
-            for (int lane = 0; lane < cityCars.Length; lane++)
-            {
-                var car = new GameObject("City / visual traffic " + lane); car.transform.SetParent(transform, false); cityCars[lane] = car.transform;
-                CarStyle style = lane == 1 ? CarStyle.Suv : lane == 2 ? CarStyle.Taxi : CarStyle.Sedan; int seed = lane * 3 + 1;
-                // The car root rides 0.48 m above the road; the voxel body's wheels touch the asphalt.
-                PlaceVoxel("car/" + lane, () => VoxelProps.Car(style, seed), "Car / voxel body", car.transform, new Vector3(0, -0.45f, 0));
-                car.transform.localRotation = Quaternion.Euler(0, lane % 2 == 0 ? 0 : 180, 0);
-            }
+            ShowCity(1);
+        }
+        // The east and west ends of the walkable streets: a clipped hedge on a stone kerb instead of a bare wall.
+        private void BoundaryHedge(float x, float z, float length, int seed, Material concrete)
+        {
+            const float ground = CityBlockPlan.GroundY;
+            Blocker("District / boundary", new Vector3(x, ground + 0.7f, z), new Vector3(0.7f, 1.4f, length));
+            Box("District / boundary kerb", new Vector3(x, ground + 0.06f, z), new Vector3(0.7f, 0.12f, length), concrete, false);
+            PlaceVoxel("hedge/" + Mathf.RoundToInt(length * 4) + "/" + seed, () => VoxelProps.Hedge(length, seed), "District / boundary hedge",
+                transform, new Vector3(x, ground + 0.12f, z), 90);
+        }
+        // Invisible collider for walls the voxel models already show, or for limits that need no wall.
+        private GameObject Blocker(string name, Vector3 position, Vector3 size)
+        {
+            var obj = new GameObject(name); obj.transform.SetParent(transform, false);
+            obj.transform.localPosition = position; obj.transform.localScale = size;
+            obj.AddComponent<BoxCollider>(); return obj;
+        }
+        private void PointLight(string name, Vector3 position, float range, float intensity, Color color)
+        {
+            var obj = new GameObject(name); obj.transform.SetParent(transform, false); obj.transform.localPosition = position;
+            var point = obj.AddComponent<Light>(); point.type = LightType.Point; point.range = range; point.intensity = intensity; point.color = color;
         }
         // Hazy boxy skyline beyond the playable block: cheap textured boxes that the fog dissolves.
         private void BuildSkyline()
@@ -124,9 +144,12 @@ namespace Broker.Runtime.Office
         }
         private void Update()
         {
-            if (WorldMotionEnabled) cityElapsed += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
-            for (int lane = 0; lane < cityCars.Length; lane++) if (cityCars[lane] != null)
-                cityCars[lane].localPosition = new Vector3(CityBlockPlan.TrafficX(cityElapsed, lane), CityBlockPlan.GroundY + 0.48f, 30.5f + lane * 2.9f);
+            if (WorldMotionEnabled) AdvanceCity(Mathf.Min(Time.unscaledDeltaTime, 0.1f));
+        }
+        // Moves the cars and the passers-by to the state of CityLife and lights the signals; dt only smooths turning.
+        private void ShowCity(float dt)
+        {
+            ShowTraffic(); ShowSignals(); ShowCrowd(dt);
         }
         private void RestoreCityEnvironment()
         {

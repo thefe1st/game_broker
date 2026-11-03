@@ -12,9 +12,11 @@ namespace Broker.Runtime
         private void OnWorldInteraction(OfficeInteractable target)
         {
             if (!ApplicationActive || selectingMode || intro || busy || voice.Working || voice.Recording || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
-            if ((target.Station == OfficeStation.CityMap || target.Station == OfficeStation.CityCompanies) && !office.IsInCity) return;
+            if (IsStreetStation(target.Station) && !office.IsInCity) return;
             if (IsFounderMode && ((target.Station == OfficeStation.Employee && (!day.HasFounderAssistant || target.EmployeeIndex != 0))
                 || target.Station == OfficeStation.Supervisor || target.Station == OfficeStation.Upgrade || target.Station == OfficeStation.Coffee)) return;
+            // The crossing button only asks the signal for the pedestrians' green: no panel, the clock keeps running.
+            if (target.Station == OfficeStation.CrosswalkButton) { office.RequestCrossing(); return; }
             if (target.Station == OfficeStation.Street || target.Station == OfficeStation.ReturnOffice)
             {
                 CancelPending(); office.VisitCity(target.Station == OfficeStation.Street); EnterWorld(); return;
@@ -27,6 +29,10 @@ namespace Broker.Runtime
                 office.Player.SetControl(false);
             }
         }
+        private static bool IsStreetStation(OfficeStation station) => station == OfficeStation.CityMap || station == OfficeStation.CityCompanies
+            || station == OfficeStation.CityExchange || station == OfficeStation.CityCafe || station == OfficeStation.CrosswalkButton;
+        private static bool IsCityInformation(OfficeView view) => view == OfficeView.CityMap || view == OfficeView.CityCompanies
+            || view == OfficeView.CityExchange || view == OfficeView.CityCafe;
         private void EnterWorld()
         {
             if (!ApplicationActive || busy || UtilityOverlayOpen || voice.Recording || voice.Working) return;
@@ -92,6 +98,13 @@ namespace Broker.Runtime
                 Label(56, 308, 272, 28, destination.Name, theme.Heading);
                 Label(56, 348, 272, 64, Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, destination)) + " м · "
                     + CityDistrictPlan.Direction(office.MapX, office.MapZ, destination) + "\nКарта — у стенда / в паузе", theme.Small);
+                string crossing = office.CrossingHint;
+                if (crossing != null)
+                {
+                    HudPanel(32, 448, 320, 96);
+                    Label(56, 462, 272, 24, "ПЕРЕХОД / СВЕТОФОР", theme.Tag);
+                    Label(56, 490, 272, 48, crossing, theme.Small);
+                }
             }
         }
         // Exploration HUD: a light translucent wash with thin white rules instead of solid cards,
@@ -128,8 +141,8 @@ namespace Broker.Runtime
                 case OfficeView.Pause: DrawPausePanel(); break;
                 case OfficeView.CityMap: DrawCityMap(); break;
                 case OfficeView.CityCompanies: DrawCityCompanies(); break;
-
-
+                case OfficeView.CityExchange: DrawCityExchange(); break;
+                case OfficeView.CityCafe: DrawCityCafe(); break;
             }
         }
         private void DrawEmployeePanel()

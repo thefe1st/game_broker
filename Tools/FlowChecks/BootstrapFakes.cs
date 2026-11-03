@@ -110,5 +110,8 @@ namespace Broker.Runtime.Office
         public bool FounderAssistant { get; private set; }
         public void ConfigureCareerMode(CareerMode mode, bool founderAssistant = false) { Mode = mode; FounderAssistant = founderAssistant; }
         public void ResetPlayer() { IsInCity = false; }
+        public string CrossingHint;
+        public int CrossingRequests;
+        public bool RequestCrossing() { CrossingRequests++; return true; }
     }
 }

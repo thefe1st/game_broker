@@ -8,39 +8,43 @@ namespace Broker.Runtime
     {
         private string cityDestinationId = "office";
         private bool cityMapFromPause;
+        // Walking map at 4 px per metre: walkable areas, the boulevard with its zebra, closed buildings in gold with the
+        // open rooms (café, Exchange hall) cut out, the chosen landmark and the player. It never moves the player.
         private void DrawCityMap()
         {
-            Panel(160, 92, 1120, 780, ""); Label(200, 124, 1040, 48, "Район / пешая навигация", theme.Title);
-            Label(200, 184, 1040, 60, "Север — бульвар. Сквер на западе, офисная улица на востоке. Площадь соединяет обе стороны. Проезжая часть отделена; входы в декорационные здания не открыты.", theme.Small);
-            Panel(200, 268, 432, 380, "");
-            Label(224, 288, 384, 28, "СЕВЕР / БУЛЬВАР", theme.Tag);
-            Paint(new Rect(224, 336, 352, 160), theme.Border);
-            Paint(new Rect(332, 416, 136, 80), Broker.Runtime.Office.BrokerTheme.Hex("#0F1B2D"));
-            Paint(new Rect(244, 456, 72, 32), theme.Gold);
-            Paint(new Rect(484, 456, 72, 32), theme.Gold);
-            Label(236, 520, 116, 48, "ЗАПАД\nСквер", theme.Small);
-            Label(360, 520, 112, 48, "Площадь\nОфис", theme.Small);
-            Label(488, 520, 112, 48, "ВОСТОК\nОфисы", theme.Small);
+            Panel(160, 64, 1120, 832, ""); Label(200, 92, 1040, 48, "Район / пешая навигация", theme.Title);
+            Label(200, 148, 1040, 52, "Юг — площадь у офиса, сквер и офисная улица. Север — Биржа за бульваром: переходите по зебре на зелёный, кнопка на столбе. Открыты только зал Биржи и кофейня.", theme.Small);
+            Panel(200, 216, 432, 480, "");
+            const float left = 240, top = 248, scale = 4;
+            Rect Map(CityRect r) => new Rect(left + (r.MinX - CityDistrictPlan.MinX) * scale, top + (CityDistrictPlan.MaxZ - r.MaxZ) * scale, r.Width * scale, r.Depth * scale);
+            foreach (var area in CityDistrictPlan.Areas) Paint(Map(area), theme.Border);
+            Paint(Map(CityDistrictPlan.Road), Broker.Runtime.Office.BrokerTheme.Hex("#0F1B2D"));
+            for (int i = 0; i < 6; i++)
+                Paint(Map(new CityRect(-CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 0.6f + i * 2, CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 1.6f + i * 2)), theme.Ink);
+            foreach (var footprint in CityDistrictPlan.Footprints) Paint(Map(footprint), theme.Gold);
+            foreach (var opening in CityDistrictPlan.Openings) Paint(Map(opening), theme.Border);
+            Label(392, 276, 96, 24, "БИРЖА", theme.Tag);
+            Label(248, 400, 120, 24, "БУЛЬВАР", theme.Tag);
+            Label(380, 468, 120, 24, "ПЛОЩАДЬ", theme.Tag);
+            Label(256, 504, 96, 24, "СКВЕР", theme.Tag);
+            Label(504, 504, 96, 24, "ОФИСЫ", theme.Tag);
             var selected = CityDistrictPlan.Find(cityDestinationId);
-            Paint(new Rect(224 + (selected.X - CityDistrictPlan.MinX) * 4 - 4, 336 + (CityDistrictPlan.MaxZ - selected.Z) * 4 - 4, 8, 8), theme.Accent);
-            if (office.IsInCity) Paint(new Rect(224 + (office.MapX - CityDistrictPlan.MinX) * 4 - 3, 336 + (CityDistrictPlan.MaxZ - office.MapZ) * 4 - 3, 6, 6), theme.Ink);
-            Label(224, 592, 384, 40, "Белый — вы; зелёный — ориентир.\nЗолотой — непроходные фасады.", theme.Small);
-            foreach (var destination in CityDistrictPlan.Destinations)
-            {
-                int index = CityDistrictPlan.Destinations.IndexOf(destination); float y = 268 + index * 124;
-                if (Button(664, y, 568, 44, "Ориентир / " + destination.Name, ApplicationActive, destination.Id == cityDestinationId)) cityDestinationId = destination.Id;
-                Label(664, y + 48, 568, 68, destination.Description, theme.Small);
-            }
-            var target = CityDistrictPlan.Find(cityDestinationId);
-            Label(200, 776, 700, 64, office.IsInCity ? "От вас: " + Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, target)) + " м по прямой · "
-                + CityDistrictPlan.Direction(office.MapX, office.MapZ, target) + ". Обходите клумбы и фасады пешком."
+            Paint(new Rect(left + (selected.X - CityDistrictPlan.MinX) * scale - 4, top + (CityDistrictPlan.MaxZ - selected.Z) * scale - 4, 8, 8), theme.Accent);
+            if (office.IsInCity) Paint(new Rect(left + (office.MapX - CityDistrictPlan.MinX) * scale - 3, top + (CityDistrictPlan.MaxZ - office.MapZ) * scale - 3, 6, 6), theme.Ink);
+            Label(224, 616, 384, 64, "Белый — вы; зелёный — ориентир. Золотой — закрытые здания, в них открыты только кофейня и зал Биржи.", theme.Small);
+            var destinations = CityDistrictPlan.Destinations;
+            for (int i = 0; i < destinations.Count; i++)
+                if (Button(664, 216 + i * 54, 568, 44, "Ориентир / " + destinations[i].Name, ApplicationActive, destinations[i].Id == cityDestinationId)) cityDestinationId = destinations[i].Id;
+            Label(664, 652, 568, 64, selected.Description, theme.Small);
+            Label(200, 724, 700, 64, office.IsInCity ? "От вас: " + Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, selected)) + " м по прямой · "
+                + CityDistrictPlan.Direction(office.MapX, office.MapZ, selected) + ". Обходите клумбы и фасады пешком, бульвар — только по зебре."
                 : "Карта не переносит игрока. Выйдите через лифт в квартал; выбранный ориентир появится на улице.", theme.Small);
-            if (Button(936, 784, 296, 48, "Назад · Esc", ApplicationActive)) CloseCityInformation();
+            if (Button(936, 820, 296, 48, "Назад · Esc", ApplicationActive)) CloseCityInformation();
         }
         private void DrawCityCompanies()
         {
             Panel(160, 76, 1120, 808, ""); Label(200, 108, 1040, 48, "Компании / публичные карточки", theme.Title);
-            Label(200, 170, 1040, 56, "Стенд не биржа и не реклама гарантированной доходности. Все компании вымышлены. Здесь только информация; предложение клиенту выбирается за рабочим столом.", theme.Small);
+            Label(200, 170, 1040, 56, "Стенд — не реклама гарантированной доходности. Все компании вымышлены. Здесь только описания; предложение клиенту выбирается за рабочим столом.", theme.Small);
             var stocks = StockCatalog.Offers;
             for (int i = 0; i < stocks.Length; i++)
             {
@@ -49,7 +53,7 @@ namespace Broker.Runtime
                 Label(x, y + 40, 504, 24, stock.RiskLabel + " · " + stock.HorizonMonths + " месяцев", theme.Small);
                 Label(x, y + 72, 504, 80, stock.Description, theme.Small);
             }
-            Label(200, 756, 700, 88, "Чтение не даёт бонуса, не закрывает претензию и не раскрывает условия за брокера. Нет рыночных котировок/покупки акций на улице. Пока открыт стенд, рабочее время стоит.", theme.Small);
+            Label(200, 756, 700, 88, "Чтение не даёт бонуса, не закрывает претензию и не раскрывает условия за брокера. Цены дня — на табло в зале Биржи за бульваром; купить акции на улице нельзя. Пока открыт стенд, рабочее время стоит.", theme.Small);
             if (Button(936, 796, 296, 48, "Назад · Esc", ApplicationActive)) CloseCityInformation();
         }
         private void OpenCityMapFromPause()
