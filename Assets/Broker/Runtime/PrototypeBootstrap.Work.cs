@@ -40,7 +40,8 @@ namespace Broker.Runtime
                 Label(240 + (i / 3) * 488, 412 + (i % 3) * 44, 472, 40,
                     ClientCatalog.Create(c.id).Name + " · отношения " + Signed(c.relationship) + (c.awaitingReport ? " · ждёт отчёт" : "") + (c.complaintPending ? " · претензия" : ""), theme.Small);
             }
-            Label(240, 556, 960, 52, "За рабочие дни: " + workCareer.CompletedDays + " дней, " + workCareer.TotalDeals + " сделок. Фирме сегодня $" + report.firmRevenue + ". Ориентир — без штрафов.", theme.Small);
+            Label(240, 548, 960, 64, StockHistory.SoldToday(report.clientIds, report.sold, report.soldStockIds) + " За рабочие дни: " + workCareer.CompletedDays
+                + " дней, " + workCareer.TotalDeals + " сделок. Фирме сегодня $" + report.firmRevenue + ". Ориентир — без штрафов.", theme.Small);
             var next = ClientCatalog.Appointments(workCareer.NextDayNumber);
             Label(240, 620, 960, 40, "Завтра: " + ClientCatalog.Create(next[0]).Name + ", " + ClientCatalog.Create(next[1]).Name + ", " + ClientCatalog.Create(next[2]).Name + ".", theme.Heading);
             Label(240, 672, 960, 52, saveNotice, theme.Small);

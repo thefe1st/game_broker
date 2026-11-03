@@ -36,13 +36,13 @@ namespace Broker.Tests
         {
             var work = WorkCareerState.FromIntro(WorkCareerTests.Intro()); var s = work.Capture();
             s.checkpoint.completedWorkDays = 10; s.checkpoint.clients[0].deals = 10;
-            s.checkpoint.clients[0].lastSeenWorkDay = 10;
+            s.checkpoint.clients[0].lastSeenWorkDay = 10; s.checkpoint.clients[0].lastStockId = "logistics"; s.checkpoint.clients[0].lastStockDay = 7;
             s.origin.startingSavings = s.origin.savings = savings - 300;
             s.checkpoint.startingSavings = savings - 300; s.checkpoint.savings = savings;
             s.reports = new WorkDayReport[7];
             for (int n = 0; n < 7; n++) s.reports[n] = new WorkDayReport { day = 14 + n, openingSavings = savings, savings = savings,
                 reputation = 50, clientIds = ClientCatalog.Appointments(14 + n), sold = new bool[3], closed = new bool[3],
-                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3] };
+                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3], soldStockIds = new[] { "", "", "" } };
             Assert.That(WorkCareerState.TryRestore(s, out work), Is.True);
             Assert.That(FirmCareerState.CanOpen(work), Is.EqualTo(allowed));
             if (allowed) Assert.That(FirmCareerState.FromWork(work).PersonalReserve, Is.EqualTo(savings - 500));
@@ -296,9 +296,10 @@ namespace Broker.Tests
         [Test] public void ValidLegacyFounderMigratesWithoutChangingInputOrAddingPastSalary()
         {
             var firm = NewFirm(); for (int n = 0; n < 12; n++) Finish(firm, true);
-            var s = firm.Capture(); s.schemaVersion = 1;
+            var s = StockHistoryTests.Legacy(firm.Capture(), 1);
             Assert.That(FirmCareerState.TryRestore(s, out var restored), Is.True); Assert.That(s.schemaVersion, Is.EqualTo(1));
-            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(2)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
+            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(3)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
+            Assert.That(restored.StockHistoryFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(restored.HasAssistant, Is.False); Assert.That(restored.TryHireAssistant(out _), Is.True);
         }
         [TestCase("past")] [TestCase("future")] [TestCase("negative")] [TestCase("legacyHire")]
@@ -313,13 +314,13 @@ namespace Broker.Tests
                 case "past": s.assistantHireDay = s.sourceDay - 1; break;
                 case "future": s.assistantHireDay = firm.NextDayNumber + 1; break;
                 case "negative": s.assistantHireDay = -1; break;
-                case "legacyHire": s.schemaVersion = 1; break;
+                case "legacyHire": StockHistoryTests.Legacy(s, 1); break;
                 case "salary": s.reports[0].salary = 0; break;
                 case "opening": s.reports[0].openingBalance += 100; break;
                 case "balance": s.reports[0].balance += 40; break;
                 case "noHire": s.assistantHireDay = 0; break;
                 case "prunedBalance": s.checkpoint.balance += 100; break;
-                case "legacySalary": var d = NewFirm(); Finish(d); s = d.Capture(); s.schemaVersion = 1; s.reports[0].salary = 40; break;
+                case "legacySalary": var d = NewFirm(); Finish(d); s = StockHistoryTests.Legacy(d.Capture(), 1); s.reports[0].salary = 40; break;
             }
             Assert.That(FirmCareerState.TryRestore(s, out _), Is.False);
         }
@@ -374,7 +375,7 @@ namespace Broker.Tests
             var firm = NewFirm(); Finish(firm); var s = firm.Capture(); var r = s.reports[0];
             switch (kind)
             {
-                case "null": s = null; break; case "version": s.schemaVersion = 3; break; case "mode": s.mode = "owner"; break;
+                case "null": s = null; break; case "version": s.schemaVersion = 4; break; case "mode": s.mode = "owner"; break;
                 case "sourceDay": s.sourceDay = 3; break; case "sourceOverflow": s.sourceDay = int.MaxValue; break;
                 case "savings": s.sourceSavings = 599; break; case "reserve": s.personalReserve++; break;
                 case "origin": s.origin = null; break; case "checkpoint": s.checkpoint = null; break;

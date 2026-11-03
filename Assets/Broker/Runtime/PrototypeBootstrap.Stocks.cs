@@ -41,7 +41,9 @@ namespace Broker.Runtime
             { stockNotice = day.SelectStock(stock.Id); News(stockNotice); }
             Label(180, 776, 720, 96, string.IsNullOrEmpty(stockNotice) ? day.StockSelectionNotice : stockNotice, theme.Small);
             if (Button(932, 808, 308, 48, "Вернуться к звонку / Esc")) CloseUtilityOverlay();
-            Label(180, 872, 1080, 40, "Портфель/котировки не моделируются. Выбор акции действует в этом дне; сохранение хранит сумму сделки и обязательства, не тикер.", theme.Small);
+            Label(180, 872, 1080, 40, "Портфель/котировки не моделируются. " + (IsWorkMode || IsFounderMode
+                ? "Проданная бумага попадёт в историю после завершения дня; вложение и комиссия выводятся из сделки."
+                : "В этом режиме сохраняются сумма сделки и обязательства, не тикер."), theme.Small);
         }
         private void ExplainCurrentStock()
         {
