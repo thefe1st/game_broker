@@ -47,7 +47,7 @@ namespace Broker.Core
             if (Current.StockId == stockId) return "Акция уже выбрана: " + stock.Name + ".";
             Current.StockId = stockId; Current.RisksExplained = false; Current.FeesExplained = false;
             Current.StockRiskExplained = false;
-            return "Выбраны акции «" + stock.Name + "» (" + stock.Ticker + "). Риск и комиссию нужно раскрыть заново. " + StockCatalog.Suitability(Current.Id, stock);
+            return "Выбраны акции «" + stock.Name + "» (" + stock.Ticker + "). Риск и комиссию нужно раскрыть заново. " + StockSuitability(stock);
         }
         // Explicit sales action, not a keyword shortcut: it speaks the exact selected terms.
         public string ExplainStockTerms()
@@ -56,7 +56,7 @@ namespace Broker.Core
                 return "Раскрытие свойств акции сейчас недоступно.";
             Current.RisksExplained = true; Current.StockRiskExplained = true; Current.FeesExplained = true;
             return Current.Name + ": Условия акций «" + CurrentStock.Name + "» услышал. "
-                + StockCatalog.Suitability(Current.Id, CurrentStock);
+                + StockSuitability(CurrentStock);
         }
     }
 }

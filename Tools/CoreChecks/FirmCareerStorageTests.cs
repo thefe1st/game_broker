@@ -14,7 +14,7 @@ namespace Broker.Tests
         private static FirmCareerSave Decode(string json) => JsonSerializer.Deserialize<FirmCareerSave>(json, Options);
         private FirmCareerStorage Store() => new FirmCareerStorage(path, Encode, Decode);
         [SetUp] public void Setup()
-        { folder = Path.Combine(Path.GetTempPath(), "broker-firm-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-founder-v4.json"); }
+        { folder = Path.Combine(Path.GetTempPath(), "broker-firm-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-founder-v5.json"); }
         [TearDown] public void Cleanup() { Directory.Delete(folder, true); }
         [Test] public void MissingFileDoesNotWriteAnything()
         {
@@ -76,7 +76,8 @@ namespace Broker.Tests
         [Test] public void FounderSaveAndResetNeverTouchOtherFilesOrTheirBackups()
         {
             var paths = new[] { "broker-career-v1.json", "broker-employee-intro-v1.json", "broker-employee-work-v1.json", "broker-employee-work-v2.json",
-                "broker-employee-work-v3.json", "broker-employee-work-v4.json", "broker-founder-v1.json", "broker-founder-v2.json", "broker-founder-v3.json" };
+                "broker-employee-work-v3.json", "broker-employee-work-v4.json", "broker-employee-work-v5.json", "broker-founder-v1.json", "broker-founder-v2.json",
+                "broker-founder-v3.json", "broker-founder-v4.json" };
             foreach (string name in paths) { File.WriteAllText(Path.Combine(folder, name), name); File.WriteAllText(Path.Combine(folder, name + ".bak"), name + ".bak"); }
             var firm = FirmCareerTests.NewFirm(); Store().TryCreate(firm, out _); FirmCareerTests.Finish(firm); Store().TrySave(firm, out _);
             Store().TrySave(firm.RestartFromOrigin(), out _);
@@ -118,11 +119,20 @@ namespace Broker.Tests
         private string LegacyPath => Path.Combine(folder, "broker-founder-v1.json");
         private string V2Path => Path.Combine(folder, "broker-founder-v2.json");
         private string V3Path => Path.Combine(folder, "broker-founder-v3.json");
-        private FirmCareerStorage MigratingStore() => new FirmCareerStorage(path, Encode, Decode, V3Path, V2Path, LegacyPath);
+        private string V4Path => Path.Combine(folder, "broker-founder-v4.json");
+        private FirmCareerStorage MigratingStore() => new FirmCareerStorage(path, Encode, Decode, V4Path, V3Path, V2Path, LegacyPath);
+        // Real v4 JSON has no portfolio fields at all: no reaction start day, positions or settled price concerns.
+        private static System.Text.Json.Nodes.JsonNode WithoutPortfolio(FirmCareerState firm)
+        {
+            var json = System.Text.Json.Nodes.JsonNode.Parse(Encode(firm.Capture())); json["schemaVersion"] = 4; json.AsObject().Remove("portfolioFromDay");
+            foreach (string key in new[] { "origin", "checkpoint" }) foreach (var client in json[key]["clients"].AsArray()) client.AsObject().Remove("portfolio");
+            foreach (var report in json["reports"].AsArray()) report.AsObject().Remove("concernResolved");
+            return json;
+        }
         // Real v3 JSON has no quote fields at all: no market day, prices or rate counters.
         private static System.Text.Json.Nodes.JsonNode WithoutMarket(FirmCareerState firm)
         {
-            var json = System.Text.Json.Nodes.JsonNode.Parse(Encode(firm.Capture())); json["schemaVersion"] = 3; json.AsObject().Remove("marketFromDay");
+            var json = WithoutPortfolio(firm); json["schemaVersion"] = 3; json.AsObject().Remove("marketFromDay");
             foreach (string key in new[] { "origin", "checkpoint" })
                 foreach (var client in json[key]["clients"].AsArray())
                     foreach (string field in new[] { "lastStockPrice", "dealsAt3", "dealsAt5" }) client.AsObject().Remove(field);
@@ -147,21 +157,21 @@ namespace Broker.Tests
             foreach (var report in json["reports"].AsArray()) report.AsObject().Remove("salary");
             File.WriteAllText(LegacyPath + (backup ? ".bak" : ""), json.ToJsonString());
         }
-        [Test] public void V2ImportWinsOverV1KeepsHireAndWritesOnlyV4()
+        [Test] public void V2ImportWinsOverV1KeepsHireAndWritesOnlyV5()
         {
             WriteLegacy(); var firm = FirmCareerTests.NewFirm(); firm.TryHireAssistant(out firm);
             for (int n = 0; n < 9; n++) FinishOld(firm);
             string v2 = WithoutStocks(firm, 2).ToJsonString(); File.WriteAllText(V2Path, v2); File.WriteAllText(V2Path + ".bak", v2);
             var files = Directory.GetFiles(folder); var bytes = Array.ConvertAll(files, File.ReadAllText);
             var store = MigratingStore(); Assert.That(store.TryLoad(out var loaded, out var notice, out _), Is.True);
-            Assert.That(notice, Does.Contain("копия конторы v2")); Assert.That(notice, Does.Contain("в v4")); Assert.That(File.Exists(path), Is.False);
+            Assert.That(notice, Does.Contain("копия конторы v2")); Assert.That(notice, Does.Contain("в v5")); Assert.That(File.Exists(path), Is.False);
             Assert.That(loaded.HasAssistant, Is.True); Assert.That(loaded.Balance, Is.EqualTo(firm.Balance)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(store.TryCreate(FirmCareerTests.NewFirm(), out _), Is.False);
             FirmCareerTests.Finish(loaded, true); Assert.That(store.TrySave(loaded, out _), Is.True);
             Assert.That(store.TryLoad(out var read, out notice, out _), Is.True); Assert.That(notice, Is.Empty);
             Assert.That(read.LastReport.soldStockIds[0], Is.EqualTo(StockCatalog.DefaultFor(read.LastReport.clientIds[0])));
-            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(4));
+            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(5));
             for (int i = 0; i < files.Length; i++) Assert.That(File.ReadAllText(files[i]), Is.EqualTo(bytes[i]));
         }
         [Test] public void V3ImportWinsOverV2KeepsCarriedPurchasesAndStartsQuotesNextDay()
@@ -171,7 +181,7 @@ namespace Broker.Tests
             string v3 = WithoutMarket(firm).ToJsonString(); File.WriteAllText(V3Path, v3); File.WriteAllText(V3Path + ".bak", v3);
             var files = Directory.GetFiles(folder); var bytes = Array.ConvertAll(files, File.ReadAllText);
             var store = MigratingStore(); Assert.That(store.TryLoad(out var loaded, out var notice, out _), Is.True);
-            Assert.That(notice, Does.Contain("копия конторы v3")); Assert.That(notice, Does.Contain("в v4")); Assert.That(File.Exists(path), Is.False);
+            Assert.That(notice, Does.Contain("копия конторы v3")); Assert.That(notice, Does.Contain("в v5")); Assert.That(File.Exists(path), Is.False);
             Assert.That(loaded.HasAssistant, Is.True); Assert.That(loaded.Balance, Is.EqualTo(firm.Balance));
             Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(firm.StockHistoryFromDay)); Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(loaded.LastReport.soldStockIds, Is.EqualTo(new[] { StockHistoryTests.Moderate, StockHistoryTests.Moderate, StockHistoryTests.Moderate }));
@@ -181,7 +191,7 @@ namespace Broker.Tests
             Assert.That(store.TryLoad(out var read, out notice, out _), Is.True); Assert.That(notice, Is.Empty);
             var last = read.LastReport; Assert.That(read.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
             for (int i = 0; i < 3; i++) Assert.That(last.soldPrices[i], Is.EqualTo(StockMarket.PriceCents(last.soldStockIds[i], firm.NextDayNumber)).And.GreaterThan(0));
-            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(4));
+            Assert.That(read.PortfolioFromDay, Is.EqualTo(firm.NextDayNumber)); Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(5));
             for (int i = 0; i < files.Length; i++) Assert.That(File.ReadAllText(files[i]), Is.EqualTo(bytes[i]));
         }
         [Test] public void V3FounderWithHigherRatesOrQuotesIsNotImported()
@@ -203,7 +213,7 @@ namespace Broker.Tests
             File.WriteAllText(V3Path, WithoutMarket(old).ToJsonString()); Assert.That(MigratingStore().TryLoad(out var loaded, out _, out _), Is.True);
             Assert.That(loaded.MarketFromDay, Is.EqualTo(old.NextDayNumber));
         }
-        [Test] public void HireFromV2ImportWritesOnlyV4()
+        [Test] public void HireFromV2ImportWritesOnlyV5()
         {
             var firm = FirmCareerTests.NewFirm(); FinishOld(firm);
             string v2 = WithoutStocks(firm, 2).ToJsonString(); File.WriteAllText(V2Path, v2);
@@ -294,7 +304,46 @@ namespace Broker.Tests
             Assert.That(firm.LastReport.salary, Is.EqualTo(40)); Assert.That(firm.HasAssistant, Is.True);
             Assert.Throws<ArgumentException>(() => new FirmCareerStorage(path, Encode, Decode, path.ToUpperInvariant()));
             Assert.Throws<ArgumentException>(() => new FirmCareerStorage(path, Encode, Decode, V3Path, V3Path.ToUpperInvariant()));
-            Assert.Throws<ArgumentException>(() => new FirmCareerStorage(path, Encode, Decode, V3Path, V2Path, LegacyPath, LegacyPath + ".old"));
+            Assert.Throws<ArgumentException>(() => new FirmCareerStorage(path, Encode, Decode, V4Path, V3Path, V2Path, LegacyPath, LegacyPath + ".old"));
+        }
+        [Test] public void V4FounderImportWinsOverV3KeepsCarriedPurchasesAndStartsPortfoliosNextDay()
+        {
+            WriteLegacy(); File.WriteAllText(V3Path, WithoutMarket(FirmCareerTests.NewFirm()).ToJsonString());
+            var firm = FirmCareerTests.NewFirm(); firm.TryHireAssistant(out firm); for (int n = 0; n < 9; n++) FirmCareerTests.Finish(firm, n % 2 == 0);
+            string v4 = WithoutPortfolio(firm).ToJsonString(); File.WriteAllText(V4Path, v4); File.WriteAllText(V4Path + ".bak", v4);
+            var files = Directory.GetFiles(folder); var bytes = Array.ConvertAll(files, File.ReadAllText);
+            var store = MigratingStore(); Assert.That(store.TryLoad(out var loaded, out var notice, out _), Is.True);
+            Assert.That(notice, Does.Contain("копия конторы v4")); Assert.That(notice, Does.Contain("в v5")); Assert.That(File.Exists(path), Is.False);
+            // v4 kept quotes and rates: money stays; reactions start on the next day; the origin keeps the last purchase made while employed.
+            Assert.That(loaded.HasAssistant, Is.True); Assert.That(loaded.Balance, Is.EqualTo(firm.Balance)); Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.MarketFromDay));
+            Assert.That(loaded.PortfolioFromDay, Is.EqualTo(firm.NextDayNumber));
+            var origin = loaded.Capture().origin;
+            foreach (var client in origin.clients)
+                Assert.That(client.portfolio.Length, Is.EqualTo(client.lastStockPrice > 0 ? 1 : 0), client.id);
+            Assert.That(Array.Exists(origin.clients, c => c.portfolio.Length == 1 && c.portfolio[0].day < loaded.OpeningDayNumber), Is.True);
+            foreach (var client in loaded.Clients)
+            {
+                Assert.That(client.portfolio.Length, Is.LessThanOrEqualTo(3));
+                if (client.lastStockPrice > 0) Assert.That(client.portfolio[client.portfolio.Length - 1].day, Is.EqualTo(client.lastStockDay)); else Assert.That(client.portfolio, Is.Empty);
+            }
+            Assert.That(store.TryCreate(FirmCareerTests.NewFirm(), out _), Is.False);
+            FirmCareerTests.Finish(loaded, true); Assert.That(store.TrySave(loaded, out _), Is.True);
+            Assert.That(store.TryLoad(out var read, out notice, out _), Is.True); Assert.That(notice, Is.Empty);
+            Assert.That(read.PortfolioFromDay, Is.EqualTo(firm.NextDayNumber)); Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(5));
+            var restart = read.RestartFromOrigin(); Assert.That(restart.PortfolioFromDay, Is.EqualTo(restart.OpeningDayNumber));
+            for (int i = 0; i < files.Length; i++) Assert.That(File.ReadAllText(files[i]), Is.EqualTo(bytes[i]));
+        }
+        [Test] public void V4FounderWithPortfoliosOrPriceReactionsIsNotImported()
+        {
+            var firm = FirmCareerTests.NewFirm(); FirmCareerTests.Finish(firm, true);
+            var json = WithoutPortfolio(firm); json["portfolioFromDay"] = firm.OpeningDayNumber;
+            File.WriteAllText(V4Path, json.ToJsonString()); Assert.That(MigratingStore().TryLoad(out _, out _, out var status), Is.False);
+            Assert.That(status, Is.EqualTo(FirmCareerLoadStatus.Unreadable));
+            json = WithoutPortfolio(firm); json["reports"][0]["concernResolved"] = new System.Text.Json.Nodes.JsonArray(true, false, false);
+            File.WriteAllText(V4Path, json.ToJsonString()); Assert.That(MigratingStore().TryLoad(out _, out _, out _), Is.False);
+            File.WriteAllText(V4Path, Encode(firm.Capture())); Assert.That(MigratingStore().TryLoad(out _, out _, out _), Is.False);
+            File.WriteAllText(V4Path, WithoutPortfolio(firm).ToJsonString()); Assert.That(MigratingStore().TryLoad(out var loaded, out _, out _), Is.True);
+            Assert.That(loaded.PortfolioFromDay, Is.EqualTo(firm.NextDayNumber)); Assert.That(File.Exists(path), Is.False);
         }
         [TestCase("broken")] [TestCase("future")] [TestCase("missing")]
         public void HireCannotTreatMatchingBackupAsUnchangedPrimary(string kind)
@@ -311,7 +360,7 @@ namespace Broker.Tests
             for (int i = 0; i < files.Length; i++) Assert.That(File.ReadAllText(files[i]), Is.EqualTo(bytes[i]));
         }
         [TestCase(false)] [TestCase(true)]
-        public void RecoveredV4MustSaveBeforeHiringWithoutDamagingBackup(bool missing)
+        public void RecoveredV5MustSaveBeforeHiringWithoutDamagingBackup(bool missing)
         {
             var firm = FirmCareerTests.NewFirm(); var store = Store(); store.TryCreate(firm, out _); store.TrySave(firm, out _);
             string backup = File.ReadAllText(path + ".bak");

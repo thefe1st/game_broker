@@ -23,7 +23,8 @@ namespace Broker.Runtime
             Scrim(); Panel(140, 64, 1160, 856, "");
             bool quotes = day.HasQuotes;
             Label(180, 92, 1080, 36, quotes ? "АКЦИИ / ВЫМЫШЛЕННЫЕ КОМПАНИИ / КОТИРОВКИ ДНЯ " + day.DayNumber : "АКЦИИ / ВЫМЫШЛЕННЫЕ КОМПАНИИ", theme.Tag);
-            Label(180, 144, 1080, 44, "Предложение для «" + day.Current.Name + "»", theme.Title);
+            string badge = BrokerDay.PortfolioBadge(day.Current);
+            Label(180, 144, 1080, 44, "Предложение для «" + day.Current.Name + "»" + (badge.Length > 0 ? " · " + badge.ToLowerInvariant() : ""), theme.Title);
             var offers = StockCatalog.Offers;
             for (int i = 0; i < offers.Length; i++)
             {
@@ -55,13 +56,13 @@ namespace Broker.Runtime
                 Label(640, 592, 600, 48, "Вложение клиента: $" + day.CurrentInvestment + "; фирме $" + day.Current.Commission
                     + (IsEmployeeMode ? ", лично вам $" + BrokerDay.PersonalPayout(day.Current.Commission) + " (20%)." : ". Вся комиссия в кассу."), theme.Small);
             }
-            Label(640, 648, 600, 60, StockCatalog.Suitability(day.Current.Id, stock), theme.Small);
+            Label(640, 648, 600, 60, day.StockSuitability(stock), theme.Small);
             if (Button(640, 724, 600, 48, "Выбрать / " + stock.Ticker, ApplicationActive && day.CanSelectStock && !busy && !voice.Recording && !voice.Working, true))
             { stockNotice = day.SelectStock(stock.Id); News(stockNotice); }
             Label(180, 776, 720, 96, string.IsNullOrEmpty(stockNotice) ? day.StockSelectionNotice : stockNotice, theme.Small);
             if (Button(932, 808, 308, 48, "Вернуться к звонку / Esc")) CloseUtilityOverlay();
             Label(180, 872, 1080, 40, quotes
-                ? "Котировки вымышленные: одна цена на день, без реальных данных; портфель не моделируется. Проданная бумага попадёт в историю после завершения дня вместе с ценой покупки."
+                ? "Котировки вымышленные: одна цена на день, без реальных данных. Проданная бумага после завершения дня попадёт в историю и портфель клиента по цене покупки: до трёх последних покупок, см. «База клиентов»."
                 : "Котировки есть только в рабочих днях и своей конторе. В этом режиме сохраняются сумма сделки и обязательства, не тикер.", theme.Small);
         }
         private string DayChange(string stockId) => StockMarket.Change(StockMarket.PriceCents(stockId, day.DayNumber - 1L), day.QuoteCents(stockId));

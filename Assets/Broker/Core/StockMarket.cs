@@ -65,12 +65,11 @@ namespace Broker.Core
             + "," + (Math.Abs(cents) % 100).ToString("00", CultureInfo.InvariantCulture);
         // "+2,0%", "−3,4%", "0,0%": change in tenths of a percent, rounded toward zero.
         public static string Change(int fromCents, int toCents)
-        {
-            if (fromCents <= 0) return "0,0%";
-            long tenths = ((long)toCents - fromCents) * 1000 / fromCents;
-            return (tenths > 0 ? "+" : tenths < 0 ? "−" : "") + (Math.Abs(tenths) / 10).ToString(CultureInfo.InvariantCulture)
+            => fromCents <= 0 ? "0,0%" : Percent(((long)toCents - fromCents) * 1000 / fromCents);
+        // Tenths of a percent as text: 74 → "+7,4%", −150 → "−15,0%".
+        public static string Percent(long tenths)
+            => (tenths > 0 ? "+" : tenths < 0 ? "−" : "") + (Math.Abs(tenths) / 10).ToString(CultureInfo.InvariantCulture)
                 + "," + (Math.Abs(tenths) % 10).ToString(CultureInfo.InvariantCulture) + "%";
-        }
         public static string SharesText(int shares)
         {
             int last = shares % 10, lastTwo = shares % 100;

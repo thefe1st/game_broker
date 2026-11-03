@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Broker.Core;
 using UnityEngine;
 
@@ -53,6 +54,7 @@ namespace Broker.Runtime
                         + (client.awaitingReport ? " · остался отчёт по сделке" : " · необсуждённых отчётов нет")
                         + (client.complaintPending ? " · ПРЕТЕНЗИЯ К ГАРАНТИИ" : " · претензий нет"), theme.Small, draw);
                     y = NotebookLine(y, StockHistory.LastPurchase(client, !IsFounderMode, IsFounderMode ? firmCareer.OpeningDayNumber : 0, day.DayNumber), theme.Small, draw);
+                    y = NotebookLine(y, StockPortfolio.Describe(client, day.DayNumber, IsFounderMode ? firmCareer.OpeningDayNumber : 0), theme.Small, draw);
                     y = NotebookLine(y, WorkNotebookToday(client), theme.Small, draw);
                     int low = profile.Commission, high = StockMarket.MaxCommission(client.id);
                     y = NotebookLine(y, "Вложение $" + StockHistory.Investment(client.id) + " · комиссия фирмы " + (high > low ? "$" + low + "–$" + high + " по ставке бумаги (2–" + (high * 100 / StockHistory.Investment(client.id)) + "%)" : "$" + low + " (2%)")
@@ -67,7 +69,7 @@ namespace Broker.Runtime
                 return NotebookLine(y, "Рабочие дни ещё не завершены. Перенесённые накопления вступления не считаются заработком рабочего дня.", theme.Text, draw, 60);
             y = NotebookLine(y, "Показано " + reports.Length + " из " + workCareer.CompletedDays + " завершённых рабочих дней, новые сверху."
                 + (workCareer.CompletedDays > reports.Length ? " Более ранние подробности свёрнуты; накопления, сделки, отношения и последние покупки сохранены." : "")
-                + StockHistoryNote(workCareer.StockHistoryFromDay, WorkCareerState.FirstWorkDay, workCareer.MarketFromDay), theme.Small, draw);
+                + StockHistoryNote(workCareer.StockHistoryFromDay, WorkCareerState.FirstWorkDay, workCareer.MarketFromDay, workCareer.PortfolioFromDay), theme.Small, draw);
             for (int i = reports.Length - 1; i >= 0; i--)
             {
                 var report = reports[i];
@@ -78,7 +80,8 @@ namespace Broker.Runtime
                     y = NotebookLine(y, ClientCatalog.Create(report.clientIds[c]).Name + ": "
                         + (report.sold[c] ? "сделка · " + StockHistory.Describe(report.clientIds[c], report.soldStockIds[c], true, report.soldPrices[c]) : report.closed[c] ? "звонок без сделки" : "не звонили")
                         + (report.guaranteed[c] ? " · ложная гарантия: претензия на следующий звонок" : "")
-                        + (report.complaintResolved[c] ? " · претензия урегулирована" : ""), theme.Small, draw);
+                        + (report.complaintResolved[c] ? " · претензия урегулирована" : "")
+                        + (report.concernResolved[c] ? " · падение цены объяснили честно" : ""), theme.Small, draw);
                 y += 24;
             }
             return y;
@@ -88,29 +91,33 @@ namespace Broker.Runtime
             foreach (var c in day.Clients)
             {
                 if (c.Id != client.id) continue;
-                string state = c.DealClosed ? "сделка закрыта: " + StockHistory.Short(c.Id, c.StockId, c.SoldPriceCents) + "; в историю попадёт после завершения дня" : c.Call == CallStatus.Active ? "на линии"
+                string state = c.DealClosed ? "сделка закрыта: " + StockHistory.Short(c.Id, c.StockId, c.SoldPriceCents) + "; в историю и портфель попадёт после завершения дня" : c.Call == CallStatus.Active ? "на линии"
                     : c.Call == CallStatus.Closed ? "звонок завершён без сделки" : "ещё не звонили";
-                return "Сегодня в списке: " + state
-                    + (IsFounderMode && c.Researched ? ". Досье подготовлено сегодня (+1 доверия, без автоматической продажи)." : "")
-                    + (c.FalseGuaranteeMade ? ". Сегодня дана ложная гарантия; претензия останется на следующий звонок." : "")
-                    + (c.ComplaintPending ? (c.ComplaintResolved ? ". Претензия урегулирована сегодня." : ". Претензия ещё не урегулирована.") : "")
-                    + (c.Returning
-                    ? (c.ReportReviewed ? ". Прошлый отчёт обсуждён сегодня." : ". Сначала обсудите прошлый отчёт.") : ".");
+                var notes = new List<string> { "Сегодня в списке: " + state };
+                if (IsFounderMode && c.Researched) notes.Add("Досье подготовлено сегодня (+1 доверия, без автоматической продажи)");
+                if (c.FalseGuaranteeMade) notes.Add("Сегодня дана ложная гарантия; претензия останется на следующий звонок");
+                if (c.ComplaintPending) notes.Add(c.ComplaintResolved ? "Претензия урегулирована сегодня" : "Претензия ещё не урегулирована");
+                if (c.PriceConcern) notes.Add(BrokerDay.PortfolioBadge(c) + (c.PriceConcernResolved ? ": падение цены объяснено честно сегодня" : ": падение цены ещё не объяснено"));
+                else if (c.Mood == PortfolioMood.Growth) notes.Add(BrokerDay.PortfolioBadge(c) + ": рост, +1 доверия на звонок");
+                if (c.Returning) notes.Add(c.ReportReviewed ? "Прошлый отчёт обсуждён сегодня" : "Сначала обсудите прошлый отчёт");
+                return string.Join(". ", notes) + ".";
             }
             return "Сегодня не в списке. " + (client.lastSeenWorkDay == 0 ? "В этом режиме ещё не появлялся."
                 : "Последний раз в списке: день " + (IsFounderMode ? firmCareer.OpeningDayNumber + client.lastSeenWorkDay - 1 : client.lastSeenWorkDay + 3) + ". Это не означает, что вы звонили.");
         }
         // Imported v1/v2 days keep their deals without tickers; recording starts from the next day.
         // Imported v1-v3 days keep the fixed 2% without prices; quotes start from marketFromDay.
-        private static string StockHistoryNote(int fromDay, int firstDay, int marketFrom)
+        // Imported v1-v4 days have no portfolio reactions; only the last priced purchase enters the portfolio.
+        private static string StockHistoryNote(int fromDay, int firstDay, int marketFrom, int portfolioFrom)
             => (fromDay > firstDay ? " Бумаги записываются с дня " + fromDay + "; более ранние сделки — до истории акций." : "")
-                + (marketFrom > firstDay ? " Котировки и ставки по риску — с дня " + marketFrom + "; раньше комиссия 2% без цены." : "");
+                + (marketFrom > firstDay ? " Котировки и ставки по риску — с дня " + marketFrom + "; раньше комиссия 2% без цены." : "")
+                + (portfolioFrom > firstDay ? " Портфели и реакция на цену — с дня " + portfolioFrom + "; из более ранних покупок в портфель перенесена только последняя с ценой." : "");
         private float FirmNotebookHistory(float y, bool draw)
         {
             var reports = firmCareer.RecentReports;
             y = NotebookLine(y, "Показано " + reports.Length + " из " + firmCareer.CompletedDays + " завершённых дней своей конторы. Личный резерв $" + firmCareer.PersonalReserve + ". Старые рабочие дни не включены."
                 + (firmCareer.CompletedDays > reports.Length ? " Более ранние подробности свёрнуты; последние покупки сохранены в базе клиентов." : "")
-                + StockHistoryNote(firmCareer.StockHistoryFromDay, firmCareer.OpeningDayNumber, firmCareer.MarketFromDay), theme.Small, draw);
+                + StockHistoryNote(firmCareer.StockHistoryFromDay, firmCareer.OpeningDayNumber, firmCareer.MarketFromDay, firmCareer.PortfolioFromDay), theme.Small, draw);
             y = NotebookLine(y, firmCareer.HasAssistant ? "Помощник нанят перед днём " + firmCareer.AssistantHireDay
                 + ": −$100 до утренней кассы этого дня. Зарплата $40/день. Текущая касса/долг $" + firmCareer.Balance + "."
                 : "Помощник не нанят; зарплата $0. Найм доступен утром или в итогах при кассе от $200.", theme.Small, draw);
@@ -121,7 +128,8 @@ namespace Broker.Runtime
                 y = NotebookLine(y, "Фирма: $" + r.openingBalance + " + $" + r.revenue + " − $" + r.rent + " аренды − $" + r.salary + " зарплаты = $" + r.balance + ". Личной выплаты нет.", theme.Small, draw);
                 for (int c = 0; c < 3; c++) y = NotebookLine(y, ClientCatalog.Create(r.clientIds[c]).Name + ": "
                     + (r.sold[c] ? "сделка · " + StockHistory.Describe(r.clientIds[c], r.soldStockIds[c], false, r.soldPrices[c]) : r.closed[c] ? "звонок без сделки" : "не звонили")
-                    + (r.guaranteed[c] ? " · ложная гарантия" : "") + (r.complaintResolved[c] ? " · претензия урегулирована" : ""), theme.Small, draw);
+                    + (r.guaranteed[c] ? " · ложная гарантия" : "") + (r.complaintResolved[c] ? " · претензия урегулирована" : "")
+                    + (r.concernResolved[c] ? " · падение цены объяснили честно" : ""), theme.Small, draw);
             }
             return y;
         }

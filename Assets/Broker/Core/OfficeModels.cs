@@ -40,6 +40,14 @@ namespace Broker.Core
         public string LastStockId { get; internal set; } = "";
         public int LastStockDay { get; internal set; }
         public int LastStockPrice { get; internal set; }
+        // v5 repeatable careers: positions bought before today and the reaction to today's quotes, fixed at the start of the day.
+        internal StockPosition[] Positions { get; set; } = new StockPosition[0];
+        internal bool PortfolioAttached { get; set; }
+        public StockPosition[] Portfolio => StockPortfolio.Copy(Positions);
+        public PortfolioMood Mood { get; internal set; }
+        public int PortfolioChangeTenths { get; internal set; }
+        public bool PriceConcern => StockPortfolio.IsConcern(Mood);
+        public bool PriceConcernResolved { get; internal set; }
         public ClientRecord(string id, string name, string role, string brief, int commission, int trust)
         { Id = id; Name = name; Role = role; Brief = brief; Commission = commission; Trust = trust; StockId = StockCatalog.DefaultFor(id); }
     }

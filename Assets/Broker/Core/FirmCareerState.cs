@@ -16,6 +16,8 @@ namespace Broker.Core
         public string[] soldStockIds;
         // v4: purchase quote per slot in cents; 0 without a sale or for imported days before marketFromDay.
         public int[] soldPrices;
+        // v5: price concern settled honestly in this call; possible only after a morning drop of the portfolio by 5% or more.
+        public bool[] concernResolved;
     }
     [Serializable] public sealed class FirmCareerSave
     {
@@ -26,6 +28,8 @@ namespace Broker.Core
         public int stockHistoryFromDay;
         // v4: first founder day with daily quotes and per-risk fees; imported v1-v3 days keep the fixed 2%.
         public int marketFromDay;
+        // v5: first founder day with client portfolio reactions to prices; imported v1-v4 days had none.
+        public int portfolioFromDay;
         public FirmCheckpoint origin, checkpoint;
         public FirmDayReport[] reports;
     }
@@ -34,7 +38,7 @@ namespace Broker.Core
     public sealed class FirmCareerState
     {
         public const int RequiredSavings = 600, OpeningCost = 200, InitialCapital = 300, DailyRent = 60, HistoryDays = 7;
-        public const int HiringCost = 100, HiringCashRequired = 200, AssistantSalary = 40, SchemaVersion = 4;
+        public const int HiringCost = 100, HiringCashRequired = 200, AssistantSalary = 40, SchemaVersion = 5;
         public const float DossierSeconds = 25f;
         private FirmCareerSave save;
         private FirmCheckpoint current;
@@ -50,6 +54,7 @@ namespace Broker.Core
         public int Reputation => current.reputation;
         public int StockHistoryFromDay => save.stockHistoryFromDay;
         public int MarketFromDay => save.marketFromDay;
+        public int PortfolioFromDay => save.portfolioFromDay;
         public WorkClientState[] Clients => CopyCheckpoint(current).clients;
         public FirmDayReport[] RecentReports
         {
@@ -64,11 +69,11 @@ namespace Broker.Core
         {
             if (!CanOpen(work)) throw new ArgumentException("Not enough settled savings to open a firm.");
             var clients = work.Clients;
-            // Last recorded purchases stay as "still employed" facts; firm deal counters start from zero.
+            // Last recorded purchases and portfolios stay as "still employed" facts; firm deal counters start from zero.
             foreach (var c in clients) { c.deals = 0; c.lastSeenWorkDay = 0; c.dealsAt3 = 0; c.dealsAt5 = 0; }
             var origin = new FirmCheckpoint { balance = InitialCapital, reputation = work.Reputation, clients = clients };
             var data = new FirmCareerSave { schemaVersion = SchemaVersion, mode = "founder", sourceDay = work.NextDayNumber, stockHistoryFromDay = work.NextDayNumber,
-                marketFromDay = work.NextDayNumber,
+                marketFromDay = work.NextDayNumber, portfolioFromDay = work.NextDayNumber,
                 sourceSavings = work.PersonalSavings, personalReserve = work.PersonalSavings - OpeningCost - InitialCapital,
                 origin = origin, checkpoint = CopyCheckpoint(origin), reports = new FirmDayReport[0] };
             if (!TryRestore(data, out var state)) throw new InvalidOperationException("Invalid founder seed.");
@@ -80,7 +85,7 @@ namespace Broker.Core
             for (int i = 0; i < 3; i++) { var c = current.clients[ClientCatalog.Index(ids[i])]; relationships[i] = c.relationship; returns[i] = c.awaitingReport; complaints[i] = c.complaintPending; }
             var day = new BrokerDay(NextDayNumber, Math.Max(0, Balance), Reputation, relationshipBonuses: relationships,
                 returning: returns, carryDebt: Math.Max(0, -Balance), mode: CareerMode.Founder, clientIds: ids, complaints: complaints, founderAssistant: HasAssistant);
-            for (int i = 0; i < 3; i++) { var c = current.clients[ClientCatalog.Index(ids[i])]; day.AttachLastPurchase(i, c.lastStockId, c.lastStockDay, c.lastStockPrice); }
+            for (int i = 0; i < 3; i++) { var c = current.clients[ClientCatalog.Index(ids[i])]; day.AttachLastPurchase(i, c.lastStockId, c.lastStockDay, c.lastStockPrice); day.AttachPortfolio(i, c.portfolio); }
             return day;
         }
         // Candidate is activated by runtime only after a successful between-day write.
@@ -99,10 +104,10 @@ namespace Broker.Core
             var r = new FirmDayReport { day = day.DayNumber, openingBalance = Balance, revenue = day.FirmRevenue,
                 rent = DailyRent, salary = day.DailyPayroll, balance = day.FinalBalance, reputation = day.Reputation, clientIds = new string[3],
                 sold = new bool[3], closed = new bool[3], reportReviewed = new bool[3], guaranteed = new bool[3], complaintResolved = new bool[3],
-                soldStockIds = new string[3], soldPrices = new int[3] };
+                soldStockIds = new string[3], soldPrices = new int[3], concernResolved = new bool[3] };
             for (int i = 0; i < 3; i++) { var c = day.Clients[i]; r.clientIds[i] = c.Id; r.sold[i] = c.DealClosed;
                 r.closed[i] = c.Call == CallStatus.Closed; r.reportReviewed[i] = c.ReportReviewed; r.guaranteed[i] = c.FalseGuaranteeMade; r.complaintResolved[i] = c.ComplaintResolved;
-                r.soldStockIds[i] = c.DealClosed ? c.StockId : ""; r.soldPrices[i] = c.DealClosed ? c.SoldPriceCents : 0; }
+                r.soldStockIds[i] = c.DealClosed ? c.StockId : ""; r.soldPrices[i] = c.DealClosed ? c.SoldPriceCents : 0; r.concernResolved[i] = c.PriceConcernResolved; }
             var candidate = Capture(); int length = candidate.reports.Length;
             if (length == HistoryDays)
             {
@@ -115,7 +120,7 @@ namespace Broker.Core
         }
         public FirmCareerState RestartFromOrigin()
         {
-            var data = Capture(); data.assistantHireDay = 0; data.stockHistoryFromDay = data.sourceDay; data.marketFromDay = data.sourceDay;
+            var data = Capture(); data.assistantHireDay = 0; data.stockHistoryFromDay = data.sourceDay; data.marketFromDay = data.sourceDay; data.portfolioFromDay = data.sourceDay;
             data.checkpoint = CopyCheckpoint(data.origin); data.reports = new FirmDayReport[0];
             if (!TryRestore(data, out var state)) throw new InvalidOperationException("Invalid founder origin.");
             return state;
@@ -125,7 +130,7 @@ namespace Broker.Core
         {
             if (other == null) return false; var a = save; var b = other.save;
             if (a.schemaVersion != b.schemaVersion || a.mode != b.mode || a.sourceDay != b.sourceDay || a.stockHistoryFromDay != b.stockHistoryFromDay
-                || a.marketFromDay != b.marketFromDay
+                || a.marketFromDay != b.marketFromDay || a.portfolioFromDay != b.portfolioFromDay
                 || a.sourceSavings != b.sourceSavings || a.personalReserve != b.personalReserve || a.assistantHireDay != b.assistantHireDay
                 || !SameCheckpoint(a.origin, b.origin) || !SameCheckpoint(a.checkpoint, b.checkpoint) || a.reports.Length != b.reports.Length) return false;
             for (int n = 0; n < a.reports.Length; n++)
@@ -135,7 +140,8 @@ namespace Broker.Core
                     || x.salary != y.salary || x.balance != y.balance || x.reputation != y.reputation) return false;
                 for (int i = 0; i < 3; i++) if (x.clientIds[i] != y.clientIds[i] || x.sold[i] != y.sold[i] || x.closed[i] != y.closed[i]
                     || x.reportReviewed[i] != y.reportReviewed[i] || x.guaranteed[i] != y.guaranteed[i] || x.complaintResolved[i] != y.complaintResolved[i]
-                    || (x.soldStockIds[i] ?? "") != (y.soldStockIds[i] ?? "") || x.soldPrices[i] != y.soldPrices[i]) return false;
+                    || (x.soldStockIds[i] ?? "") != (y.soldStockIds[i] ?? "") || x.soldPrices[i] != y.soldPrices[i]
+                    || x.concernResolved[i] != y.concernResolved[i]) return false;
             }
             return true;
         }
@@ -158,15 +164,25 @@ namespace Broker.Core
                 if (s != null && s.schemaVersion == 3)
                 {
                     if (!LegacyMarketFieldsEmpty(s)) return false;
-                    s = Copy(s); s.schemaVersion = SchemaVersion;
+                    s = Copy(s); s.schemaVersion = 4;
                     s.marketFromDay = checked(s.sourceDay + s.checkpoint.completedDays + s.reports.Length);
                     foreach (var r in s.reports) r.soldPrices = new int[3];
+                }
+                // v4 has no portfolios: the last quoted purchase (also one carried from employee days) becomes the only position;
+                // the ledger days are replayed and add their purchases. Reactions to prices start on the next day.
+                if (s != null && s.schemaVersion == 4)
+                {
+                    if (!LegacyPortfolioFieldsEmpty(s)) return false;
+                    s = Copy(s); s.schemaVersion = SchemaVersion;
+                    s.portfolioFromDay = checked(s.sourceDay + s.checkpoint.completedDays + s.reports.Length);
+                    foreach (var checkpoint in new[] { s.origin, s.checkpoint }) foreach (var c in checkpoint.clients) c.portfolio = StockPortfolio.FromLastPurchase(c);
+                    foreach (var r in s.reports) r.concernResolved = new bool[3];
                 }
                 if (s == null || s.schemaVersion != SchemaVersion || s.mode != "founder" || s.sourceDay < 4 || s.sourceDay > int.MaxValue - 5
                     || s.sourceSavings < RequiredSavings || s.sourceSavings > int.MaxValue - 1000
                     || s.personalReserve != s.sourceSavings - OpeningCost - InitialCapital
                     || s.assistantHireDay < 0 || (s.assistantHireDay != 0 && s.assistantHireDay < s.sourceDay)
-                    || s.stockHistoryFromDay < s.sourceDay || s.marketFromDay < s.stockHistoryFromDay
+                    || s.stockHistoryFromDay < s.sourceDay || s.marketFromDay < s.stockHistoryFromDay || s.portfolioFromDay < s.marketFromDay
                     || !ValidCheckpoint(s, s.origin) || !ValidCheckpoint(s, s.checkpoint)
                     || s.origin.completedDays != 0 || s.origin.balance != InitialCapital
                     || s.reports == null || s.reports.Length > HistoryDays
@@ -175,7 +191,7 @@ namespace Broker.Core
                 var result = CopyCheckpoint(s.checkpoint);
                 foreach (var r in s.reports) if (!Apply(s, result, r)) return false;
                 long next = (long)s.sourceDay + result.completedDays;
-                if (s.assistantHireDay > next || (s.assistantHireDay == next && result.balance < HiringCashRequired) || s.marketFromDay > next) return false;
+                if (s.assistantHireDay > next || (s.assistantHireDay == next && result.balance < HiringCashRequired) || s.portfolioFromDay > next) return false;
                 state = new FirmCareerState(s, result); return true;
             }
             catch (OverflowException) { return false; }
@@ -193,6 +209,20 @@ namespace Broker.Core
                 if (r == null || r.clientIds == null || r.sold == null || r.closed == null || r.reportReviewed == null
                     || r.guaranteed == null || r.complaintResolved == null) return false;
                 if (r.soldStockIds != null) foreach (string id in r.soldStockIds) if (!string.IsNullOrEmpty(id)) return false;
+            }
+            return true;
+        }
+        // Structural checks before copying, as for v3: Copy must not hide missing v4 arrays as defaults.
+        private static bool LegacyPortfolioFieldsEmpty(FirmCareerSave s)
+        {
+            if (s.portfolioFromDay != 0 || s.origin?.clients == null || s.checkpoint?.clients == null || s.reports == null) return false;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients })
+                foreach (var c in clients) if (c == null || (c.portfolio != null && c.portfolio.Length != 0)) return false;
+            foreach (var r in s.reports)
+            {
+                if (r == null || r.clientIds == null || r.sold == null || r.closed == null || r.reportReviewed == null
+                    || r.guaranteed == null || r.complaintResolved == null || r.soldStockIds == null || r.soldPrices == null) return false;
+                if (r.concernResolved != null) foreach (bool flag in r.concernResolved) if (flag) return false;
             }
             return true;
         }
@@ -236,7 +266,7 @@ namespace Broker.Core
                             : client.deals == 0 || client.lastStockDay < s.stockHistoryFromDay
                                 || (long)client.lastStockDay - s.sourceDay + 1 > client.lastSeenWorkDay
                                 || client.lastStockPrice != StockMarket.RecordedPrice(client.lastStockId, client.lastStockDay, s.marketFromDay))) return false;
-                if (!WorkCareerState.ValidRateCounts(client, marketDays)) return false;
+                if (!WorkCareerState.ValidRateCounts(client, marketDays) || !StockPortfolio.Valid(client, s.sourceDay, s.marketFromDay)) return false;
                 revenue += WorkCareerState.Income(client, false);
             }
             long paidDays = s.assistantHireDay == 0 ? 0 : Math.Max(0, (long)s.sourceDay + c.completedDays - s.assistantHireDay);
@@ -250,6 +280,7 @@ namespace Broker.Core
             if (r == null || r.day != (long)s.sourceDay + c.completedDays || r.openingBalance != (long)c.balance - (hiring ? HiringCost : 0)
                 || (hiring && c.balance < HiringCashRequired) || r.salary != salary
                 || r.soldStockIds == null || r.soldStockIds.Length != 3 || r.soldPrices == null || r.soldPrices.Length != 3
+                || r.concernResolved == null || r.concernResolved.Length != 3
                 || r.rent != DailyRent || r.reputation < 0 || r.reputation > 100
                 || r.clientIds == null || r.clientIds.Length != 3 || r.sold == null || r.sold.Length != 3
                 || r.closed == null || r.closed.Length != 3 || r.reportReviewed == null || r.reportReviewed.Length != 3
@@ -269,11 +300,14 @@ namespace Broker.Core
                     : r.sold[i] && r.day >= s.stockHistoryFromDay) return false;
                 int price = hasStock ? StockMarket.RecordedPrice(r.soldStockIds[i], r.day, s.marketFromDay) : 0;
                 if (r.soldPrices[i] != price) return false;
+                // Morning mood from positions bought before this day, including ones carried from employee days.
+                var mood = r.day >= s.portfolioFromDay ? StockPortfolio.Mood(ids[i], client.portfolio, r.day) : PortfolioMood.None;
+                if (!StockPortfolio.ValidReaction(mood, r.sold[i], r.closed[i], r.guaranteed[i], r.concernResolved[i], r.soldStockIds[i])) return false;
                 if (r.sold[i]) { int rate = StockMarket.SaleRate(hasStock ? r.soldStockIds[i] : "", r.day, s.marketFromDay);
                     revenue += StockMarket.CommissionAt(ids[i], rate); client.deals = checked(client.deals + 1); WorkCareerState.CountRate(client, rate);
-                    client.lastStockId = hasStock ? r.soldStockIds[i] : ""; client.lastStockDay = hasStock ? r.day : 0; client.lastStockPrice = price; }
-                int change = r.sold[i] ? 1 : r.complaintResolved[i] ? 0 : r.closed[i] ? -1 : 0;
-                change += (r.complaintResolved[i] ? 1 : 0) - (r.guaranteed[i] ? 1 : 0);
+                    client.lastStockId = hasStock ? r.soldStockIds[i] : ""; client.lastStockDay = hasStock ? r.day : 0; client.lastStockPrice = price;
+                    client.portfolio = price > 0 ? StockPortfolio.Add(client.portfolio, r.soldStockIds[i], r.day, price) : new StockPosition[0]; }
+                int change = StockPortfolio.RelationshipChange(r.sold[i], r.closed[i], r.guaranteed[i], r.complaintResolved[i], StockPortfolio.IsConcern(mood), r.concernResolved[i]);
                 client.relationship = Math.Max(-1, Math.Min(2, client.relationship + change));
                 client.complaintPending = r.guaranteed[i] || (client.complaintPending && !r.complaintResolved[i]);
                 client.awaitingReport = r.sold[i] || (client.awaitingReport && !r.reportReviewed[i]);
@@ -291,7 +325,8 @@ namespace Broker.Core
                 || a.clients[i].awaitingReport != b.clients[i].awaitingReport || a.clients[i].complaintPending != b.clients[i].complaintPending
                 || a.clients[i].lastStockDay != b.clients[i].lastStockDay || (a.clients[i].lastStockId ?? "") != (b.clients[i].lastStockId ?? "")
                 || a.clients[i].lastStockPrice != b.clients[i].lastStockPrice
-                || a.clients[i].dealsAt3 != b.clients[i].dealsAt3 || a.clients[i].dealsAt5 != b.clients[i].dealsAt5) return false;
+                || a.clients[i].dealsAt3 != b.clients[i].dealsAt3 || a.clients[i].dealsAt5 != b.clients[i].dealsAt5
+                || !StockPortfolio.Same(a.clients[i].portfolio, b.clients[i].portfolio)) return false;
             return true;
         }
         private static FirmCheckpoint CopyCheckpoint(FirmCheckpoint c)
@@ -303,10 +338,11 @@ namespace Broker.Core
             revenue = r.revenue, rent = r.rent, salary = r.salary, balance = r.balance, reputation = r.reputation, clientIds = (string[])r.clientIds.Clone(),
             sold = (bool[])r.sold.Clone(), closed = (bool[])r.closed.Clone(), reportReviewed = (bool[])r.reportReviewed.Clone(),
             guaranteed = (bool[])r.guaranteed.Clone(), complaintResolved = (bool[])r.complaintResolved.Clone(), soldStockIds = WorkCareerState.CopyStockIds(r.soldStockIds),
-            soldPrices = WorkCareerState.CopyPrices(r.soldPrices) };
+            soldPrices = WorkCareerState.CopyPrices(r.soldPrices), concernResolved = WorkCareerState.CopyFlags(r.concernResolved) };
         private static FirmCareerSave Copy(FirmCareerSave s)
         {
             var copy = new FirmCareerSave { schemaVersion = s.schemaVersion, mode = s.mode, sourceDay = s.sourceDay, stockHistoryFromDay = s.stockHistoryFromDay, marketFromDay = s.marketFromDay,
+                portfolioFromDay = s.portfolioFromDay,
                 sourceSavings = s.sourceSavings, personalReserve = s.personalReserve, assistantHireDay = s.assistantHireDay, origin = CopyCheckpoint(s.origin),
                 checkpoint = CopyCheckpoint(s.checkpoint), reports = new FirmDayReport[s.reports.Length] };
             for (int i = 0; i < s.reports.Length; i++) copy.reports[i] = CopyReport(s.reports[i]); return copy;

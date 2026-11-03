@@ -40,12 +40,14 @@ namespace Broker.Tests
             s.checkpoint.completedWorkDays = 10; s.checkpoint.clients[0].deals = 10;
             s.checkpoint.clients[0].lastSeenWorkDay = 10; s.checkpoint.clients[0].lastStockId = "logistics"; s.checkpoint.clients[0].lastStockDay = 7;
             s.checkpoint.clients[0].lastStockPrice = StockMarket.PriceCents("logistics", 7);
+            s.checkpoint.clients[0].portfolio = new[] { new StockPosition { stockId = "logistics", day = 7, priceCents = StockMarket.PriceCents("logistics", 7) } };
             s.origin.startingSavings = s.origin.savings = savings - 300;
             s.checkpoint.startingSavings = savings - 300; s.checkpoint.savings = savings;
             s.reports = new WorkDayReport[7];
             for (int n = 0; n < 7; n++) s.reports[n] = new WorkDayReport { day = 14 + n, openingSavings = savings, savings = savings,
                 reputation = 50, clientIds = ClientCatalog.Appointments(14 + n), sold = new bool[3], closed = new bool[3],
-                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3], soldStockIds = new[] { "", "", "" }, soldPrices = new int[3] };
+                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3], soldStockIds = new[] { "", "", "" }, soldPrices = new int[3],
+                concernResolved = new bool[3] };
             Assert.That(WorkCareerState.TryRestore(s, out work), Is.True);
             Assert.That(FirmCareerState.CanOpen(work), Is.EqualTo(allowed));
             if (allowed) Assert.That(FirmCareerState.FromWork(work).PersonalReserve, Is.EqualTo(savings - 500));
@@ -111,7 +113,8 @@ namespace Broker.Tests
             d = firm.CreateDay(); d.SelectClient(Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), id)); d.StartCall();
             Assert.That(d.ConversationStep, Is.EqualTo(ConversationStage.Complaint)); d.OfferDeal(); Assert.That(d.DealClosed, Is.False);
             d.Say("Признаю ошибку. Есть риск убытка."); Assert.That(d.Current.ComplaintResolved, Is.True);
-            Assert.That(d.ConversationStep, Is.EqualTo(ConversationStage.Report));
+            // v5: a portfolio drop of the carried purchases is discussed after the complaint, before the report.
+            Assert.That(d.ConversationStep, Is.EqualTo(d.Current.PriceConcern ? ConversationStage.PriceConcern : ConversationStage.Report));
             WorkCareerTests.SellAfterStarted(d); // Same call, without opening it again.
             d.EndDay(); Assert.That(firm.CompleteDay(d), Is.True);
             Assert.That(firm.Clients[ClientCatalog.Index(id)].complaintPending, Is.False);
@@ -301,7 +304,7 @@ namespace Broker.Tests
             var firm = NewFirm(); for (int n = 0; n < 12; n++) Finish(firm, true, StockHistoryTests.Moderate);
             var s = StockHistoryTests.Legacy(firm.Capture(), 1);
             Assert.That(FirmCareerState.TryRestore(s, out var restored), Is.True); Assert.That(s.schemaVersion, Is.EqualTo(1));
-            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
+            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(5)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
             Assert.That(restored.StockHistoryFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(restored.HasAssistant, Is.False); Assert.That(restored.TryHireAssistant(out _), Is.True);
         }
@@ -381,7 +384,7 @@ namespace Broker.Tests
             var firm = NewFirm(); Finish(firm); var s = firm.Capture(); var r = s.reports[0];
             switch (kind)
             {
-                case "null": s = null; break; case "version": s.schemaVersion = 5; break; case "mode": s.mode = "owner"; break;
+                case "null": s = null; break; case "version": s.schemaVersion = 6; break; case "mode": s.mode = "owner"; break;
                 case "sourceDay": s.sourceDay = 3; break; case "sourceOverflow": s.sourceDay = int.MaxValue; break;
                 case "savings": s.sourceSavings = 599; break; case "reserve": s.personalReserve++; break;
                 case "origin": s.origin = null; break; case "checkpoint": s.checkpoint = null; break;

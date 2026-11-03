@@ -97,13 +97,19 @@ namespace Broker.Tests
         {
             foreach (var s in StockCatalog.Offers)
             {
-                var firm = FirmCareerTests.NewFirm();
-                while (Array.IndexOf(ClientCatalog.Appointments(firm.NextDayNumber), "artem") < 0) FirmCareerTests.Finish(firm);
-                var d = firm.CreateDay(); d.SelectClient(Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), "artem"));
+                var firm = FirmCareerTests.NewFirm(); BrokerDay d; int artem;
+                // v5: a day without a price concern for Artem; concerns and deep drops have their own tests.
+                while (true)
+                {
+                    d = firm.CreateDay(); artem = Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), "artem");
+                    if (artem >= 0 && !d.Clients[artem].PriceConcern) break;
+                    d.EndDay(); Assert.That(firm.CompleteDay(d), Is.True);
+                }
+                d.SelectClient(artem);
                 d.SelectStock(s.Id); d.StartCall(); d.Say("Какая цель? Обсудим отчёт. Персональный отчёт."); d.ExplainStockTerms();
                 d.OfferDeal(); d.Say("Личный менеджер, буду на связи."); d.OfferDeal(); Assert.That(d.DealClosed, Is.True);
                 d.EndDay(); Assert.That(firm.CompleteDay(d), Is.True); Assert.That(FirmCareerState.TryRestore(firm.Capture(), out var restored), Is.True);
-                Assert.That(firm.Capture().schemaVersion, Is.EqualTo(4)); int slot = Array.IndexOf(restored.LastReport.clientIds, "artem");
+                Assert.That(firm.Capture().schemaVersion, Is.EqualTo(5)); int slot = Array.IndexOf(restored.LastReport.clientIds, "artem");
                 Assert.That(restored.LastReport.soldStockIds[slot], Is.EqualTo(s.Id));
                 Assert.That(restored.LastReport.soldPrices[slot], Is.EqualTo(StockMarket.PriceCents(s.Id, restored.LastReport.day)));
                 Assert.That(restored.LastReport.revenue, Is.EqualTo(9000 * s.FeePercent / 100));

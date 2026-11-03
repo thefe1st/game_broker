@@ -9,7 +9,7 @@ namespace Broker.Core
     {
         None = 0, Needs = 1, Risk = 2, Fee = 4, Year = 8, Personal = 16, Report = 32,
         Guarantee = 64, Pressure = 128, Respect = 256, Reserve = 512, Written = 1024,
-        Contact = 2048, Jargon = 4096, AdmitError = 8192
+        Contact = 2048, Jargon = 4096, AdmitError = 8192, Rebound = 16384
     }
 
     // Deterministic Russian phrase rules, NOT semantic understanding or a financial fact checker.
@@ -24,6 +24,7 @@ namespace Broker.Core
             string text = message.Trim().ToLowerInvariant().Replace('ё', 'е').Replace('\u00a0', ' ')
                 .Replace('—', '-').Replace('–', '-');
             DialogueIntent result = DialogueIntent.None;
+            if (RecoveryPromise(text)) result |= DialogueIntent.Rebound;
             string[] clauses = Regex.Split(text, @"(?<!\d)[.,]|[.,](?!\d)|[!?;\r\n]+|\b(?:но|однако|зато)\b");
             foreach (string clause in clauses)
             {
@@ -68,6 +69,25 @@ namespace Broker.Core
         {
             string safe = Regex.Replace(clause, @"\bне\s+(?:могу\s+|буду\s+)?гарантир\w*|\bне\s+обещаю\s+гарантир\w*|\b(?:прибыл|доход|возврат)\w*\s+не\s+гарантир\w*|\bне\s+без\s+риска|\bне\s+бывает\s+безрисков\w*", " ");
             return Match(safe, @"гарантир\w*.{0,25}(?:прибыл|доход|заработ|возврат|сохранност|\d+\s*%)|(?:прибыл|доход|возврат)\w*.{0,15}гарантир\w*|\bбез\s+(?:риска|потерь)|\bбезрисков\w*|\b(?:риска|убытков)\s+нет|\bнет\s+(?:риска|убытков)|\bневозможно\s+потерять|\bубытков\s+не\s+будет");
+        }
+
+        // v5: a recovery or growth forecast stated as a fact: "цена точно вернётся", "акции обязательно вырастут", "портфель отыграется".
+        // Not a promise: modal, conditional, negated and question forms ("может вырасти", "если вырастет", "не вернётся", "вернётся ли",
+        // "вырастет или упадёт") and a refusal to promise together with its clause ("не могу обещать, что цена вернётся").
+        // Works on the whole reply: the refusal and the forecast are often split by a comma.
+        // The rest of a sentence up to a contrast: "гарантировать не могу, но цена точно вернётся" is still a promise.
+        private const string RestOfClaim = @"(?:(?!\b(?:но|однако|зато)\b)[^.!?;])*";
+        private const string RecoveryVerbs = @"(?:вырастет|вырастут|подрастет|подрастут|подорожает|подорожают|отыграет(?:ся)?|отыграют(?:ся)?|вернется|вернутся|восстановится|восстановятся|поднимется|поднимутся)";
+        private static bool RecoveryPromise(string text)
+        {
+            string safe = Regex.Replace(text, @"\bне\s+(?:могу\s+|буду\s+|стану\s+|берусь\s+)?(?:обеща|гарантир|утвержда|зна|скаж|сказать|увер)\w*" + RestOfClaim
+                + @"|\b(?:обеща|гарантир|утвержда)\w*\s+не\s+(?:могу|буду|стану|берусь)\b" + RestOfClaim + @"|\bникто\s+не\s+\w+" + RestOfClaim, " ");
+            safe = Regex.Replace(safe, @"\b(?:не|если|когда|может|возможно|вероятно|вдруг)\s+(?:\w+\s+)?" + RecoveryVerbs + @"\b|\b" + RecoveryVerbs + @"(?:\s+(?:ли|или)\b|\s*\?)", " ");
+            foreach (string clause in Regex.Split(safe, @"(?<!\d)[.,]|[.,](?!\d)|[!?;\r\n]+|\b(?:но|однако|зато)\b"))
+                if (Match(clause, @"(?:\b(?:точно|обязательно|непременно|наверняка|гарантированно)\b|\bсто\s+процентов\b|\b100\s*%).{0,30}\b" + RecoveryVerbs + @"\b"
+                    + @"|\b" + RecoveryVerbs + @"\b.{0,15}\b(?:точно|обязательно|непременно|наверняка)\b"
+                    + @"|\b(?:цен|курс|котировк|акци|бумаг|портфел|вложени|деньг|стоимост|убыт|рын)\w*\s+(?:\w+\s+){0,3}?" + RecoveryVerbs + @"\b")) return true;
+            return false;
         }
 
         private static bool HasRisk(string clause)
