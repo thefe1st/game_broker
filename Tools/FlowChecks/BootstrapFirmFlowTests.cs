@@ -12,12 +12,16 @@ namespace Broker.FlowChecks
 {
     public sealed partial class BootstrapFlowTests
     {
-        private string FirmPath => Path.Combine(folder, "broker-founder-v4.json");
-        // Real v3 founder JSON has no quotes, prices or rate counters; v1/v2 also have no stock fields.
+        private string FirmPath => Path.Combine(folder, "broker-founder-v5.json");
+        // Real v4 founder JSON has no portfolios; v3 also has no quotes, prices or rate counters; v1/v2 also have no stock fields.
         // Explicit empty values are accepted too. Only 2% days convert: older schemas had no other rate.
         private static FirmCareerSave LegacyFirm(FirmCareerSave s, int version)
         {
-            s.schemaVersion = version; s.marketFromDay = 0;
+            s.schemaVersion = version; s.portfolioFromDay = 0;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) c.portfolio = new StockPosition[0];
+            foreach (var r in s.reports) r.concernResolved = null;
+            if (version == 4) return s;
+            s.marketFromDay = 0;
             foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockPrice = 0; c.dealsAt3 = 0; c.dealsAt5 = 0; }
             foreach (var r in s.reports) r.soldPrices = null;
             if (version == 3) return s;
@@ -57,6 +61,7 @@ namespace Broker.FlowChecks
             OpenFirm(false); var d = Day; var files = Directory.GetFiles(folder); var bytes = Array.ConvertAll(files, File.ReadAllText);
             Click("Нанять помощника / $100"); float seconds = Day.RemainingSeconds; Frame();
             Assert.That(NotebookText(), Does.Contain("Нанять помощника?")); Assert.That(Day.RemainingSeconds, Is.EqualTo(seconds));
+            Assert.That(NotebookText(), Does.Contain("После записи в broker-founder-v5.json откроется утро. Старые v1–v4 и .bak не меняются."));
             if (escape) { OfficeInput.Escape = true; Call("Update"); } else Click("Нет, без помощника / Esc");
             Assert.That(OverlayOpen, Is.False); Assert.That(Day, Is.SameAs(d)); Assert.That(Day.Cash, Is.EqualTo(300));
             Assert.That(Get<FirmCareerState>("firmCareer").HasAssistant, Is.False);

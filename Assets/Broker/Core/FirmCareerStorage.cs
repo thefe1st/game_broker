@@ -6,7 +6,7 @@ namespace Broker.Core
 {
     public enum FirmCareerLoadStatus { Missing, Loaded, Unreadable }
 
-    // Read-only v3/v2/v1 imports; all new founder writes go to the separate v4 file.
+    // Read-only v4/v3/v2/v1 imports; all new founder writes go to the separate v5 file.
     public sealed class FirmCareerStorage
     {
         public const int MaxBytes = 65536;
@@ -15,7 +15,7 @@ namespace Broker.Core
         private readonly Generation[] generations;
         private readonly Func<FirmCareerSave, string> encode;
         private readonly Func<string, FirmCareerSave> decode;
-        // legacyPaths, newest first: v3, v2, v1 files. A null entry skips that generation; each accepts only its own schema.
+        // legacyPaths, newest first: v4, v3, v2, v1 files. A null entry skips that generation; each accepts only its own schema.
         public FirmCareerStorage(string path, Func<FirmCareerSave, string> serializer, Func<string, FirmCareerSave> deserializer,
             params string[] legacyPaths)
         {
@@ -91,7 +91,7 @@ namespace Broker.Core
                 if (expected != null)
                 {
                     // Recovery is valid for playing, not proof that the primary is unchanged.
-                    // A read-only legacy import is safe only while both v4 paths are absent.
+                    // A read-only legacy import is safe only while both current paths are absent.
                     bool legacy = Source() != generations[0];
                     FirmCareerState stored;
                     bool loaded = legacy ? TryLoad(out stored, out _, out _) : ValidFile(SavePath, out stored);

@@ -22,17 +22,32 @@ namespace Broker.Tests
             foreach (var r in s.reports) r.soldStockIds = null;
             return s;
         }
+        // Simulates a v4 file: quotes and rate counters without client portfolios or price reactions.
+        public static WorkCareerSave LegacyV4(WorkCareerSave s)
+        {
+            s.schemaVersion = 4; s.portfolioFromDay = 0;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) c.portfolio = null;
+            foreach (var r in s.reports) r.concernResolved = null;
+            return s;
+        }
+        public static FirmCareerSave LegacyV4(FirmCareerSave s)
+        {
+            s.schemaVersion = 4; s.portfolioFromDay = 0;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) c.portfolio = null;
+            foreach (var r in s.reports) r.concernResolved = null;
+            return s;
+        }
         // Simulates a v3 file: stock history without quotes, prices or rate counters.
         public static WorkCareerSave LegacyV3(WorkCareerSave s)
         {
-            s.schemaVersion = 3; s.marketFromDay = 0;
+            s = LegacyV4(s); s.schemaVersion = 3; s.marketFromDay = 0;
             foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockPrice = 0; c.dealsAt3 = 0; c.dealsAt5 = 0; }
             foreach (var r in s.reports) r.soldPrices = null;
             return s;
         }
         public static FirmCareerSave LegacyV3(FirmCareerSave s)
         {
-            s.schemaVersion = 3; s.marketFromDay = 0;
+            s = LegacyV4(s); s.schemaVersion = 3; s.marketFromDay = 0;
             foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockPrice = 0; c.dealsAt3 = 0; c.dealsAt5 = 0; }
             foreach (var r in s.reports) r.soldPrices = null;
             return s;
@@ -69,7 +84,7 @@ namespace Broker.Tests
             Assert.That(ClientCatalog.Appointments(4), Is.EqualTo(new[] { "boris", "vera", "denis" }));
             Play(c, "utility", "utility");
             var r = c.LastReport; Assert.That(r.soldStockIds, Is.EqualTo(new[] { "utility", "utility", "" }));
-            Assert.That(c.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(c.MarketFromDay, Is.EqualTo(4));
+            Assert.That(c.Capture().schemaVersion, Is.EqualTo(5)); Assert.That(c.MarketFromDay, Is.EqualTo(4));
             // SVET on day 4 is $17,83: 420 shares for Борис ($7500), 560 for Вера ($10000).
             Assert.That(r.soldPrices, Is.EqualTo(new[] { 1783, 1783, 0 }));
             var boris = Client(c.Clients, "boris"); Assert.That(boris.lastStockId, Is.EqualTo("utility")); Assert.That(boris.lastStockDay, Is.EqualTo(4));
@@ -167,7 +182,7 @@ namespace Broker.Tests
             var s = Legacy(c.Capture(), version); if (version == 1) foreach (var r in s.reports) { r.guaranteed = null; r.complaintResolved = null; }
             var loaded = Restored(s);
             Assert.That(s.schemaVersion, Is.EqualTo(version)); Assert.That(s.reports[0].soldStockIds, Is.Null);
-            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(16));
+            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(5)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(16));
             Assert.That(loaded.MarketFromDay, Is.EqualTo(16));
             Assert.That(loaded.TotalDeals, Is.EqualTo(c.TotalDeals)); Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings));
             foreach (var r in loaded.RecentReports) Assert.That(r.soldStockIds, Is.EqualTo(new[] { "", "", "" }));
@@ -203,7 +218,7 @@ namespace Broker.Tests
             var c = NewWork(); for (int n = 0; n < 12; n++) Play(c, Moderate, "utility", Moderate);
             var s = LegacyV3(c.Capture()); var loaded = Restored(s);
             Assert.That(s.schemaVersion, Is.EqualTo(3)); Assert.That(s.reports[0].soldPrices, Is.Null);
-            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(4)); Assert.That(loaded.MarketFromDay, Is.EqualTo(16));
+            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(5)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(4)); Assert.That(loaded.MarketFromDay, Is.EqualTo(16));
             Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings)); Assert.That(loaded.TotalDeals, Is.EqualTo(36));
             foreach (var r in loaded.RecentReports) Assert.That(r.soldPrices, Is.EqualTo(new int[3]));
             var boris = Client(loaded.Clients, "boris"); Assert.That(boris.lastStockPrice, Is.Zero); Assert.That(boris.lastStockId, Is.EqualTo(Moderate));
@@ -223,7 +238,7 @@ namespace Broker.Tests
         [Test] public void FounderCarriesStillEmployedPurchaseAndRecordsOwnSales()
         {
             var work = FirmCareerTests.ReadyWork(); var firm = FirmCareerState.FromWork(work);
-            Assert.That(firm.StockHistoryFromDay, Is.EqualTo(firm.OpeningDayNumber)); Assert.That(firm.Capture().schemaVersion, Is.EqualTo(4));
+            Assert.That(firm.StockHistoryFromDay, Is.EqualTo(firm.OpeningDayNumber)); Assert.That(firm.Capture().schemaVersion, Is.EqualTo(5));
             Assert.That(firm.MarketFromDay, Is.EqualTo(firm.OpeningDayNumber));
             for (int i = 0; i < 6; i++)
             {
@@ -299,7 +314,7 @@ namespace Broker.Tests
         {
             var firm = FirmCareerTests.NewFirm(); for (int n = 0; n < 10; n++) Play(firm, Moderate, Moderate, Moderate);
             var s = Legacy(firm.Capture(), version); Assert.That(FirmCareerState.TryRestore(s, out var loaded), Is.True);
-            Assert.That(s.schemaVersion, Is.EqualTo(version)); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(4));
+            Assert.That(s.schemaVersion, Is.EqualTo(version)); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(5));
             Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(firm.NextDayNumber)); Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(loaded.Balance, Is.EqualTo(firm.Balance));
             foreach (var r in loaded.RecentReports) Assert.That(r.soldStockIds, Is.EqualTo(new[] { "", "", "" }));
@@ -315,7 +330,7 @@ namespace Broker.Tests
         {
             var firm = FirmCareerTests.NewFirm(); for (int n = 0; n < 9; n++) Play(firm, Moderate, Moderate, Moderate);
             var s = LegacyV3(firm.Capture()); Assert.That(FirmCareerState.TryRestore(s, out var loaded), Is.True);
-            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
+            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(5)); Assert.That(loaded.MarketFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(firm.OpeningDayNumber)); Assert.That(loaded.Balance, Is.EqualTo(firm.Balance));
             foreach (var c in loaded.Clients) Assert.That(c.lastStockPrice, Is.Zero);
             var origin = loaded.Capture().origin.clients; foreach (var c in origin) Assert.That(c.lastStockPrice, Is.Zero);

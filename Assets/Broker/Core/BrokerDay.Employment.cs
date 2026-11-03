@@ -50,7 +50,7 @@ namespace Broker.Core
                 if (next < 0) return "Все три звонка завершены. Подойдите к входной двери и подтвердите окончание дня.";
                 string lead = !IsFounder && DealsCount >= SalesTarget ? "Ориентир выполнен; можно продолжить. " : "";
                 return lead + "За рабочим столом выберите «" + Clients[next].Name + "» и нажмите «Позвонить»."
-                    + (Clients[next].ComplaintPending ? " Сначала разберите претензию к гарантии." : Clients[next].Returning ? (IsRepeatableCareer ? " Сначала обсудите отчёт по прошлой сделке." : " Сначала обсудите вчерашний отчёт.") : " Начните с цели клиента.");
+                    + (Clients[next].ComplaintPending ? " Сначала разберите претензию к гарантии." : Clients[next].PriceConcern ? " Портфель клиента упал: начните с честного объяснения цены." : Clients[next].Returning ? (IsRepeatableCareer ? " Сначала обсудите отчёт по прошлой сделке." : " Сначала обсудите вчерашний отчёт.") : " Начните с цели клиента.");
             }
         }
         public string ColleagueAdvice(int index) => IsRepeatingWork

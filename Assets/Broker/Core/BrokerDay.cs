@@ -108,7 +108,13 @@ namespace Broker.Core
             if (Call != CallStatus.NotStarted) return "Этот звонок уже начат или завершён. Выберите другого клиента.";
             Current.Call = CallStatus.Active;
             if (Current.ComplaintPending)
-                return Current.Name + ": В прошлый раз вы обещали гарантированную прибыль. Теперь предлагаете забыть? Сначала признайте ошибку и объясните риск: например, «Признаю ошибку. Есть риск убытка». Это претензия к обещанию, а не сообщение об убытке по продукту.";
+                return Current.Name + ": В прошлый раз вы обещали гарантированную прибыль. Теперь предлагаете забыть? Сначала признайте ошибку и объясните риск: например, «Признаю ошибку. Есть риск убытка». Это претензия к обещанию, а не сообщение об убытке по продукту."
+                    + (Current.PriceConcern ? " " + PriceConcernAside : "");
+            if (Current.PriceConcern) return Current.Name + ": " + PriceConcernOpening;
+            return Opening() + (Current.Mood == PortfolioMood.Growth ? " " + GrowthAside : "");
+        }
+        private string Opening()
+        {
             if (Current.Returning)
                 return Current.Name + ": " + (Current.Id == "boris"
                     ? "Снова вы. Мойки работают, а что с прошлым разговором? Сначала отчёт, потом новые предложения."
@@ -130,6 +136,7 @@ namespace Broker.Core
                 if (Call == CallStatus.NotStarted) return ConversationStage.AwaitingCall;
                 if (Call == CallStatus.Closed) return ConversationStage.Closed;
                 if (Current.ComplaintPending && !Current.ComplaintResolved) return ConversationStage.Complaint;
+                if (Current.PriceConcern && !Current.PriceConcernResolved) return ConversationStage.PriceConcern;
                 if (!Current.ReportReviewed) return ConversationStage.Report;
                 if (!NeedsKnown) return ConversationStage.Goal;
                 if (!RisksExplained || (CurrentStock.Risk == StockRisk.Speculative && !Current.StockRiskExplained)) return ConversationStage.Risk;
@@ -154,6 +161,7 @@ namespace Broker.Core
                         ? "Вы повторили ложную гарантию. Претензия останется до следующего звонка; новой сделки сегодня не будет."
                         : !Current.ComplaintAcknowledged ? "Признай ошибку: например, «Признаю ошибку». Одного «извините» недостаточно."
                         : "Объясни риск заново: например, «Есть риск убытка». Затем можно обсудить отчёт и условия.";
+                    case ConversationStage.PriceConcern: return PriceConcernHint;
                     case ConversationStage.Report: return "Сначала обсуди отчёт по прошлому разговору.";
                     case ConversationStage.Goal: return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
                     case ConversationStage.Risk: return "Дальше: объясни риск акций «" + CurrentStock.Name + "», без обещаний гарантированной прибыли. " + CurrentStock.RiskDisclosure;
@@ -176,14 +184,18 @@ namespace Broker.Core
             if (string.IsNullOrWhiteSpace(message)) return "Введите реплику.";
             if (message.Trim().Length > 500) return "Сократите реплику до 500 символов.";
             DialogueIntent facts = DialogueRules.Analyze(message, CurrentFeePercent);
-            if (DialogueRules.Has(facts, DialogueIntent.Guarantee))
+            // v5: with quotes, a promise that the price will recover or grow is the same false guarantee.
+            bool guarantee = DialogueRules.Has(facts, DialogueIntent.Guarantee), rebound = HasQuotes && DialogueRules.Has(facts, DialogueIntent.Rebound);
+            if (guarantee || rebound)
             {
-                if (IsRepeatableCareer) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; }
+                if (IsRepeatableCareer) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; Current.PriceConcernResolved = false; }
                 Current.Trust = Math.Max(0, Trust - 1); Reputation = Math.Max(0, Reputation - 10);
                 string consequence = IsRepeatableCareer ? " На следующем звонке вернёмся к этому обещанию: у меня претензия к гарантии." : "";
-                if (Trust == 0) { CloseCurrentCall(); return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно." + consequence; }
-                return Current.Name + ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска." + consequence;
+                if (Trust == 0) { CloseCurrentCall(); return Current.Name + (guarantee ? ": Гарантии без риска? Спасибо, на сегодня достаточно." : ": Цена «точно вернётся»? Спасибо, на сегодня достаточно.") + consequence; }
+                return Current.Name + (guarantee ? ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска." : ": Уже подозрительно. Рост цены никто обещать не может — это та же гарантия.") + consequence;
             }
+            // A complaint open before this reply must be settled first: its risk sentence does not also answer the price concern.
+            bool complaintOpen = Current.ComplaintPending && !Current.ComplaintResolved;
             var answers = new List<string>();
             if (Current.ComplaintPending && !Current.ComplaintResolved && !Current.FalseGuaranteeMade)
             {
@@ -194,8 +206,14 @@ namespace Broker.Core
                 if (Current.ComplaintAcknowledged && Current.ComplaintRiskExplained)
                 {
                     Current.ComplaintResolved = true; Current.Trust = Math.Min(4, Trust + 1);
-                    answers.Add("Претензию к гарантии урегулировали. Это не обещание доходности. Отчёт по прошлой сделке и новые условия всё ещё нужно обсудить.");
+                    answers.Add("Претензию к гарантии урегулировали. Это не обещание доходности. "
+                        + (Current.PriceConcern ? "Теперь объясните, что с ценой моих акций." : "Отчёт по прошлой сделке и новые условия всё ещё нужно обсудить."));
                 }
+            }
+            if (Current.PriceConcern && !Current.PriceConcernResolved && !complaintOpen && !Current.FalseGuaranteeMade && DialogueRules.Has(facts, DialogueIntent.Risk))
+            {
+                Current.PriceConcernResolved = true;
+                answers.Add(PriceConcernSettled + (Current.Returning && !Current.ReportReviewed && !DialogueRules.Has(facts, DialogueIntent.Report) ? " Теперь отчёт по прошлому разговору." : ""));
             }
             bool pressure = DialogueRules.Has(facts, DialogueIntent.Pressure);
             if (pressure)
@@ -254,9 +272,11 @@ namespace Broker.Core
             if (DayEnded || Call != CallStatus.Active || PendingEvent != null) return "Сейчас нет доступного звонка.";
             if (Current.ComplaintPending && (!Current.ComplaintResolved || Current.FalseGuaranteeMade))
                 return Current.Name + ": Сначала разберём претензию к гарантии. " + NextConversationStep;
+            if (Current.PriceConcern && !Current.PriceConcernResolved)
+                return Current.Name + ": Сначала объясните, что с моими акциями. " + NextConversationStep;
             if (!Current.ReportReviewed) return Current.Name + ": Сначала обсудим отчёт по прошлому разговору.";
             if (!NeedsKnown) return Current.Name + ": Вы даже не спросили, зачем мне это.";
-            if (!StockCatalog.Fits(Current.Id, CurrentStock)) return Current.Name + ": " + StockCatalog.Suitability(Current.Id, CurrentStock);
+            if (!FitsToday(CurrentStock)) return Current.Name + ": " + StockSuitability(CurrentStock);
             if (!RisksExplained) return Current.Name + ": Сначала расскажите, что может пойти не так.";
             if (CurrentStock.Risk == StockRisk.Speculative && !Current.StockRiskExplained)
                 return Current.Name + ": Для «" + CurrentStock.Name + "» общего слова «риск» мало. Раскройте высокий риск, возможность потери всей суммы и отсутствие покупателя; можно нажать «Раскрыть свойства акции».";

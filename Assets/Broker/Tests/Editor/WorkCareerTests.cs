@@ -13,6 +13,8 @@ namespace Broker.Tests
         }
         public static void SellAfterStarted(BrokerDay d)
         {
+            // v5: after a deep portfolio drop the client takes only a moderate stock that day.
+            if (StockCatalog.Fits(d.Current.Id, d.CurrentStock) && !d.FitsToday(d.CurrentStock)) d.SelectStock(StockHistoryTests.Moderate);
             // v4: work days and the founder office name the rate of the selected stock (2/3/5%).
             d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия " + d.CurrentFeePercent + "%. Срок год. Персональный отчёт.");
             d.OfferDeal();
@@ -116,12 +118,22 @@ namespace Broker.Tests
         [Test] public void AThousandDaysKeepOnlySevenReportsAndMoneyPassesOldPrototypeLimit()
         {
             var c = WorkCareerState.FromIntro(Intro());
-            for (int n = 0; n < 1000; n++) { Finish(c, true); Assert.That(WorkCareerState.TryRestore(c.Capture(), out var loaded), Is.True); c = loaded; }
-            Assert.That(c.CompletedDays, Is.EqualTo(1000)); Assert.That(c.NextDayNumber, Is.EqualTo(1004));
             // v4: each default stock pays its own rate (Инна MDAT, Оксана/Артём OBLK at 3%).
-            long expected = 0;
-            for (int day = 4; day < 1004; day++) foreach (string id in ClientCatalog.Appointments(day))
-                expected += BrokerDay.PersonalPayout(StockMarket.Commission(id, StockCatalog.DefaultFor(id)));
+            // v5: after a deep portfolio drop the client takes RLOG at 2% instead of a riskier default that day.
+            long expected = 0; int moderateAfterDeepDrop = 0;
+            for (int n = 0; n < 1000; n++)
+            {
+                var d = Finish(c, true);
+                foreach (var client in d.Clients)
+                {
+                    bool deep = client.Mood == PortfolioMood.DeepDrop && StockCatalog.Find(StockCatalog.DefaultFor(client.Id)).Risk != StockRisk.Moderate;
+                    Assert.That(client.StockId, Is.EqualTo(deep ? StockHistoryTests.Moderate : StockCatalog.DefaultFor(client.Id)));
+                    if (deep) moderateAfterDeepDrop++;
+                    expected += BrokerDay.PersonalPayout(StockMarket.Commission(client.Id, client.StockId));
+                }
+                Assert.That(WorkCareerState.TryRestore(c.Capture(), out var loaded), Is.True); c = loaded;
+            }
+            Assert.That(c.CompletedDays, Is.EqualTo(1000)); Assert.That(c.NextDayNumber, Is.EqualTo(1004)); Assert.That(moderateAfterDeepDrop, Is.GreaterThan(0));
             Assert.That(c.PersonalSavings, Is.EqualTo(expected)); Assert.That(c.PersonalSavings, Is.GreaterThan(111000)); Assert.That(c.TotalDeals, Is.EqualTo(3000));
             Assert.That(c.Capture().reports.Length, Is.EqualTo(7)); Assert.That(c.Capture().checkpoint.completedWorkDays, Is.EqualTo(993));
             Assert.That(c.CreateDay().OpeningCash, Is.EqualTo(c.PersonalSavings));
@@ -159,11 +171,13 @@ namespace Broker.Tests
         }
         [Test] public void OutstandingReportAndRelationshipsSurviveCheckpointPruningWithoutNewCalls()
         {
-            var c = WorkCareerState.FromIntro(Intro()); var d = c.CreateDay(); Sell(d, 0); d.EndDay(); c.CompleteDay(d);
-            for (int i = 0; i < 40; i++) Finish(c);
-            Assert.That(WorkCareerState.TryRestore(c.Capture(), out var loaded), Is.True);
-            Assert.That(loaded.Clients[0].awaitingReport, Is.True); Assert.That(loaded.Clients[0].relationship, Is.EqualTo(1));
-            Assert.That(loaded.Clients[0].deals, Is.EqualTo(1)); Assert.That(loaded.TotalDeals, Is.EqualTo(1));
+            var c = WorkCareerState.FromIntro(Intro()); var d = c.CreateDay(); Sell(d, 0); string id = d.Current.Id; d.EndDay(); c.CompleteDay(d);
+            // v5: a price concern left without a call costs 1 relationship; other days without calls change nothing.
+            int expected = 1, ignored = 0;
+            for (int i = 0; i < 40; i++) { d = Finish(c); foreach (var client in d.Clients) if (client.Id == id && client.PriceConcern) { expected = Math.Max(-1, expected - 1); ignored++; } }
+            Assert.That(WorkCareerState.TryRestore(c.Capture(), out var loaded), Is.True); var restored = loaded.Clients[ClientCatalog.Index(id)];
+            Assert.That(restored.awaitingReport, Is.True); Assert.That(restored.relationship, Is.EqualTo(expected)); Assert.That(ignored, Is.GreaterThan(0));
+            Assert.That(restored.deals, Is.EqualTo(1)); Assert.That(loaded.TotalDeals, Is.EqualTo(1)); Assert.That(restored.portfolio.Length, Is.EqualTo(1));
         }
         [Test] public void WorkDayRequiresCanonicalAppointmentsAndDisallowsOwnerMoneyFeatures()
         {

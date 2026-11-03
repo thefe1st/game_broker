@@ -31,7 +31,7 @@ namespace Broker.Runtime
             Scrim(); Panel(280, 132, 880, 704, "");
             Label(320, 172, 800, 64, "Нанять помощника?", theme.Title);
             Label(320, 280, 800, 168, "Лена будет готовить досье по поручению: 25 игровых секунд, +1 доверия один раз клиенту за день. Звонки и продажи остаются за вами. Найм $100: касса $" + firmCareer.Balance + " → $" + (firmCareer.Balance - FirmCareerState.HiringCost) + ". Личный резерв не расходуется.", theme.Text);
-            Label(320, 468, 800, 88, "С дня " + firmCareer.NextDayNumber + " зарплата $40 каждый день, даже без поручений и при долге; аренда ещё $60. После записи в broker-founder-v4.json откроется утро. Старые v1–v3 и .bak не меняются.", theme.Small);
+            Label(320, 468, 800, 88, "С дня " + firmCareer.NextDayNumber + " зарплата $40 каждый день, даже без поручений и при долге; аренда ещё $60. После записи в broker-founder-v5.json откроется утро. Старые v1–v4 и .bak не меняются.", theme.Small);
             Label(320, 564, 800, 60, hiringNotice, theme.Small);
             if (Button(320, 632, 800, 52, "Нет, без помощника / Esc", true, true)) CloseUtilityOverlay();
             if (Button(320, 724, 800, 52, "Да, нанять за $100", CanRequestAssistant)) HireAssistant();
@@ -89,7 +89,7 @@ namespace Broker.Runtime
             Scrim(); Panel(280, 132, 880, 704, "");
             Label(320, 172, 800, 64, "Открыть свою контору?", theme.Title);
             Label(320, 280, 800, 164, "Из сохранённых $" + workCareer.PersonalSavings + ": $200 — расходы открытия, $300 — касса фирмы, $" + (workCareer.PersonalSavings - 500) + " — личный резерв. Аренда $60 за день. Всю комиссию получает фирма; сотрудников пока нет. Долг переносится, но личный резерв сам не расходуется.", theme.Text);
-            Label(320, 468, 800, 120, "Начнётся день " + workCareer.NextDayNumber + " в отдельном broker-founder-v4.json. Вводная глава, рабочие дни и старый прототип владельца не перезаписываются. Это отдельная ветка-снимок, не повторная выплата заработка. " + firmLoadNotice, theme.Small);
+            Label(320, 468, 800, 120, "Начнётся день " + workCareer.NextDayNumber + " в отдельном broker-founder-v5.json. Вводная глава, рабочие дни и старый прототип владельца не перезаписываются. Это отдельная ветка-снимок, не повторная выплата заработка. " + firmLoadNotice, theme.Small);
             if (Button(320, 632, 800, 52, "Нет, остаться брокером / Esc", true, true)) CloseUtilityOverlay();
             if (Button(320, 724, 800, 52, "Да, открыть свою контору", saveSucceeded && FirmCareerState.CanOpen(workCareer))) StartFirmFromWork();
         }
@@ -121,9 +121,10 @@ namespace Broker.Runtime
             MetricCard(560, 280, 296, "Комиссия фирмы", "+$" + report.revenue);
             MetricCard(880, 280, 320, "Личный резерв", "$" + firmCareer.PersonalReserve);
             Label(240, 448, 960, 64, "$" + report.openingBalance + " + $" + report.revenue + " − $60 аренды − $" + report.salary + " зарплаты = $" + report.balance + ". Расходы начислены один раз; резерв не потрачен.", theme.Heading);
-            Label(240, 520, 960, 92, StockHistory.SoldToday(report.clientIds, report.sold, report.soldStockIds, report.soldPrices) + " Долг переносится в следующий день, продажи позволяют восстановить кассу. " + (firmCareer.HasAssistant ? "Помощник остаётся в штате, зарплата начисляется и без поручений. Незавершённое досье на следующий день не переносится." : "Найм только между сохранёнными днями: $100 при кассе от $200, затем $40 за день."), theme.Small);
-            if (!firmCareer.HasAssistant && Button(240, 616, 960, 40, "Нанять помощника / $100", CanRequestAssistant)) RequestAssistant();
-            Label(240, 664, 960, 56, saveNotice, theme.Small);
+            Label(240, 520, 960, 80, StockHistory.SoldToday(report.clientIds, report.sold, report.soldStockIds, report.soldPrices) + " Долг переносится в следующий день, продажи позволяют восстановить кассу. " + (firmCareer.HasAssistant ? "Помощник остаётся в штате, зарплата начисляется и без поручений. Незавершённое досье на следующий день не переносится." : "Найм только между сохранёнными днями: $100 при кассе от $200, затем $40 за день."), theme.Small);
+            Label(240, 600, 960, 40, day.PriceReactionsSummary, theme.Small);
+            if (!firmCareer.HasAssistant && Button(240, 644, 960, 36, "Нанять помощника / $100", CanRequestAssistant)) RequestAssistant();
+            Label(240, 684, 960, 48, saveNotice, theme.Small);
             if (Button(240, 740, 464, 48, saveSucceeded ? "Следующий день конторы" : "Продолжить без записи", true, true)) Restart();
             if (Button(736, 740, 464, 48, saveSucceeded ? "Сбросить свою контору" : "Повторить сохранение"))
             { if (saveSucceeded) RequestConfirmation(ConfirmationKind.NewCareer); else SaveCareer(); }

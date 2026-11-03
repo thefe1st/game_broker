@@ -101,21 +101,29 @@ namespace Broker.FlowChecks
         [Test] public void V3WorkImportKeepsStockHistoryAndStartsQuotesNextDay()
         {
             StartWork(); Sell(Day, 0); Day.EndDay(); Frame();
-            string v4 = Path.Combine(folder, "broker-employee-work-v4.json"), v3 = Path.Combine(folder, "broker-employee-work-v3.json");
-            string legacy = LegacyWorkJson(File.ReadAllText(v4), 3); File.WriteAllText(v3, legacy); File.WriteAllText(v3 + ".bak", legacy);
-            File.Delete(v4); if (File.Exists(v4 + ".bak")) File.Delete(v4 + ".bak");
+            string v5 = Path.Combine(folder, "broker-employee-work-v5.json"), v3 = Path.Combine(folder, "broker-employee-work-v3.json");
+            string legacy = LegacyWorkJson(File.ReadAllText(v5), 3); File.WriteAllText(v3, legacy); File.WriteAllText(v3 + ".bak", legacy);
+            File.Delete(v5); if (File.Exists(v5 + ".bak")) File.Delete(v5 + ".bak");
             FreshGame(); Assert.That(NotebookText(), Does.Contain("копия v3"));
             Click("Продолжить рабочие дни"); Click("Начать рабочий день"); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.Cash, Is.EqualTo(30));
             Interact(OfficeStation.Desk); Click("База клиентов");
             Assert.That(NotebookText(), Does.Contain("Последняя покупка, день 4: «Регион Логистика» (RLOG), вложение $7500, комиссия фирмы $150, лично вам $30. Куплено до котировок; сегодня $25,67."));
+            // A purchase without a recorded price never enters the portfolio: no invented reaction.
+            Assert.That(NotebookText(), Does.Contain("Портфель: покупок с котировкой нет; бумаги до котировок в портфель не входят, цена не реагирует."));
             Click("История рабочих дней"); string history = NotebookText();
             Assert.That(history, Does.Contain("Борис: сделка · «Регион Логистика» (RLOG), вложение $7500, комиссия фирмы $150, лично вам $30"));
             Assert.That(history, Does.Contain("Котировки и ставки по риску — с дня 5; раньше комиссия 2% без цены.")); Assert.That(history, Does.Not.Contain("Бумаги записываются с дня"));
-            Click("Вернуться к работе / Esc"); Assert.That(File.Exists(v4), Is.False);
-            SellAny(Day, 1); Day.EndDay(); Frame(); Assert.That(File.Exists(v4), Is.True);
+            Assert.That(history, Does.Contain("Портфели и реакция на цену — с дня 5; из более ранних покупок в портфель перенесена только последняя с ценой."));
+            Click("Вернуться к работе / Esc"); Assert.That(File.Exists(v5), Is.False);
+            SellAny(Day, 1); Day.EndDay(); Frame(); Assert.That(File.Exists(v5), Is.True);
             Assert.That(NotebookText(), Does.Contain("Продано сегодня: Оксана — OBLK $9500 (173 акции по $54,73, комиссия 3%)."));
-            var saved = JsonUtility.FromJson<WorkCareerSave>(File.ReadAllText(v4));
-            Assert.That(saved.schemaVersion, Is.EqualTo(4)); Assert.That(saved.marketFromDay, Is.EqualTo(5)); Assert.That(saved.reports[1].soldPrices, Is.EqualTo(new[] { 0, 5473, 0 }));
+            var saved = JsonUtility.FromJson<WorkCareerSave>(File.ReadAllText(v5));
+            Assert.That(saved.schemaVersion, Is.EqualTo(5)); Assert.That(saved.marketFromDay, Is.EqualTo(5)); Assert.That(saved.portfolioFromDay, Is.EqualTo(5));
+            Assert.That(saved.reports[1].soldPrices, Is.EqualTo(new[] { 0, 5473, 0 }));
+            var clients = Get<WorkCareerState>("workCareer").Clients;
+            Assert.That(clients[ClientCatalog.Index("boris")].portfolio, Is.Empty);
+            Assert.That(clients[ClientCatalog.Index("oksana")].portfolio.Length, Is.EqualTo(1));
+            Assert.That(clients[ClientCatalog.Index("oksana")].portfolio[0].priceCents, Is.EqualTo(5473));
             Assert.That(saved.reports[0].soldPrices, Is.EqualTo(new[] { 0, 0, 0 })); Assert.That(saved.reports[0].soldStockIds[0], Is.EqualTo("logistics"));
             Assert.That(File.ReadAllText(v3), Is.EqualTo(legacy)); Assert.That(File.ReadAllText(v3 + ".bak"), Is.EqualTo(legacy));
         }

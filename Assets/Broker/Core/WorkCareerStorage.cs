@@ -7,7 +7,7 @@ namespace Broker.Core
     public enum WorkCareerLoadStatus { Missing, Loaded, Unreadable }
 
     // Serializer is injected: Unity uses JsonUtility, headless tests use System.Text.Json.
-    // Writes go only to SavePath (v4). Older generations are read-only imports, newest first.
+    // Writes go only to SavePath (v5). Older generations are read-only imports, newest first.
     public sealed class WorkCareerStorage
     {
         public const int MaxBytes = 65536;
@@ -16,7 +16,7 @@ namespace Broker.Core
         private readonly Generation[] generations;
         private readonly Func<WorkCareerSave, string> encode;
         private readonly Func<string, WorkCareerSave> decode;
-        // legacyPaths, newest first: v3, v2, v1 files. A null entry skips that generation;
+        // legacyPaths, newest first: v4, v3, v2, v1 files. A null entry skips that generation;
         // each file accepts its own and older schemas (a v3 file may still hold v2 data).
         public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer,
             params string[] legacyPaths)

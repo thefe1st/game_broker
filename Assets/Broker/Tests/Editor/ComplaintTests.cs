@@ -130,7 +130,7 @@ namespace Broker.Tests
             for (int n = 0; n < 10; n++) { var d = c.CreateDay(); d.SelectStock(StockHistoryTests.Moderate); WorkCareerTests.Sell(d, 0); Settle(c, d); }
             var s = StockHistoryTests.Legacy(c.Capture(), 1); foreach (var r in s.reports) { r.guaranteed = null; r.complaintResolved = null; }
             Assert.That(WorkCareerState.TryRestore(s, out var loaded), Is.True); Assert.That(s.schemaVersion, Is.EqualTo(1));
-            Assert.That(s.reports[0].guaranteed, Is.Null); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(4));
+            Assert.That(s.reports[0].guaranteed, Is.Null); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(5));
             Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings)); Assert.That(loaded.TotalDeals, Is.EqualTo(c.TotalDeals));
             foreach (var client in loaded.Clients) Assert.That(client.complaintPending, Is.False);
         }

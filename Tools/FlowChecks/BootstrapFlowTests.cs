@@ -272,7 +272,7 @@ namespace Broker.FlowChecks
         {
             CompleteIntroForWork(); string before = File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json"));
             Click("Перейти к рабочим дням"); Click("Нет, вернуться / Esc");
-            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v4.json")), Is.False);
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v5.json")), Is.False);
             Assert.That(File.ReadAllText(Path.Combine(folder, "broker-employee-intro-v1.json")), Is.EqualTo(before));
             Assert.That(Day.DayEnded, Is.True);
         }
@@ -283,7 +283,7 @@ namespace Broker.FlowChecks
             Assert.That(Day.Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.DayNumber, Is.EqualTo(4)); Assert.That(Day.Cash, Is.EqualTo(330));
             Assert.That(Get<OfficeScene>("office").Mode, Is.EqualTo(CareerMode.EmployeeWork)); Assert.That(Day.Clients[1].Id, Is.EqualTo("vera"));
             Assert.That(Day.Clients[0].Returning, Is.True); Assert.That(Get<bool>("intro"), Is.True);
-            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v4.json")), Is.True); Assert.That(File.ReadAllText(introPath), Is.EqualTo(before));
+            Assert.That(File.Exists(Path.Combine(folder, "broker-employee-work-v5.json")), Is.True); Assert.That(File.ReadAllText(introPath), Is.EqualTo(before));
         }
         [Test] public void WorkDeskUsesEmployeeTabsAndNoThreeDayCapHeader()
         {
@@ -327,12 +327,14 @@ namespace Broker.FlowChecks
         }
         [Test] public void InitialTransferWriteFailureStaysOnConfirmationAndCanRetry()
         {
-            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v4.json");
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v5.json");
             Click("Перейти к рабочим дням"); Directory.CreateDirectory(path);
             Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.True);
             Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee)); Directory.Delete(path);
             Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.False); Assert.That(Day.DayNumber, Is.EqualTo(4));
         }
+        [TestCase("v5", false)] [TestCase("v5", true)]
+        [TestCase("v5.bak", false)] [TestCase("v5.bak", true)]
         [TestCase("v4", false)] [TestCase("v4", true)]
         [TestCase("v4.bak", false)] [TestCase("v4.bak", true)]
         [TestCase("v3", false)] [TestCase("v3", true)]
@@ -362,7 +364,7 @@ namespace Broker.FlowChecks
             var d = c.CreateDay(); Sell(d, 0); d.EndDay(); Assert.That(c.CompleteDay(d), Is.True);
             string json = JsonUtility.ToJson(c.Capture());
             if (legacyBackup) json = LegacyWorkJson(json, 1);
-            string path = Path.Combine(folder, legacyBackup ? "broker-employee-work-v1.json.bak" : "broker-employee-work-v4.json");
+            string path = Path.Combine(folder, legacyBackup ? "broker-employee-work-v1.json.bak" : "broker-employee-work-v5.json");
             File.WriteAllText(path, json); return path;
         }
         [TestCase(false)] [TestCase(true)]
@@ -378,7 +380,7 @@ namespace Broker.FlowChecks
         [Test] public void UnreadableFileAppearingDuringConfirmationIsNotReplaced()
         {
             CompleteIntroForWork(); Click("Перейти к рабочим дням");
-            string path = Path.Combine(folder, "broker-employee-work-v4.json"); const string bytes = "future progress";
+            string path = Path.Combine(folder, "broker-employee-work-v5.json"); const string bytes = "future progress";
             File.WriteAllText(path, bytes); Click("Да, начать рабочие дни");
             Assert.That(OverlayOpen, Is.True); Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee));
             Assert.That(NotebookText(), Does.Contain("не прочитано")); Assert.That(File.ReadAllText(path), Is.EqualTo(bytes));
@@ -399,7 +401,7 @@ namespace Broker.FlowChecks
         }
         [Test] public void FreshMenuOffersLoadRetryEvenWithoutCompletedIntro()
         {
-            string path = Path.Combine(folder, "broker-employee-work-v4.json"); File.WriteAllText(path, "broken progress");
+            string path = Path.Combine(folder, "broker-employee-work-v5.json"); File.WriteAllText(path, "broken progress");
             Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake");
             Click("Повторить загрузку рабочих дней");
             Assert.That(Get<bool>("selectingMode"), Is.True); Assert.That(OverlayOpen, Is.False);
@@ -409,7 +411,7 @@ namespace Broker.FlowChecks
         }
         [Test] public void MissingFilesAfterFailedLoadOfferExplicitTransferAgain()
         {
-            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v4.json"); File.WriteAllText(path, "broken progress");
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v5.json"); File.WriteAllText(path, "broken progress");
             Click("Выбрать режим"); Click("Начать рабочие дни с дня 4"); Assert.That(OverlayOpen, Is.False);
             File.Delete(path); Click("Повторить загрузку рабочих дней"); Assert.That(OverlayOpen, Is.True);
             Assert.That(File.Exists(path), Is.False); Click("Нет, вернуться / Esc");
@@ -417,7 +419,7 @@ namespace Broker.FlowChecks
         }
         [Test] public void FailedWorkSaveBlocksModeSwitchUntilRetryWithoutDuplicatePayout()
         {
-            StartWork(); string path = Path.Combine(folder, "broker-employee-work-v4.json"); File.Delete(path); Directory.CreateDirectory(path);
+            StartWork(); string path = Path.Combine(folder, "broker-employee-work-v5.json"); File.Delete(path); Directory.CreateDirectory(path);
             Sell(Day, 0); Day.EndDay(); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.False);
             GUI.Click = "Выбрать режим"; Call("OnGUI"); Assert.That(GUI.Click, Is.Not.Null); GUI.Click = null;
             Assert.That(Get<bool>("selectingMode"), Is.False); Directory.Delete(path);
@@ -562,40 +564,43 @@ namespace Broker.FlowChecks
             Assert.That(Day.Current.FalseGuaranteeMade || Day.Current.ComplaintPending, Is.False);
             Assert.That(Get<WorkCareerState>("workCareer").Clients[0].complaintPending, Is.False);
         }
-        // Real v3 JSON has no quote fields; v1/v2 also have no stock fields; v1 also lacks complaint fields.
+        // Real v4 JSON has no portfolio fields; v3 also has no quote fields; v1/v2 also have no stock fields; v1 also lacks complaint fields.
         // Only 2% days convert: older schemas had no other rate.
         private static string LegacyWorkJson(string json, int version)
         {
-            var node = System.Text.Json.Nodes.JsonNode.Parse(json); node["schemaVersion"] = version; node.AsObject().Remove("marketFromDay");
+            var node = System.Text.Json.Nodes.JsonNode.Parse(json); node["schemaVersion"] = version; node.AsObject().Remove("portfolioFromDay");
+            if (version < 4) node.AsObject().Remove("marketFromDay");
             if (version < 3) node.AsObject().Remove("stockHistoryFromDay");
             foreach (string key in new[] { "origin", "checkpoint" })
                 foreach (var c in node[key]["clients"].AsArray())
                 {
-                    foreach (string field in new[] { "lastStockPrice", "dealsAt3", "dealsAt5" }) c.AsObject().Remove(field);
+                    c.AsObject().Remove("portfolio");
+                    if (version < 4) foreach (string field in new[] { "lastStockPrice", "dealsAt3", "dealsAt5" }) c.AsObject().Remove(field);
                     if (version < 3) { c.AsObject().Remove("lastStockId"); c.AsObject().Remove("lastStockDay"); }
                     if (version == 1) c.AsObject().Remove("complaintPending");
                 }
             foreach (var r in node["reports"].AsArray())
             {
-                r.AsObject().Remove("soldPrices"); if (version < 3) r.AsObject().Remove("soldStockIds");
+                r.AsObject().Remove("concernResolved"); if (version < 4) r.AsObject().Remove("soldPrices");
+                if (version < 3) r.AsObject().Remove("soldStockIds");
                 if (version == 1) { r.AsObject().Remove("guaranteed"); r.AsObject().Remove("complaintResolved"); }
             }
             return node.ToJsonString();
         }
         [TestCase(1)] [TestCase(2)]
-        public void FreshBootstrapReadsRealLegacyShapeWithoutTouchingItAndLaterWritesV4(int version)
+        public void FreshBootstrapReadsRealLegacyShapeWithoutTouchingItAndLaterWritesV5(int version)
         {
             StartWork(); Sell(Day, 0); Day.EndDay(); Frame();
-            string v4 = Path.Combine(folder, "broker-employee-work-v4.json"), old = Path.Combine(folder, "broker-employee-work-v" + version + ".json");
-            string legacy = LegacyWorkJson(File.ReadAllText(v4), version); File.WriteAllText(old, legacy); File.WriteAllText(old + ".bak", legacy);
-            File.Delete(v4); if (File.Exists(v4 + ".bak")) File.Delete(v4 + ".bak");
+            string v5 = Path.Combine(folder, "broker-employee-work-v5.json"), old = Path.Combine(folder, "broker-employee-work-v" + version + ".json");
+            string legacy = LegacyWorkJson(File.ReadAllText(v5), version); File.WriteAllText(old, legacy); File.WriteAllText(old + ".bak", legacy);
+            File.Delete(v5); if (File.Exists(v5 + ".bak")) File.Delete(v5 + ".bak");
             Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake"); Assert.That(NotebookText(), Does.Contain("копия v" + version));
             Click("Продолжить рабочие дни"); Click("Начать рабочий день"); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.Cash, Is.EqualTo(30));
             Interact(OfficeStation.Desk); Click("База клиентов"); Assert.That(NotebookText(), Does.Contain("Последняя покупка — до истории акций"));
             Click("История рабочих дней"); string history = NotebookText();
             Assert.That(history, Does.Contain("Борис: сделка · до истории акций")); Assert.That(history, Does.Contain("Бумаги записываются с дня 5"));
             Click("Вернуться к работе / Esc");
-            Assert.That(File.Exists(v4), Is.False); SellAny(Day, 1); Day.EndDay(); Frame(); Assert.That(File.Exists(v4), Is.True);
+            Assert.That(File.Exists(v5), Is.False); SellAny(Day, 1); Day.EndDay(); Frame(); Assert.That(File.Exists(v5), Is.True);
             // Imported days stay at 2% without prices; quotes start on the first new day.
             Assert.That(NotebookText(), Does.Contain("Продано сегодня: Оксана — OBLK $9500 (" + StockMarket.SharesText(StockMarket.Shares("oksana", 5473)) + " по $54,73, комиссия 3%)."));
             Assert.That(File.ReadAllText(old), Is.EqualTo(legacy)); Assert.That(File.ReadAllText(old + ".bak"), Is.EqualTo(legacy));
@@ -603,7 +608,7 @@ namespace Broker.FlowChecks
         [Test] public void FailedComplaintSaveRetriesOnceWithoutDuplicateRelationshipRecovery()
         {
             ReachBorisComplaint(); Day.StartCall(); Day.Say("Признаю ошибку. Есть риск убытка.");
-            string path = Path.Combine(folder, "broker-employee-work-v4.json"); File.Delete(path); Directory.CreateDirectory(path);
+            string path = Path.Combine(folder, "broker-employee-work-v5.json"); File.Delete(path); Directory.CreateDirectory(path);
             Day.EndDay(); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.False);
             var c = Get<WorkCareerState>("workCareer"); Assert.That(c.Clients[0].relationship, Is.Zero);
             Directory.Delete(path); Click("Повторить сохранение"); Frame(); Assert.That(Get<bool>("saveSucceeded"), Is.True);
