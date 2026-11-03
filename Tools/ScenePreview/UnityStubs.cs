@@ -339,11 +339,8 @@ namespace UnityEngine
         public Color32[] GetPixels32() => (Color32[])Pixels.Clone();
         public void Apply() { } public void Apply(bool updateMipmaps) { } public void Apply(bool updateMipmaps, bool makeNoLongerReadable) { }
     }
-    public static class ImageConversion { public static bool LoadImage(Texture2D texture, byte[] data, bool markNonReadable) => false; }
-    public class TextAsset : Object { public string text { get; set; } = ""; }
     public static class Resources
     {
-        public static T Load<T>(string path) where T : Object => null;
         public static T GetBuiltinResource<T>(string path) where T : Object => (T)Activator.CreateInstance(typeof(T), true);
     }
     public class Font : Object

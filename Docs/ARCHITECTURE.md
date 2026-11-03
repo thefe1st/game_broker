@@ -70,7 +70,7 @@ DTO `CareerSave` / `CareerDayReport` используют публичные с�
 
 
 ## Локальные текстуры
-`SurfaceLibrary` загружает нативные Texture2D-ресурсы либо текстово упакованные JPEG, различает sRGB/linear и кеширует карты. С 3 ноября `Pixel(key)` строит пиксельные 32×32 карты `VoxelSurfaces` (Point, без нормалей); фото-карты загружаются только для ключей без рисунка. `OfficeScene.Surfaces.cs` создаёт метрические UV и освобождает свои меши/изображения. `SurfaceMapping` в Core не зависит от Unity. Добавлен встроенный модуль imageconversion. Экономика, голос и сохранения не менялись. Подробности и ограничения: [MATERIALS.md](MATERIALS.md).
+`SurfaceLibrary` строит пиксельные 32×32 карты `VoxelSurfaces` (Point, без нормалей) и кеширует их на сцену; фото-текстуры и их загрузка из Resources удалены 3 ноября. `OfficeScene.Surfaces.cs` создаёт метрические UV и освобождает свои меши/изображения. `SurfaceMapping` в Core не зависит от Unity. Добавлен встроенный модуль imageconversion. Экономика, голос и сохранения не менялись. Подробности и ограничения: [MATERIALS.md](MATERIALS.md).
 
 
 ## Ежедневные дела квартала
@@ -154,7 +154,7 @@ DTO `CareerSave` / `CareerDayReport` используют публичные с�
 
 `OfficeScene.Models.cs` с 3 ноября ставит воксельную мебель (`BuildVoxelFurniture`) вместо OBJ из Resources. Мебель не содержит игровых станций/коллайдеров: исходные простые коллайдеры остаются, скрывается только Renderer заменённых конструкций. Мониторы/телефон/персонажи сохраняют прежние визуалы, включая процедурную анимацию/смену экранов; авторские модели потребуют отдельного подключения.
 
-Реестр лицензии/источников/хешей — `ThirdParty/KenneyFurniture/SOURCES.json`, оригинальная CC0-лицензия рядом. `Tools/Art/Import-KenneyFurniture.ps1` импортирует только заданный subset с проверкой хеша, не заменяет изменённые файлы. `Tools/Art/check-assets.mjs` проверяет байты, OBJ/MTL и бюджет треугольников без npm-зависимостей. Новый OfficeScene partial не входит в FlowChecks: синтаксис и проверка геометрических файлов не подтверждают Unity importer, ориентацию/компоновку, GraphicsSettings или runtime. Сцену всё ещё создаём при Play, не вводим сериализованные prefab/.unity ссылки. Следующие этапы: [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md), задания/ручная проверка — [ART_BRIEF.md](ART_BRIEF.md).
+Прежние CC0-модели/текстуры, их реестры `ThirdParty/` и скрипты `Tools/Art/` удалены 3 ноября: сцена воксельная и не загружает ресурсов. Сцену всё ещё создаём при Play, не вводим сериализованные prefab/.unity ссылки. Следующие этапы: [PRODUCTION_ROADMAP.md](PRODUCTION_ROADMAP.md), задания/ручная проверка — [ART_BRIEF.md](ART_BRIEF.md).
 
 ## Воксельный стиль
 

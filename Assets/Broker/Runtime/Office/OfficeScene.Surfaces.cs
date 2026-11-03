@@ -9,10 +9,10 @@ namespace Broker.Runtime.Office
         private readonly SurfaceLibrary surfaces = new SurfaceLibrary();
         private readonly Dictionary<Material, float> surfaceTiles = new Dictionary<Material, float>();
         private readonly List<Mesh> surfaceMeshes = new List<Mesh>();
-        private Material Surface(string key, string tint, float metresPerTile, float smoothness, float normalStrength)
+        private Material Surface(string key, string tint, float metresPerTile, float smoothness)
         {
             Material material = Mat(tint);
-            surfaces.Apply(material, key, smoothness, normalStrength);
+            surfaces.Apply(material, key, smoothness);
             surfaceTiles.Add(material, metresPerTile); return material;
         }
         private void MapSurface(GameObject obj, PrimitiveType kind, Vector3 size, Material material)
@@ -30,7 +30,7 @@ namespace Broker.Runtime.Office
                     Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z), tile);
                 uv[i] = new Vector2(point.U, point.V);
             }
-            mesh.uv = uv; mesh.RecalculateTangents(); filter.sharedMesh = mesh; surfaceMeshes.Add(mesh);
+            mesh.uv = uv; filter.sharedMesh = mesh; surfaceMeshes.Add(mesh);
         }
         private void ReleaseSurfaces()
         {
