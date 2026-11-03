@@ -157,7 +157,7 @@ namespace Broker.Core
                     case ConversationStage.Report: return "Сначала обсуди отчёт по прошлому разговору.";
                     case ConversationStage.Goal: return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
                     case ConversationStage.Risk: return "Дальше: объясни риск акций «" + CurrentStock.Name + "», без обещаний гарантированной прибыли. " + CurrentStock.RiskDisclosure;
-                    case ConversationStage.Fee: return "Дальше: назови комиссию 2% — отдельно от доходности.";
+                    case ConversationStage.Fee: return "Дальше: назови комиссию " + CurrentFeePercent + "% — отдельно от доходности.";
                     case ConversationStage.Term: return "Дальше: назови срок вложения — год или 12 месяцев.";
                     case ConversationStage.Service: return "Дальше: обсуди персональный отчёт или личное сопровождение.";
                     case ConversationStage.Proposal: return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
@@ -175,7 +175,7 @@ namespace Broker.Core
             if (DayEnded || Call != CallStatus.Active || PendingEvent != null) return "Сейчас разговор недоступен.";
             if (string.IsNullOrWhiteSpace(message)) return "Введите реплику.";
             if (message.Trim().Length > 500) return "Сократите реплику до 500 символов.";
-            DialogueIntent facts = DialogueRules.Analyze(message);
+            DialogueIntent facts = DialogueRules.Analyze(message, CurrentFeePercent);
             if (DialogueRules.Has(facts, DialogueIntent.Guarantee))
             {
                 if (IsRepeatableCareer) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; }
@@ -213,7 +213,7 @@ namespace Broker.Core
                 answers.Add(ClientConversation.Respect(Current.Id));
             }
             if (Current.Returning && !Current.ReportReviewed && DialogueRules.Has(facts, DialogueIntent.Report))
-            { Current.ReportReviewed = true; answers.Add("Обсудили отчёт по прошлому разговору. Теперь можно к новым условиям."); }
+            { Current.ReportReviewed = true; answers.Add("Обсудили отчёт по прошлому разговору." + ReportQuoteNote + " Теперь можно к новым условиям."); }
             if (!NeedsKnown && DialogueRules.Has(facts, DialogueIntent.Needs))
             {
                 Current.Trust = Math.Min(4, Trust + 1); Current.NeedsKnown = true;
@@ -224,7 +224,7 @@ namespace Broker.Core
             if (DialogueRules.Has(facts, DialogueIntent.Risk) && (CurrentStock.Risk != StockRisk.Speculative
                 || StockDialogueRules.DisclosesSpeculativeRisk(message))) Current.StockRiskExplained = true;
             if (!FeesExplained && DialogueRules.Has(facts, DialogueIntent.Fee))
-            { Current.FeesExplained = true; answers.Add(ClientConversation.Fee(Current.Id)); }
+            { Current.FeesExplained = true; answers.Add(ClientConversation.Fee(Current.Id, CurrentFeePercent)); }
             if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Year))
             {
                 Current.Trust = Math.Min(4, Trust + 1); Current.SpecialDiscussed = true;
@@ -271,17 +271,21 @@ namespace Broker.Core
             if (!Current.ObjectionResolved) return Current.Name + ": Мой вопрос всё ещё открыт. " + ClientConversation.Objection(Current.Id);
             if (Trust < 2) return Current.Name + (IsEmployee || (IsFounder && !HasFounderAssistant) ? ": Пока не доверяю. Если раньше торопили — дайте мне подумать. Одной вежливостью ложные гарантии не исправить."
                 : ": Пока не доверяю. Подготовьте досье или вернёмся к разговору без давления.");
+            int commission = CurrentCommission;
             Current.DealClosed = true; CloseCurrentCall();
-            FirmRevenue += Current.Commission;
-            int payout = IsEmployee ? PersonalPayout(Current.Commission) : Current.Commission;
+            if (HasQuotes) Current.SoldPriceCents = CurrentQuoteCents;
+            FirmRevenue += commission;
+            int payout = IsEmployee ? PersonalPayout(commission) : commission;
             Credit(payout); Reputation = Math.Min(100, Reputation + 5);
-            Notify(IsEmployee ? "Бухгалтерия: фирме начислено $" + Current.Commission + ", вам выплачено $" + payout + " (20%)."
-                : "Бухгалтерия: +" + Current.Commission + " комиссии. Сделок: " + DealsCount + "/3.");
+            Notify(IsEmployee ? "Бухгалтерия: фирме начислено $" + commission + ", вам выплачено $" + payout + " (20%)."
+                : "Бухгалтерия: +" + commission + " комиссии. Сделок: " + DealsCount + "/3.");
             string agreement = ClientCatalog.Index(Current.Id) >= 3 ? "Договорились. Условия и мой вопрос разобрали. В следующий раз начнём с отчёта, не с рекламы." : Current.Id == "boris" ? "Договорились. Начнём с небольшой суммы, резерв остаётся у мойки."
                 : Current.Id == "inna" ? "Условия согласованы. Год, комиссия, риск и письменный договор. Теперь можно работать."
                 : "Договорились. Личный контакт записал. Если ответит робот, назову его вашим именем.";
-            return Current.Name + ": " + agreement + (IsEmployee ? "\nКомиссия фирмы: $" + Current.Commission + ". Лично вам: +$" + payout + " (20%)."
-                : "\nКомиссия: +" + Current.Commission + ".") + "\nКуплены акции «" + CurrentStock.Name + "» (" + CurrentStock.Ticker + "), вложение $" + CurrentInvestment + ". Доходность не гарантирована. Все деньги и продукты вымышлены.";
+            return Current.Name + ": " + agreement + (IsEmployee ? "\nКомиссия фирмы" + (HasQuotes ? " " + CurrentFeePercent + "%" : "") + ": $" + commission + ". Лично вам: +$" + payout + " (20%)."
+                : "\nКомиссия" + (HasQuotes ? " " + CurrentFeePercent + "%" : "") + ": +" + commission + ".") + "\nКуплены акции «" + CurrentStock.Name + "» (" + CurrentStock.Ticker + ")"
+                + (HasQuotes ? ": " + StockMarket.SharesText(StockMarket.Shares(Current.Id, Current.SoldPriceCents)) + " по " + StockMarket.Money(Current.SoldPriceCents) : "")
+                + ", вложение $" + CurrentInvestment + ". Доходность не гарантирована. Все деньги и продукты вымышлены.";
         }
         public string EndCall()
         {

@@ -34,6 +34,12 @@ namespace Broker.Core
         public bool PressureRecovered { get; internal set; }
         public bool PressureTrustLost { get; internal set; }
         public int UnclearReplies { get; internal set; }
+        // v4 repeatable careers: quote of the sale day; 0 without a sale or in fixed-fee modes.
+        public int SoldPriceCents { get; internal set; }
+        // Last recorded purchase from the saved career, shown in the report of a returning client.
+        public string LastStockId { get; internal set; } = "";
+        public int LastStockDay { get; internal set; }
+        public int LastStockPrice { get; internal set; }
         public ClientRecord(string id, string name, string role, string brief, int commission, int trust)
         { Id = id; Name = name; Role = role; Brief = brief; Commission = commission; Trust = trust; StockId = StockCatalog.DefaultFor(id); }
     }

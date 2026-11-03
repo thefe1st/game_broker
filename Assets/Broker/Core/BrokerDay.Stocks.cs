@@ -4,9 +4,37 @@ namespace Broker.Core
     {
         public StockOffer CurrentStock => StockCatalog.Find(Current.StockId);
         public int CurrentInvestment => Current.Commission * 100 / StockCatalog.FeePercent;
+        // v4: work days and the founder office use daily quotes and the fee of the selected stock.
+        public bool HasQuotes => IsRepeatableCareer;
+        public int FeePercentFor(string stockId) => HasQuotes ? StockMarket.FeePercent(stockId) : StockCatalog.FeePercent;
+        public int CurrentFeePercent => FeePercentFor(Current.StockId);
+        public int CommissionFor(ClientRecord client) => HasQuotes ? StockMarket.Commission(client.Id, client.StockId) : client.Commission;
+        public int CommissionFor(string stockId) => HasQuotes ? StockMarket.Commission(Current.Id, stockId) : Current.Commission;
+        public int CurrentCommission => CommissionFor(Current);
+        public int QuoteCents(string stockId) => StockMarket.PriceCents(stockId, DayNumber);
+        public int CurrentQuoteCents => QuoteCents(Current.StockId);
         public string StockTermsText => "Акции «" + CurrentStock.Name + "» (" + CurrentStock.Ticker + "). " + CurrentStock.RiskDisclosure
-            + " Горизонт — " + CurrentStock.HorizonMonths + " месяцев, не срок гарантированного возврата. Комиссия 2%: $"
-            + Current.Commission + " от вложения $" + CurrentInvestment + ".";
+            + " Горизонт — " + CurrentStock.HorizonMonths + " месяцев, не срок гарантированного возврата. Комиссия " + CurrentFeePercent + "%: $"
+            + CurrentCommission + " от вложения $" + CurrentInvestment + "."
+            + (HasQuotes ? " Цена сегодня " + StockMarket.Money(CurrentQuoteCents) + " за акцию: на вложение — "
+                + StockMarket.SharesText(StockMarket.Shares(Current.Id, CurrentQuoteCents)) + ". Цена может упасть." : "");
+        // Report of a returning client: purchase price vs today's quote. Information only, no trust or money.
+        public string ReportQuoteNote
+        {
+            get
+            {
+                if (!HasQuotes || string.IsNullOrEmpty(Current.LastStockId) || StockCatalog.Find(Current.LastStockId) == null) return "";
+                var stock = StockCatalog.Find(Current.LastStockId); int today = QuoteCents(stock.Id);
+                return Current.LastStockPrice > 0
+                    ? " " + stock.Ticker + ": куплены в день " + Current.LastStockDay + " по " + StockMarket.Money(Current.LastStockPrice) + ", сегодня "
+                        + StockMarket.Money(today) + " (" + StockMarket.Change(Current.LastStockPrice, today) + "). Цена не обещание."
+                    : " " + stock.Ticker + ": куплены в день " + Current.LastStockDay + " до котировок, сегодня " + StockMarket.Money(today) + ".";
+            }
+        }
+        internal void AttachLastPurchase(int slot, string stockId, int day, int priceCents)
+        {
+            var client = clients[slot]; client.LastStockId = stockId ?? ""; client.LastStockDay = day; client.LastStockPrice = priceCents;
+        }
         public bool CanSelectStock => !DayEnded && PendingEvent == null && Call != CallStatus.Closed && !Current.ObjectionRaised;
         public string StockSelectionNotice => DayEnded ? "День завершён: предложение изменить нельзя."
             : Call == CallStatus.Closed ? "Звонок завершён: предложение изменить нельзя."

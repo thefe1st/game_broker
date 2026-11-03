@@ -13,7 +13,8 @@ namespace Broker.Tests
         }
         public static void SellAfterStarted(BrokerDay d)
         {
-            d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт.");
+            // v4: work days and the founder office name the rate of the selected stock (2/3/5%).
+            d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия " + d.CurrentFeePercent + "%. Срок год. Персональный отчёт.");
             d.OfferDeal();
             d.Say(ClientConversation.AnswerIntent(d.Current.Id) == DialogueIntent.Reserve ? "Оставьте резерв, не вкладывайте всю сумму."
                 : ClientConversation.AnswerIntent(d.Current.Id) == DialogueIntent.Written ? "Все условия в письменном договоре." : "Личный менеджер, буду на связи.");
@@ -59,7 +60,7 @@ namespace Broker.Tests
         {
             var c = WorkCareerState.FromIntro(Intro()); while (Array.IndexOf(ClientCatalog.Appointments(c.NextDayNumber), id) < 0) Finish(c);
             var d = c.CreateDay(); int i = Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), id); d.SelectClient(i); d.StartCall();
-            d.Say("Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт."); d.OfferDeal();
+            d.Say("Какая цель? Есть риск убытка. Комиссия " + d.CurrentFeePercent + "%. Срок год. Персональный отчёт."); d.OfferDeal();
             d.Say(ClientConversation.AnswerIntent(id) == DialogueIntent.Reserve ? "Договор с письменными условиями." : "Оставьте резерв на ремонт.");
             d.OfferDeal(); Assert.That(d.DealClosed, Is.False);
             d.Say(ClientConversation.AnswerIntent(id) == DialogueIntent.Reserve ? "Оставьте резерв на ремонт." : "Договор с письменными условиями.");
@@ -70,7 +71,7 @@ namespace Broker.Tests
         {
             var c = WorkCareerState.FromIntro(Intro()); while (Array.IndexOf(ClientCatalog.Appointments(c.NextDayNumber), id) < 0) Finish(c);
             var d = c.CreateDay(); d.SelectClient(Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), id)); d.StartCall();
-            d.Say("Какая цель? Есть риск убытка. Комиссия 2%."); Assert.That(d.ConversationStep, Is.EqualTo(required));
+            d.Say("Какая цель? Есть риск убытка. Комиссия " + d.CurrentFeePercent + "%."); Assert.That(d.ConversationStep, Is.EqualTo(required));
             d.OfferDeal(); Assert.That(d.Current.ObjectionRaised, Is.False);
         }
         [Test] public void IdentityRatherThanDailySlotCarriesRelationsAndOutstandingReport()
@@ -117,7 +118,11 @@ namespace Broker.Tests
             var c = WorkCareerState.FromIntro(Intro());
             for (int n = 0; n < 1000; n++) { Finish(c, true); Assert.That(WorkCareerState.TryRestore(c.Capture(), out var loaded), Is.True); c = loaded; }
             Assert.That(c.CompletedDays, Is.EqualTo(1000)); Assert.That(c.NextDayNumber, Is.EqualTo(1004));
-            Assert.That(c.PersonalSavings, Is.EqualTo(111000)); Assert.That(c.TotalDeals, Is.EqualTo(3000));
+            // v4: each default stock pays its own rate (Инна MDAT, Оксана/Артём OBLK at 3%).
+            long expected = 0;
+            for (int day = 4; day < 1004; day++) foreach (string id in ClientCatalog.Appointments(day))
+                expected += BrokerDay.PersonalPayout(StockMarket.Commission(id, StockCatalog.DefaultFor(id)));
+            Assert.That(c.PersonalSavings, Is.EqualTo(expected)); Assert.That(c.PersonalSavings, Is.GreaterThan(111000)); Assert.That(c.TotalDeals, Is.EqualTo(3000));
             Assert.That(c.Capture().reports.Length, Is.EqualTo(7)); Assert.That(c.Capture().checkpoint.completedWorkDays, Is.EqualTo(993));
             Assert.That(c.CreateDay().OpeningCash, Is.EqualTo(c.PersonalSavings));
         }

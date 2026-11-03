@@ -91,6 +91,8 @@ test('stock context never assumes one anonymous product and does not trust a new
     const payload = JSON.parse(options.body), content = JSON.parse(payload.messages[1].content);
     assert.match(content.product, /название и риск берутся только из canonicalReply и истории/);
     assert.match(content.product, /Не выдумывай котировку/);
+    assert.match(content.product, /Ставка комиссии и цена дня зависят от бумаги/);
+    assert.doesNotMatch(content.product, /Комиссия 2%/);
     assert.match(payload.messages[0].content, /Не меняй условия продукта/);
     assert.equal(content.canonicalReply, 'Артём: По акциям «Новые Недра» (NEDR) нужен живой контакт.');
     assert.equal(payload.messages.length, 2);

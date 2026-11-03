@@ -61,7 +61,7 @@ namespace Broker.Runtime
                 { CancelPending(); day.SelectClient(i); message = ""; replyScroll = Vector2.zero; }
                 if (selected) Paint(new Rect(48, y + 16, 3, 88), theme.Accent);
                 Label(60, y + 16, 160, 32, c.Name, theme.Heading);
-                Label(224, y + 20, 68, 24, "$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(c.Commission) : c.Commission), theme.Small);
+                int fee = day.CommissionFor(c); Label(224, y + 20, 68, 24, "$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(fee) : fee), theme.Small);
                 Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.ComplaintPending && !c.ComplaintResolved ? "Есть претензия" : c.Returning ? "Вернулся за отчётом" : IsWorkMode || IsFounderMode ? "Готов к звонку" : "Первый контакт", theme.Small);
                 if (relationships != null) Label(60, y + 96, 220, 22, "Отношения " + Signed(relationships[ClientCatalog.Index(c.Id)].relationship), theme.Small);
             }
@@ -90,15 +90,16 @@ namespace Broker.Runtime
             Label(1184, 212, 184, 24, "Доверие " + day.Trust + "/4", theme.Small);
             for (int i = 0; i < 4; i++) Paint(new Rect(1184 + i * 46, 252, 34, 6), i < day.Trust ? theme.Accent : theme.Border);
             float chipX = 376; float chipWidth = day.Current.ComplaintPending ? 128 : 152;
-            StageChip(ref chipX, "Цель", day.NeedsKnown, chipWidth); StageChip(ref chipX, "Риск", day.RisksExplained, chipWidth); StageChip(ref chipX, "2%", day.FeesExplained, chipWidth);
+            StageChip(ref chipX, "Цель", day.NeedsKnown, chipWidth); StageChip(ref chipX, "Риск", day.RisksExplained, chipWidth); StageChip(ref chipX, day.CurrentFeePercent + "%", day.FeesExplained, chipWidth);
             if (ClientCatalog.NeedsYear(day.Current.Id) || ClientCatalog.NeedsService(day.Current.Id)) StageChip(ref chipX, ClientCatalog.NeedsYear(day.Current.Id) ? "Срок" : "Сервис", day.Current.SpecialDiscussed, chipWidth);
             if (day.Current.Returning) StageChip(ref chipX, "Отчёт", day.Current.ReportReviewed, chipWidth);
             StageChip(ref chipX, "Вопрос", day.Current.ObjectionResolved, chipWidth);
             if (day.Current.ComplaintPending) StageChip(ref chipX, "Спор", day.Current.ComplaintResolved, chipWidth);
-            Label(376, 360, 760, 40, BrokerPresentation.ShortHint(day.ConversationStep, day.Current.Id), theme.Heading);
+            Label(376, 360, 760, 40, BrokerPresentation.ShortHint(day.ConversationStep, day.Current.Id, day.CurrentFeePercent), theme.Heading);
             if (Button(1144, 352, 104, 44, "История", !busy && !voice.Working && !voice.Recording)) OpenCallLog(false);
             if (Button(1264, 352, 104, 44, "Досье", !busy && !voice.Working && !voice.Recording)) OpenCallLog(true);
-            if (Button(376, 404, 616, 44, "Акции / " + day.CurrentStock.Ticker, !busy && !voice.Working && !voice.Recording)) OpenStocks();
+            if (Button(376, 404, day.HasQuotes ? 360 : 616, 44, "Акции / " + day.CurrentStock.Ticker, !busy && !voice.Working && !voice.Recording)) OpenStocks();
+            if (day.HasQuotes) Label(752, 416, 240, 24, StockMarket.Money(day.CurrentQuoteCents) + " · комиссия " + day.CurrentFeePercent + "%", theme.Small);
             if (Button(1008, 404, 360, 44, "Раскрыть свойства акции", day.Call == CallStatus.Active && !day.Current.ObjectionRaised && !busy && !voice.Working && !voice.Recording)) ExplainCurrentStock();
             string latest = day.Call == CallStatus.NotStarted ? "Начни разговор. Клиент ещё не знает, насколько мы солидны." : LatestClientReply();
             if (latest != shownReply) { shownReply = latest; replyScroll = Vector2.zero; }
@@ -106,7 +107,7 @@ namespace Broker.Runtime
             float height = theme.Text.CalcHeight(new GUIContent(latest), 920);
             replyScroll = GUI.BeginScrollView(new Rect(392, 476, 960, 120), replyScroll, new Rect(0, 0, 928, Mathf.Max(120, height)));
             GUI.Label(new Rect(0, 0, 920, height), latest, theme.Text); GUI.EndScrollView();
-            Label(376, 640, 820, 28, day.Call == CallStatus.Active ? "Твоя реплика" : day.DealClosed ? "+$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(day.Current.Commission) : day.Current.Commission) + (IsEmployeeMode ? " лично вам (20%)" : " в кассе") : "Одна линия. Один разговор.", theme.Small);
+            Label(376, 640, 820, 28, day.Call == CallStatus.Active ? "Твоя реплика" : day.DealClosed ? "+$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(day.CurrentCommission) : day.CurrentCommission) + (IsEmployeeMode ? " лично вам (20%)" : " в кассе") : "Одна линия. Один разговор.", theme.Small);
             bool canTalk = day.Call == CallStatus.Active && !busy && !voice.Recording && !voice.Working;
             bool before = GUI.enabled; GUI.enabled = before && canTalk;
             GUI.SetNextControlName("BrokerMessage"); message = GUI.TextField(new Rect(376, 684, 824, 56), message, 500, theme.Field); GUI.enabled = before;

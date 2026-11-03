@@ -128,7 +128,7 @@ export function createGateway({ mode = 'mock', apiKey = '', model = '',
           response_format: { type: 'json_object' },
           messages: [{ role: 'system', content: PERSONAS[data.clientId] + '\n' + SYSTEM }, { role: 'user', content: JSON.stringify({
             message: data.message, canonicalReply: data.canonicalReply, history: data.history,
-            product: 'Вымышленные акции: название и риск берутся только из canonicalReply и истории. Комиссия 2%. Не выдумывай котировку, дивиденды, гарантии или смену выбранной акции.'
+            product: 'Вымышленные акции: название и риск берутся только из canonicalReply и истории. Ставка комиссии и цена дня зависят от бумаги и режима — называй только числа из canonicalReply и истории. Не выдумывай котировку, дивиденды, гарантии или смену выбранной акции.'
           }) }] })
       });
       if (!response.ok) { await response.body?.cancel(); send(502, { error: 'upstream_failed' }); return; }

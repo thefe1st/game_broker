@@ -16,18 +16,23 @@ namespace Broker.FlowChecks
         [Test] public void WorkResultsAndNotebookShowChosenStockAfterReload()
         {
             StartWork(); Interact(OfficeStation.Desk); Click("Акции / RLOG");
-            Assert.That(NotebookText(), Does.Contain("Проданная бумага попадёт в историю после завершения дня")); Click("Вернуться к звонку / Esc");
+            Assert.That(NotebookText(), Does.Contain("Проданная бумага попадёт в историю после завершения дня вместе с ценой покупки.")); Click("Вернуться к звонку / Esc");
             SellChosen(Day, 0, "utility"); Click("База клиентов");
-            Assert.That(NotebookText(), Does.Contain("Сегодня в списке: сделка закрыта: SVET $7500 (в историю попадёт после завершения дня)"));
+            // SVET on day 4 is $17,83: Борис's $7500 buys 420 shares; the moderate rate stays 2%.
+            Assert.That(NotebookText(), Does.Contain("Сегодня в списке: сделка закрыта: SVET $7500 (420 акций по $17,83, комиссия 2%); в историю попадёт после завершения дня"));
             Assert.That(NotebookText(), Does.Contain("Покупок в рабочих днях ещё не было.")); Click("Вернуться к работе / Esc");
-            Day.EndDay(); Frame(); Assert.That(NotebookText(), Does.Contain("Продано сегодня: Борис — SVET $7500. За рабочие дни: 1 дней, 1 сделок."));
-            var saved = JsonUtility.FromJson<WorkCareerSave>(File.ReadAllText(Path.Combine(folder, "broker-employee-work-v3.json")));
-            Assert.That(saved.schemaVersion, Is.EqualTo(3)); Assert.That(saved.reports[0].soldStockIds, Is.EqualTo(new[] { "utility", "", "" }));
+            Day.EndDay(); Frame();
+            Assert.That(NotebookText(), Does.Contain("Продано сегодня: Борис — SVET $7500 (420 акций по $17,83, комиссия 2%). За рабочие дни: 1 дней, 1 сделок."));
+            var saved = JsonUtility.FromJson<WorkCareerSave>(File.ReadAllText(Path.Combine(folder, "broker-employee-work-v4.json")));
+            Assert.That(saved.schemaVersion, Is.EqualTo(4)); Assert.That(saved.marketFromDay, Is.EqualTo(4));
+            Assert.That(saved.reports[0].soldStockIds, Is.EqualTo(new[] { "utility", "", "" })); Assert.That(saved.reports[0].soldPrices, Is.EqualTo(new[] { 1783, 0, 0 }));
             FreshGame(); Click("Продолжить рабочие дни"); Click("Начать рабочий день"); Interact(OfficeStation.Desk); Click("База клиентов");
-            Assert.That(NotebookText(), Does.Contain("Последняя покупка, день 4: «Городской Свет» (SVET), вложение $7500, комиссия фирмы $150, лично вам $30."));
+            Assert.That(NotebookText(), Does.Contain("Последняя покупка, день 4: «Городской Свет» (SVET): 420 акций по $17,83, вложение $7500, комиссия 2% — фирме $150, лично вам $30."
+                + " Сегодня $17,87 (+0,2% к цене покупки). Цена не обещание."));
             Click("История рабочих дней"); string history = NotebookText();
-            Assert.That(history, Does.Contain("Борис: сделка · «Городской Свет» (SVET), вложение $7500, комиссия фирмы $150, лично вам $30"));
-            Assert.That(history, Does.Not.Contain("Бумаги записываются с дня")); Assert.That(history, Does.Contain("Вера: не звонили"));
+            Assert.That(history, Does.Contain("Борис: сделка · «Городской Свет» (SVET): 420 акций по $17,83, вложение $7500, комиссия 2% — фирме $150, лично вам $30"));
+            Assert.That(history, Does.Not.Contain("Бумаги записываются с дня")); Assert.That(history, Does.Not.Contain("Котировки и ставки по риску"));
+            Assert.That(history, Does.Contain("Вера: не звонили"));
         }
         [Test] public void WorkResultsWithoutSalesSayNoDeals()
         {
@@ -38,15 +43,23 @@ namespace Broker.FlowChecks
             OpenFirm(); var firm = Get<FirmCareerState>("firmCareer"); int opening = firm.OpeningDayNumber;
             string first = Day.Clients[0].Id, name = ClientCatalog.Create(first).Name; var employed = firm.Clients[ClientCatalog.Index(first)];
             Assert.That(employed.lastStockDay, Is.GreaterThan(0)); Interact(OfficeStation.Desk); Click("База клиентов"); string text = NotebookText();
-            Assert.That(text, Does.Contain("Последняя покупка ещё в найме, день " + employed.lastStockDay)); Assert.That(text, Does.Not.Contain("лично вам"));
+            // The carried purchase keeps its exact quote; today's price is shown for comparison only.
+            Assert.That(employed.lastStockPrice, Is.EqualTo(StockMarket.PriceCents(employed.lastStockId, employed.lastStockDay)));
+            Assert.That(text, Does.Contain("Последняя покупка ещё в найме, день " + employed.lastStockDay));
+            Assert.That(text, Does.Contain(StockMarket.SharesText(StockMarket.Shares(first, employed.lastStockPrice)) + " по " + StockMarket.Money(employed.lastStockPrice)
+                + ". Комиссия тогда ушла прежней фирме." + StockHistory.TodayQuote(employed.lastStockId, employed.lastStockPrice, opening)));
+            Assert.That(text, Does.Not.Contain("лично вам"));
             Click("Вернуться к работе / Esc"); SellAny(Day, 0); Day.EndDay(); Frame();
-            string stock = StockCatalog.Find(StockCatalog.DefaultFor(first)).Ticker;
-            Assert.That(NotebookText(), Does.Contain("Продано сегодня: " + name + " — " + stock + " $" + StockHistory.Investment(first) + "."));
+            string stockId = StockCatalog.DefaultFor(first); int price = StockMarket.PriceCents(stockId, opening);
+            Assert.That(NotebookText(), Does.Contain("Продано сегодня: " + name + " — " + StockHistory.Short(first, stockId, price) + "."));
+            Assert.That(Get<FirmCareerState>("firmCareer").LastReport.soldPrices[0], Is.EqualTo(price));
             Click("Следующий день конторы"); Click("Начать день своей конторы"); Interact(OfficeStation.Desk); Click("База клиентов");
-            Assert.That(NotebookText(), Does.Contain("Последняя покупка, день " + opening + ": «"));
+            Assert.That(NotebookText(), Does.Contain("Последняя покупка, день " + opening + ": " + StockHistory.Describe(first, stockId, false, price) + "."));
             Click("История своей конторы"); text = NotebookText();
-            Assert.That(text, Does.Contain(name + ": сделка · «")); Assert.That(text, Does.Contain("комиссия фирмы $" + ClientCatalog.Create(first).Commission));
+            Assert.That(text, Does.Contain(name + ": сделка · " + StockHistory.Describe(first, stockId, false, price)));
+            Assert.That(text, Does.Contain("комиссия " + StockMarket.FeePercent(stockId) + "% — фирме $" + StockMarket.Commission(first, stockId)));
             Assert.That(text, Does.Not.Contain("лично вам")); Assert.That(text, Does.Not.Contain("Бумаги записываются с дня"));
+            Assert.That(text, Does.Not.Contain("Котировки и ставки по риску"));
         }
         [Test] public void LegacyV2FounderImportShowsPreHistoryDealsAndRecordsNextDay()
         {

@@ -16,7 +16,9 @@ namespace Broker.Core
     // Clause boundaries prevent a negation in one statement from hiding a promise in another.
     public static class DialogueRules
     {
-        public static DialogueIntent Analyze(string message)
+        // feePercent: the rate the player must name. Intro/owner modes use 2%; v4 careers pass the selected stock's rate.
+        public static DialogueIntent Analyze(string message) => Analyze(message, StockCatalog.FeePercent);
+        public static DialogueIntent Analyze(string message, int feePercent)
         {
             if (string.IsNullOrWhiteSpace(message) || message.Trim().Length > 500) return DialogueIntent.None;
             string text = message.Trim().ToLowerInvariant().Replace('ё', 'е').Replace('\u00a0', ' ')
@@ -33,7 +35,7 @@ namespace Broker.Core
                     result |= DialogueIntent.Needs;
                 if (HasRisk(clause))
                     result |= DialogueIntent.Risk;
-                if (HasFee(clause)) result |= DialogueIntent.Fee;
+                if (HasFee(clause, feePercent)) result |= DialogueIntent.Fee;
                 if (HasYear(clause)) result |= DialogueIntent.Year;
                 if (!Denies(clause, @"персональн\w*|личн\w*|сопровожд\w*") && !Match(clause, @"\bне\s+(?:буду|остаюсь)\s+на\s+связи") && Match(clause, @"\b(?:персональн|личн)\w*\s+(?:отчет|сопровожд|менеджер|контакт)\w*|\bбуду\s+на\s+связи"))
                     result |= DialogueIntent.Personal;
@@ -75,7 +77,7 @@ namespace Broker.Core
                 && Match(disclosure, @"\bриск\w*|\bубыт\w*|\bпотер(?:я|и|ять|ей|ь)\w*");
         }
 
-        private static bool HasFee(string clause)
+        private static bool HasFee(string clause, int feePercent)
         {
             if (Denies(clause, @"комисси\w*|сбор\w*|вознаграждени\w*")
                 || Match(clause, @"\b(?:комисси|сбор|вознаграждени)\w*.{0,30}\bне\s+(?:взима|бер|плат)\w*")) return false;
@@ -87,11 +89,15 @@ namespace Broker.Core
             {
                 if (Match(after.Substring(0, number.Index), @"\bне\b")) return false;
                 return decimal.TryParse(number.Groups["amount"].Value.Replace(',', '.'), NumberStyles.AllowDecimalPoint,
-                    CultureInfo.InvariantCulture, out decimal amount) && amount == 2m;
+                    CultureInfo.InvariantCulture, out decimal amount) && amount == feePercent;
             }
-            if (Match(after, @"^\s*(?:[-:=]\s*)?(?:(?:составляет|равна|будет|всего|ровно)\s+)?два\s+процента\b")) return true;
-            return Match(clause, @"(?<![\d.,-])2\s*%\s*(?:[-:=]\s*)?(?:это\s+)?(?:наша\s+)?комисси\w*");
+            string word = FeeWords(feePercent);
+            if (word != null && Match(after, @"^\s*(?:[-:=]\s*)?(?:(?:составляет|равна|будет|всего|ровно)\s+)?" + word + @"\b")) return true;
+            return Match(clause, @"(?<![\d.,-])" + feePercent.ToString(CultureInfo.InvariantCulture) + @"\s*%\s*(?:[-:=]\s*)?(?:это\s+)?(?:наша\s+)?комисси\w*");
         }
+
+        private static string FeeWords(int percent) => percent == 1 ? @"(?:один|одн(?:а|у))\s+процент"
+            : percent == 2 ? @"два\s+процента" : percent == 3 ? @"три\s+процента" : percent == 5 ? @"пять\s+процентов" : null;
 
         private static bool HasYear(string clause)
         {

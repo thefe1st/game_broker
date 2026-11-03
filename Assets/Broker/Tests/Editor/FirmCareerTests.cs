@@ -17,9 +17,11 @@ namespace Broker.Tests
             return work;
         }
         public static FirmCareerState NewFirm() => FirmCareerState.FromWork(ReadyWork());
-        public static void Finish(FirmCareerState firm, bool sell = false)
+        // stockId: sell this stock to every client instead of the default offers.
+        public static void Finish(FirmCareerState firm, bool sell = false, string stockId = null)
         {
-            var day = firm.CreateDay(); if (sell) for (int i = 0; i < 3; i++) WorkCareerTests.Sell(day, i);
+            var day = firm.CreateDay();
+            if (sell) for (int i = 0; i < 3; i++) { if (stockId != null) { day.SelectClient(i); day.SelectStock(stockId); } WorkCareerTests.Sell(day, i); }
             day.EndDay(); Assert.That(firm.CompleteDay(day), Is.True);
         }
         [Test] public void OpeningRequiresSettledSavingsAndDoesNotTakeTodayPayout()
@@ -37,12 +39,13 @@ namespace Broker.Tests
             var work = WorkCareerState.FromIntro(WorkCareerTests.Intro()); var s = work.Capture();
             s.checkpoint.completedWorkDays = 10; s.checkpoint.clients[0].deals = 10;
             s.checkpoint.clients[0].lastSeenWorkDay = 10; s.checkpoint.clients[0].lastStockId = "logistics"; s.checkpoint.clients[0].lastStockDay = 7;
+            s.checkpoint.clients[0].lastStockPrice = StockMarket.PriceCents("logistics", 7);
             s.origin.startingSavings = s.origin.savings = savings - 300;
             s.checkpoint.startingSavings = savings - 300; s.checkpoint.savings = savings;
             s.reports = new WorkDayReport[7];
             for (int n = 0; n < 7; n++) s.reports[n] = new WorkDayReport { day = 14 + n, openingSavings = savings, savings = savings,
                 reputation = 50, clientIds = ClientCatalog.Appointments(14 + n), sold = new bool[3], closed = new bool[3],
-                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3], soldStockIds = new[] { "", "", "" } };
+                reportReviewed = new[] { true, true, true }, guaranteed = new bool[3], complaintResolved = new bool[3], soldStockIds = new[] { "", "", "" }, soldPrices = new int[3] };
             Assert.That(WorkCareerState.TryRestore(s, out work), Is.True);
             Assert.That(FirmCareerState.CanOpen(work), Is.EqualTo(allowed));
             if (allowed) Assert.That(FirmCareerState.FromWork(work).PersonalReserve, Is.EqualTo(savings - 500));
@@ -295,10 +298,10 @@ namespace Broker.Tests
         }
         [Test] public void ValidLegacyFounderMigratesWithoutChangingInputOrAddingPastSalary()
         {
-            var firm = NewFirm(); for (int n = 0; n < 12; n++) Finish(firm, true);
+            var firm = NewFirm(); for (int n = 0; n < 12; n++) Finish(firm, true, StockHistoryTests.Moderate);
             var s = StockHistoryTests.Legacy(firm.Capture(), 1);
             Assert.That(FirmCareerState.TryRestore(s, out var restored), Is.True); Assert.That(s.schemaVersion, Is.EqualTo(1));
-            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(3)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
+            Assert.That(restored.Capture().schemaVersion, Is.EqualTo(4)); Assert.That(restored.Balance, Is.EqualTo(firm.Balance));
             Assert.That(restored.StockHistoryFromDay, Is.EqualTo(firm.NextDayNumber));
             Assert.That(restored.HasAssistant, Is.False); Assert.That(restored.TryHireAssistant(out _), Is.True);
         }
@@ -338,7 +341,8 @@ namespace Broker.Tests
             for (int n = 0; n < 5; n++)
             {
                 var d = firm.CreateDay(); int i = Array.IndexOf(ClientCatalog.Appointments(d.DayNumber), id);
-                if (!sold && i >= 0) { WorkCareerTests.Sell(d, i); sold = true; }
+                // A moderate 2% stock keeps the threshold arithmetic: Вера $200, Оксана $190.
+                if (!sold && i >= 0) { d.SelectClient(i); d.SelectStock("utility"); WorkCareerTests.Sell(d, i); sold = true; }
                 d.EndDay(); Assert.That(firm.CompleteDay(d), Is.True);
             }
             Assert.That(sold, Is.True); Assert.That(firm.Balance, Is.EqualTo(cash)); Assert.That(firm.TryHireAssistant(out var hired), Is.EqualTo(allowed));
@@ -370,12 +374,14 @@ namespace Broker.Tests
         [TestCase("reportReputation")] [TestCase("ids")] [TestCase("sold")] [TestCase("closed")] [TestCase("reviewed")]
         [TestCase("guaranteed")] [TestCase("resolved")] [TestCase("fakeRepair")] [TestCase("fakeSale")] [TestCase("fakeGuarantee")]
         [TestCase("checkpointMismatch")] [TestCase("shortPruned")] [TestCase("originDays")]
+        [TestCase("pricesNull")] [TestCase("pricesShort")] [TestCase("priceWithoutSale")] [TestCase("marketBeforeHistory")] [TestCase("marketAfterNext")]
+        [TestCase("rateCount")] [TestCase("rateForbidden")] [TestCase("lastPriceWithoutStock")]
         public void MalformedSavesAreRejectedWithoutThrowing(string kind)
         {
             var firm = NewFirm(); Finish(firm); var s = firm.Capture(); var r = s.reports[0];
             switch (kind)
             {
-                case "null": s = null; break; case "version": s.schemaVersion = 4; break; case "mode": s.mode = "owner"; break;
+                case "null": s = null; break; case "version": s.schemaVersion = 5; break; case "mode": s.mode = "owner"; break;
                 case "sourceDay": s.sourceDay = 3; break; case "sourceOverflow": s.sourceDay = int.MaxValue; break;
                 case "savings": s.sourceSavings = 599; break; case "reserve": s.personalReserve++; break;
                 case "origin": s.origin = null; break; case "checkpoint": s.checkpoint = null; break;
@@ -392,6 +398,13 @@ namespace Broker.Tests
                 case "fakeSale": r.sold[0] = true; break; case "fakeGuarantee": r.guaranteed[0] = true; break;
                 case "checkpointMismatch": s.checkpoint.clients[0].complaintPending = !s.origin.clients[0].complaintPending; break;
                 case "shortPruned": s.checkpoint.completedDays = 1; s.checkpoint.balance = 240; break; case "originDays": s.origin.completedDays = 1; break;
+                case "pricesNull": r.soldPrices = null; break; case "pricesShort": r.soldPrices = new int[2]; break;
+                case "priceWithoutSale": r.soldPrices[0] = StockMarket.PriceCents("utility", r.day); break;
+                case "marketBeforeHistory": s.marketFromDay = s.stockHistoryFromDay - 1; break; case "marketAfterNext": s.marketFromDay = s.sourceDay + 2; break;
+                case "rateCount": s.checkpoint.clients[0].dealsAt3 = 1; break;
+                case "rateForbidden": s.origin.clients[ClientCatalog.Index("boris")].dealsAt3 = 1; s.origin.clients[ClientCatalog.Index("boris")].deals = 1; break;
+                case "lastPriceWithoutStock": s.origin.clients[ClientCatalog.Index("vera")].lastStockId = ""; s.origin.clients[ClientCatalog.Index("vera")].lastStockDay = 0;
+                    s.origin.clients[ClientCatalog.Index("vera")].lastStockPrice = 1; break;
             }
             Assert.That(FirmCareerState.TryRestore(s, out var restored), Is.False); Assert.That(restored, Is.Null);
         }

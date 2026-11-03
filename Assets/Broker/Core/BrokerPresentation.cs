@@ -4,7 +4,8 @@ namespace Broker.Core
 
     public static class BrokerPresentation
     {
-        public static string ShortHint(ConversationStage stage, string clientId)
+        public static string ShortHint(ConversationStage stage, string clientId) => ShortHint(stage, clientId, StockCatalog.FeePercent);
+        public static string ShortHint(ConversationStage stage, string clientId, int feePercent)
         {
             switch (stage)
             {
@@ -13,7 +14,7 @@ namespace Broker.Core
                 case ConversationStage.Report: return "Обсуди прошлый отчёт";
                 case ConversationStage.Goal: return "Узнай цель клиента";
                 case ConversationStage.Risk: return "Расскажи о риске";
-                case ConversationStage.Fee: return "Назови комиссию 2%";
+                case ConversationStage.Fee: return "Назови комиссию " + feePercent + "%";
                 case ConversationStage.Term: return "Срок — один год";
                 case ConversationStage.Service: return "Предложи личное сопровождение";
                 case ConversationStage.Proposal: return "Предложи сделку";
