@@ -1,0 +1,27 @@
+# One-off helper for the PR that removes unused legacy assets: deletes the paths below in this branch only.
+# The GitHub connector used for this change deletes one file per commit; this keeps ~190 deletions in one commit.
+# This file is deleted again before the PR is merged and never runs on main.
+name: Remove legacy assets (one-off)
+on:
+  push:
+    branches: [remove-legacy-assets]
+permissions:
+  contents: write
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete unused models, photo textures and their tools
+        run: |
+          set -euo pipefail
+          targets=""
+          for p in Assets/Broker/Resources Assets/Broker/Resources.meta ThirdParty Tools/Art; do
+            if [ -e "$p" ]; then targets="$targets $p"; fi
+          done
+          if [ -z "$targets" ]; then echo "Nothing left to remove."; exit 0; fi
+          git rm -r -q $targets
+          echo "Removing $(git diff --cached --name-only | wc -l) files"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Remove unused Kenney models, photo textures and their import tools"
+          git push origin HEAD:remove-legacy-assets
