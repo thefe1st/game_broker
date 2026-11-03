@@ -18,7 +18,7 @@ namespace Broker.Tests
         [SetUp] public void Setup() { folder = Path.Combine(Path.GetTempPath(), "work-career-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-employee-work-v2.json"); }
         [TearDown] public void Cleanup() { Directory.Delete(folder, true); }
         [Test] public void MissingFileDoesNotCreateOne()
-        { Assert.That(Store().TryLoad(out _, out var notice), Is.False); Assert.That(notice, Is.Empty); Assert.That(Directory.GetFiles(folder), Is.Empty); }
+        { Assert.That(Store().TryLoad(out _, out var notice, out var status), Is.False); Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Missing)); Assert.That(notice, Is.Empty); Assert.That(Directory.GetFiles(folder), Is.Empty); }
         [Test] public void RoundTripBeyondLedgerWindowKeepsMoneyRelationsAndReport()
         {
             var c = NewState(); for (int n = 0; n < 20; n++) Finish(c);
@@ -130,6 +130,59 @@ namespace Broker.Tests
             Directory.CreateDirectory(path); Assert.That(WithLegacy().TrySave(loaded, out _), Is.False);
             Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo(json)); Directory.Delete(path);
             Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
+        }
+        private string SourcePath(bool legacy, bool backup) => (legacy ? LegacyPath : path) + (backup ? ".bak" : "");
+        [TestCase(false, false, false)] [TestCase(false, false, true)]
+        [TestCase(false, true, false)] [TestCase(false, true, true)]
+        [TestCase(true, false, false)] [TestCase(true, false, true)]
+        [TestCase(true, true, false)] [TestCase(true, true, true)]
+        public void LoadStatusDistinguishesUnreadableFileOrDirectoryFromMissing(bool legacy, bool backup, bool directory)
+        {
+            string source = SourcePath(legacy, backup);
+            if (directory) Directory.CreateDirectory(source); else File.WriteAllText(source, "{\"schemaVersion\":99}");
+            Assert.That(WithLegacy().TryLoad(out var state, out var notice, out var status), Is.False);
+            Assert.That(state, Is.Null); Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Unreadable));
+            Assert.That(notice, Does.Contain("перенос заблокирован"));
+        }
+        [TestCase(false, false, "valid")] [TestCase(false, false, "invalid")] [TestCase(false, false, "directory")]
+        [TestCase(false, true, "valid")] [TestCase(false, true, "invalid")] [TestCase(false, true, "directory")]
+        [TestCase(true, false, "valid")] [TestCase(true, false, "invalid")] [TestCase(true, false, "directory")]
+        [TestCase(true, true, "valid")] [TestCase(true, true, "invalid")] [TestCase(true, true, "directory")]
+        public void FirstTransferCannotWriteOverExistingContinuationOrBackup(bool legacy, bool backup, string payload)
+        {
+            string source = SourcePath(legacy, backup);
+            string text = payload == "valid" ? (legacy ? LegacyJson(NewState()) : Encode(NewState().Capture())) : "future bytes";
+            if (payload == "directory") Directory.CreateDirectory(source); else File.WriteAllText(source, text);
+            var files = Directory.GetFiles(folder);
+            Assert.That(WithLegacy().TryCreate(NewState(), out var notice), Is.False); Assert.That(notice, Is.Not.Empty);
+            CollectionAssert.AreEquivalent(files, Directory.GetFiles(folder));
+            if (payload == "directory") Assert.That(Directory.Exists(source), Is.True);
+            else Assert.That(File.ReadAllText(source), Is.EqualTo(text));
+            Assert.That(File.Exists(path + ".tmp"), Is.False);
+        }
+        [Test] public void FirstTransferWritesOnlyV2AndReportsLoadedOnRead()
+        {
+            Assert.That(WithLegacy().TryCreate(NewState(), out _), Is.True);
+            CollectionAssert.AreEquivalent(new[] { path }, Directory.GetFiles(folder));
+            Assert.That(WithLegacy().TryLoad(out var read, out _, out var status), Is.True);
+            Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Loaded)); Assert.That(read.CompletedDays, Is.Zero);
+        }
+        [Test] public void FirstTransferDoesNotOverwriteOrDeleteAnExistingTemporaryFile()
+        {
+            File.WriteAllText(path + ".tmp", "previous interrupted write");
+            Assert.That(WithLegacy().TryCreate(NewState(), out _), Is.True);
+            Assert.That(File.ReadAllText(path + ".tmp"), Is.EqualTo("previous interrupted write"));
+            Assert.That(WithLegacy().TryCreate(NewState(), out _), Is.False);
+            Assert.That(File.ReadAllText(path + ".tmp"), Is.EqualTo("previous interrupted write"));
+            CollectionAssert.AreEquivalent(new[] { path, path + ".tmp" }, Directory.GetFiles(folder));
+        }
+        [Test] public void FirstTransferRechecksFilesAfterSerializationBeforeWriting()
+        {
+            const string bytes = "newly restored future save";
+            var store = new WorkCareerStorage(path, s => { File.WriteAllText(path, bytes); return Encode(s); }, Decode);
+            Assert.That(store.TryCreate(NewState(), out _), Is.False);
+            Assert.That(File.ReadAllText(path), Is.EqualTo(bytes));
+            CollectionAssert.AreEquivalent(new[] { path }, Directory.GetFiles(folder));
         }
     }
 }

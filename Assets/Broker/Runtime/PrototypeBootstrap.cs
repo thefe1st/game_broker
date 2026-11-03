@@ -58,6 +58,7 @@ namespace Broker.Runtime
             {
                 if (navigation.IsExploring) PauseGameplay();
                 else if (navigation.View == OfficeView.Pause) ResumeGameplay();
+                else if (navigation.View == OfficeView.CityMap || navigation.View == OfficeView.CityCompanies) CloseCityInformation();
                 else { CancelPending(); EnterWorld(); }
             }
             if (ApplicationActive && !selectingMode && !intro && !showNews && !UtilityOverlayOpen && navigation.RunsClock && (OfficeInput.Available || navigation.View == OfficeView.Desk) && !busy && !voice.Working) day.AdvanceTime(Time.unscaledDeltaTime, office.IsInCity);
@@ -105,7 +106,7 @@ namespace Broker.Runtime
         }
         private void Restart()
         {
-            CancelPending(); showVoiceSetup = false; showCallLog = false; showWorkNotebook = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
+            CancelPending(); showVoiceSetup = false; showCallLog = false; showWorkNotebook = false; showCareerPath = false; showStocks = false; confirmation = ConfirmationKind.None; deskPage = DeskPage.Calls;
             if (CurrentCareerFinished)
             {
                 // Presentation-only day: the actual final ledger is stored in CareerState.
@@ -113,13 +114,14 @@ namespace Broker.Runtime
                     : new BrokerDay(3, Math.Max(0, career.Balance), career.Reputation, career.GoldenPhone);
                 day.EndDay(); lastDayEnded = true; intro = false;
             }
-            else { day = IsWorkMode ? workCareer.CreateDay() : IsEmployeeMode ? employment.CreateDay() : career.CreateDay(); lastDayEnded = false; intro = true; }
+            else { day = IsFounderMode ? firmCareer.CreateDay() : IsWorkMode ? workCareer.CreateDay() : IsEmployeeMode ? employment.CreateDay() : career.CreateDay(); lastDayEnded = false; intro = true; }
             showNews = false; newsScroll = Vector2.zero;
             foreach (var history in histories) history.Clear();
             foreach (var conversation in conversations) conversation.Clear();
             officeNews.Clear(); message = ""; scroll = Vector2.zero; DrainNews();
-            office.ConfigureCareerMode(mode);
+            office.ConfigureCareerMode(mode, day.HasFounderAssistant);
             navigation.Reset(); pauseReturnView = OfficeView.Explore; staffTargetIndex = 0; office.Player.SetControl(false); office.ResetPlayer();
+            cityDestinationId = "office"; cityMapFromPause = false;
         }
         private void DrainNews()
         {
@@ -144,7 +146,7 @@ namespace Broker.Runtime
             Add(reply.StartsWith(prefix, StringComparison.Ordinal) ? reply : prefix + reply);
             History.Add(new DialogueTurn("client", reply));
             while (History.Count > 12) History.RemoveAt(0);
-            if (voiceEnabled && ApplicationActive && navigation.View != OfficeView.Pause && !day.DayEnded && day.PendingEvent == null) voice.PlayReply(reply);
+            if (voiceEnabled && ApplicationActive && navigation.RunsClock && !UtilityOverlayOpen && !showNews && !selectingMode && !intro && !day.DayEnded && day.PendingEvent == null) voice.PlayReply(reply);
         }
         private async void SendMessageToClient()
         {
@@ -197,7 +199,7 @@ namespace Broker.Runtime
             {
                 GUI.matrix = Matrix4x4.TRS(new Vector3(canvasOffset.x, canvasOffset.y, 0), Quaternion.identity, Vector3.one * canvasScale);
                 GUI.enabled = true;
-                if (showVoiceSetup) DrawVoiceSetup(); else if (showCallLog) DrawCallLog(); else if (showWorkNotebook) DrawWorkNotebook(); else DrawConfirmation();
+                if (showVoiceSetup) DrawVoiceSetup(); else if (showCallLog) DrawCallLog(); else if (showWorkNotebook) DrawWorkNotebook(); else if (showCareerPath) DrawCareerPath(); else if (showStocks) DrawStocks(); else DrawConfirmation();
                 GUI.matrix = previous;
                 return;
             }
@@ -222,6 +224,7 @@ namespace Broker.Runtime
         private void Scrim() { Paint(new Rect(0, 0, 1440, 960), new Color(0.035f, 0.055f, 0.09f, 0.86f)); }
         private void DrawIntro()
         {
+            if (IsFounderMode) { DrawFirmIntro(); return; }
             if (IsEmployeeMode) { DrawEmploymentIntro(); return; }
             Scrim(); Panel(280, 112, 880, 736, "");
             Label(320, 152, 800, 32, "ДЕНЬ " + day.DayNumber + " / 3", theme.Tag);
@@ -262,6 +265,7 @@ namespace Broker.Runtime
         }
         private void DrawResults()
         {
+            if (IsFounderMode) { DrawFirmResults(); return; }
             if (IsEmployeeMode) { DrawEmploymentResults(); return; }
             if (career.IsFinished) { DrawCareerFinal(); return; }
             Scrim(); Panel(280, 112, 880, 736, "");

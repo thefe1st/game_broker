@@ -1,0 +1,169 @@
+{
+    "author":  "Kenney",
+    "pack":  "City Kit Commercial",
+    "license":  "CC0-1.0",
+    "checkedOn":  "2026-10-21",
+    "assetPage":  "https://kenney.nl/assets/city-kit-commercial",
+    "termsPage":  "https://kenney.nl/support",
+    "licenseUrl":  "https://creativecommons.org/publicdomain/zero/1.0/",
+    "archiveUrl":  "https://kenney.nl/media/pages/assets/city-kit-commercial/a742d900eb-1753115042/kenney_city-kit-commercial_2.1.zip",
+    "archiveSha256":  "f8b09b081c2bb88bcc126e2dec1cb40fd0dad7e7e591b6c26aaefe96fb35276b",
+    "files":  [
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-a.obj",
+                      "archiveEntry":  "Models/OBJ format/building-a.obj",
+                      "bytes":  101104,
+                      "sha256":  "ec5b3bbf725be6ea792b0cc7b543d11ac8659811264500037d2cdc398632f2ce"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-a.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-a.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-b.obj",
+                      "archiveEntry":  "Models/OBJ format/building-b.obj",
+                      "bytes":  104189,
+                      "sha256":  "d5f4344d5be797a6ed93641d4159a630de093e0517b4b8435d9789cea141bd62"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-b.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-b.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-c.obj",
+                      "archiveEntry":  "Models/OBJ format/building-c.obj",
+                      "bytes":  101022,
+                      "sha256":  "e7bc3677c9f7ee66a0459bc99fa6c69f60b7f9338165d91ccfd1f2ca1fcac9bd"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-c.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-c.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-d.obj",
+                      "archiveEntry":  "Models/OBJ format/building-d.obj",
+                      "bytes":  91677,
+                      "sha256":  "9d0e71d3a3703a171961443ea1b6ec34f67a93d90731e261eb3394fe19a78147"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-d.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-d.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-a.obj",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-a.obj",
+                      "bytes":  118235,
+                      "sha256":  "0a3704d13705c2f692166d2edb3a31105a7b42f9b4c90996ce19440e276e6c9f"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-a.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-a.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-b.obj",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-b.obj",
+                      "bytes":  144571,
+                      "sha256":  "c66e25a4501564736579cd658113d62dfc54f0c1e3cc1d118ce4fb72e367e095"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-b.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-b.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-c.obj",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-c.obj",
+                      "bytes":  158350,
+                      "sha256":  "c586b8beda8cdcc28f34e8c8d25af0fbfa49a5712c83da1228c1739ffd9ef8c1"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/building-skyscraper-c.mtl",
+                      "archiveEntry":  "Models/OBJ format/building-skyscraper-c.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-a.obj",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-a.obj",
+                      "bytes":  12263,
+                      "sha256":  "d0532d815170c5ad4ce8b751e863e36fdd111d01d2727afe5d4e76cf18c57953"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-a.mtl",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-a.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-b.obj",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-b.obj",
+                      "bytes":  13493,
+                      "sha256":  "e8598044afcd89e037f89836d8830192a88ff3016ae98cebd11944f1f87b8fe4"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-b.mtl",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-b.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-c.obj",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-c.obj",
+                      "bytes":  10959,
+                      "sha256":  "c4b8c1493d12a4003d38b9dca641e3075f6394313bf33c720e765671d74e30c4"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/low-detail-building-c.mtl",
+                      "archiveEntry":  "Models/OBJ format/low-detail-building-c.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/detail-awning.obj",
+                      "archiveEntry":  "Models/OBJ format/detail-awning.obj",
+                      "bytes":  3555,
+                      "sha256":  "0e8757195fbbff2a0e6fb35ff97083e0e2e5a8ce9c4c54a955e226a7573746e8"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/detail-awning.mtl",
+                      "archiveEntry":  "Models/OBJ format/detail-awning.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/detail-parasol-a.obj",
+                      "archiveEntry":  "Models/OBJ format/detail-parasol-a.obj",
+                      "bytes":  7340,
+                      "sha256":  "e31474f76f0898efe50733b783ec599ea11fc55ae93b2e45dc38650a0f75b375"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/detail-parasol-a.mtl",
+                      "archiveEntry":  "Models/OBJ format/detail-parasol-a.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCommercial/Textures/colormap.png",
+                      "archiveEntry":  "Models/OBJ format/Textures/colormap.png",
+                      "bytes":  11002,
+                      "sha256":  "191bec3889aaaca5018380038fecc129ebb5c2182879a099b7b538b3fa050b5d"
+                  },
+                  {
+                      "path":  "ThirdParty/KenneyCityCommercial/License.txt",
+                      "archiveEntry":  "License.txt",
+                      "bytes":  708,
+                      "sha256":  "c38cee408d022e57e44e49f1cd655c2fe0dc881a07b881276b795215cdc0de69"
+                  }
+              ]
+}

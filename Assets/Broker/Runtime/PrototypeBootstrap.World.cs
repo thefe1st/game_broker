@@ -1,3 +1,4 @@
+using System;
 using Broker.Core;
 using Broker.Runtime.Office;
 using UnityEngine;
@@ -10,7 +11,10 @@ namespace Broker.Runtime
         private int staffTargetIndex;
         private void OnWorldInteraction(OfficeInteractable target)
         {
-            if (selectingMode || intro || busy || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
+            if (!ApplicationActive || selectingMode || intro || busy || voice.Working || voice.Recording || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
+            if ((target.Station == OfficeStation.CityMap || target.Station == OfficeStation.CityCompanies) && !office.IsInCity) return;
+            if (IsFounderMode && ((target.Station == OfficeStation.Employee && (!day.HasFounderAssistant || target.EmployeeIndex != 0))
+                || target.Station == OfficeStation.Supervisor || target.Station == OfficeStation.Upgrade || target.Station == OfficeStation.Coffee)) return;
             if (target.Station == OfficeStation.Street || target.Station == OfficeStation.ReturnOffice)
             {
                 CancelPending(); office.VisitCity(target.Station == OfficeStation.Street); EnterWorld(); return;
@@ -18,6 +22,7 @@ namespace Broker.Runtime
             if (target.Station == OfficeStation.CityContact || target.Station == OfficeStation.CityPickup) return; // Temporarily hidden, not deleted.
             if (navigation.Open(target.Station, target.EmployeeIndex))
             {
+                cityMapFromPause = false;
                 staffTargetIndex = day.SelectedClientIndex;
                 office.Player.SetControl(false);
             }
@@ -50,7 +55,7 @@ namespace Broker.Runtime
         private void DrawWorldHUD()
         {
             Panel(32, 32, 320, 80, ""); Label(56, 44, 272, 32, "МОЙКА КАПИТАЛ", theme.Heading);
-            Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : (IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.Small);
+            Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : (IsFounderMode ? "Своя контора · день " : IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.Small);
             Panel(616, 32, 208, 80, ""); Label(648, 48, 160, 44, ClockText(), theme.Title);
             Panel(1104, 32, 304, 80, ""); Label(1128, 44, 256, 36, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
             Meter(1128, 96, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Accent);
@@ -65,12 +70,12 @@ namespace Broker.Runtime
             Panel(420, 784, 600, 88, "");
             if (player.Target != null) { Paint(new Rect(444, 804, 48, 48), theme.Border); Label(459, 811, 32, 36, "E", theme.Heading); }
             Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
-            if (IsEmployeeMode)
+            if (IsEmployeeMode || IsFounderMode)
             {
                 string guidance = office.IsInCity ? "Вернитесь в офис через лифт. " + day.EmploymentNextAction : day.EmploymentNextAction;
                 float guidanceHeight = Mathf.Max(56, theme.Small.CalcHeight(new GUIContent(guidance), 624));
                 Panel(384, 136, 672, guidanceHeight + 68, "");
-                Label(408, 152, 624, 24, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.Tag);
+                Label(408, 152, 624, 24, IsFounderMode ? "ДАЛЬШЕ / СВОЯ КОНТОРА" : "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.Tag);
                 Label(408, 192, 624, guidanceHeight, guidance, theme.Small);
             }
             if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
@@ -79,6 +84,14 @@ namespace Broker.Runtime
             {
                 string news = officeNews[officeNews.Count - 1]; if (news.Length > 105) news = news.Substring(0, 102) + "…";
                 Label(240, 896, 960, 44, news, theme.Small);
+            }
+            if (office.IsInCity && navigation.IsExploring)
+            {
+                var destination = CityDistrictPlan.Find(cityDestinationId);
+                Panel(32, 288, 320, 144, "");
+                Label(56, 308, 272, 28, destination.Name, theme.Heading);
+                Label(56, 348, 272, 64, Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, destination)) + " м · "
+                    + CityDistrictPlan.Direction(office.MapX, office.MapZ, destination) + "\nКарта — у стенда / в паузе", theme.Small);
             }
         }
         private void DrawStationPanel()
@@ -92,12 +105,15 @@ namespace Broker.Runtime
                 case OfficeView.Upgrade: if (IsEmployeeMode) DrawEmployerPropertyPanel(); else DrawShopPanel(true); break;
                 case OfficeView.Exit: DrawExitPanel(); break;
                 case OfficeView.Pause: DrawPausePanel(); break;
+                case OfficeView.CityMap: DrawCityMap(); break;
+                case OfficeView.CityCompanies: DrawCityCompanies(); break;
 
 
             }
         }
         private void DrawEmployeePanel()
         {
+            if (IsFounderMode) { DrawAssistantPanel(); return; }
             int index = navigation.EmployeeIndex; var worker = day.Employees[index];
             Panel(280, 188, 880, 584, ""); Label(320, 224, 800, 48, worker.Name, theme.Title);
             Label(320, 288, 800, 28, BrokerPresentation.TaskLabel(worker.Work) + " · Настроение " + worker.Morale + "%", theme.Small);
@@ -112,6 +128,16 @@ namespace Broker.Runtime
             if (Button(864, 488, 256, 80, "Перерыв", idle))
             { News(day.AssignTask(index, WorkKind.Break, staffTargetIndex)); EnterWorld(); }
             if (!idle) Label(320, 600, 800, 32, "Осталось " + Mathf.CeilToInt(worker.Remaining) + " с игрового времени", theme.Small);
+            if (Button(320, 680, 800, 56, "Назад · Esc")) EnterWorld();
+        }
+        private void DrawAssistantPanel()
+        {
+            Panel(280, 188, 880, 584, ""); Label(320, 224, 800, 48, "Лена / помощник по досье", theme.Title);
+            Label(320, 296, 800, 72, "Зарплата $40 за день, даже без поручений. Досье 25 игровых секунд: +1 доверия один раз. В этом окне время на паузе; вернитесь к работе, чтобы поручение выполнялось.", theme.Small);
+            for (int i = 0; i < 3; i++) if (Button(320 + i * 272, 392, 256, 56, day.Clients[i].Name, true, i == staffTargetIndex)) staffTargetIndex = i;
+            if (Button(320, 488, 800, 64, "Подготовить досье / 25 с", CanAssignDossier(staffTargetIndex), true))
+            { News(day.AssignTask(0, WorkKind.Research, staffTargetIndex)); EnterWorld(); }
+            Label(320, 584, 800, 80, DossierStatus(staffTargetIndex), theme.Small);
             if (Button(320, 680, 800, 56, "Назад · Esc")) EnterWorld();
         }
         private void DrawShopPanel(bool upgrade)
@@ -132,20 +158,23 @@ namespace Broker.Runtime
             MetricCard(320, 344, 248, "Касса", "$" + day.Cash);
             MetricCard(592, 344, 248, "Счета", "$" + day.TotalExpenses);
             MetricCard(864, 344, 256, "Остаток / долг", "$" + day.FinalBalance);
-            Label(320, 488, 800, 32, "Звонки и поручения остановятся. Итоги сохранятся.", theme.Small);
-            if (Button(320, 552, 800, 56, "Закрыть контору", true, true)) { CancelPending(); day.EndDay(); }
+            Label(320, 488, 800, 48, IsFounderMode ? "Звонки и досье остановятся. Аренда $60 и зарплата $" + day.DailyPayroll + " начислятся один раз; резерв не расходуется." : "Звонки и поручения остановятся. Итоги сохранятся.", theme.Small);
+            if (Button(320, 552, 800, 56, IsFounderMode ? "Закончить день конторы" : "Закрыть контору", true, true)) { CancelPending(); day.EndDay(); }
             if (Button(320, 640, 800, 56, "Ещё поработать · Esc")) EnterWorld();
         }
         private void DrawPausePanel()
         {
             Panel(360, 156, 720, 648, ""); Label(400, 196, 640, 56, "Рынок подождёт.", theme.Title);
             if (Button(400, 296, 640, 64, "Продолжить · Esc", ApplicationActive, true)) ResumeGameplay();
-            if (Button(400, 384, IsWorkMode ? 312 : 640, 56, "Журнал")) showNews = true;
-            if (IsWorkMode && Button(728, 384, 312, 56, "База клиентов", !busy && !voice.Working && !voice.Recording)) OpenWorkNotebook();
-            if (Button(400, 464, 640, 56, "Микрофон и связь")) OpenVoiceSetup();
-            if (Button(400, 544, 640, 56, "Начать день заново")) RequestConfirmation(ConfirmationKind.RestartDay);
+            if (Button(400, 384, IsWorkMode || IsFounderMode ? 312 : 640, 56, "Журнал")) showNews = true;
+            if ((IsWorkMode || IsFounderMode) && Button(728, 384, 312, 56, "База клиентов", !busy && !voice.Working && !voice.Recording)) OpenWorkNotebook();
+            if (Button(400, 464, IsWorkMode ? 312 : 640, 56, "Микрофон и связь")) OpenVoiceSetup();
+            if (IsWorkMode && Button(728, 464, 312, 56, "Карьера", !busy && !voice.Working && !voice.Recording)) OpenCareerPath();
+            if (Button(400, 544, 312, 56, "Начать день заново")) RequestConfirmation(ConfirmationKind.RestartDay);
+            if (Button(728, 544, 312, 56, "Карта района", !busy && !voice.Working && !voice.Recording)) OpenCityMapFromPause();
             if (Button(400, 624, 640, 48, "Выбрать режим")) RequestConfirmation(ConfirmationKind.SelectMode);
-            Label(400, 700, 640, 64, "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
+            if (!saveSucceeded) { if (Button(400, 724, 640, 48, "Повторить сохранение")) SaveCareer(); }
+            else Label(400, 700, 640, 64, "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
         }
     }
 }

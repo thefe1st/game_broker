@@ -26,25 +26,25 @@ namespace Broker.Runtime
             Paint(new Rect(0, 0, 1440, 960), new Color(0.035f, 0.055f, 0.09f, 0.74f));
             Panel(40, 32, 56, 56, ""); Label(48, 42, 48, 36, "МК", theme.Heading);
             Label(112, 34, 264, 32, "МОЙКА КАПИТАЛ", theme.Heading);
-            Label(112, 68, 264, 24, IsEmployeeMode ? "Наёмный брокер · личные продажи" : "Операционная система конторы", theme.Small);
-            Label(580, 32, 180, 44, ClockText(), theme.Title); Label(580, 74, 180, 24, "День " + day.DayNumber + (IsWorkMode ? " · работа" : " / 3"), theme.Small);
+            Label(112, 68, 264, 24, IsFounderMode ? "Своя контора · личные продажи" : IsEmployeeMode ? "Наёмный брокер · личные продажи" : "Операционная система конторы", theme.Small);
+            Label(580, 32, 180, 44, ClockText(), theme.Title); Label(580, 74, 180, 24, "День " + day.DayNumber + (IsFounderMode ? " · контора" : IsWorkMode ? " · работа" : " / 3"), theme.Small);
             Label(816, 32, 250, 44, "$" + day.Cash, theme.Title); Label(816, 74, 250, 24, IsEmployeeMode ? "Ваши накопления · ставка 20%" : "из $" + day.TotalExpenses + " к закрытию", theme.Small);
             Label(1104, 32, 120, 40, day.Reputation + "/100", theme.Heading); Label(1104, 72, 120, 24, "Репутация", theme.Small);
             if (Button(1240, 40, 160, 48, "Встать · Esc")) { CancelPending(); EnterWorld(); }
             bool blocked = intro || showNews || day.DayEnded || day.PendingEvent != null;
             GUI.enabled = !blocked;
-            string[] tabs = IsEmployeeMode ? new[] { "Звонки", "Начальник", "Связь" } : new[] { "Звонки", "Команда", "Офис" };
+            string[] tabs = IsFounderMode ? new[] { "Звонки", "Контора", "Связь" } : IsEmployeeMode ? new[] { "Звонки", "Начальник", "Связь" } : new[] { "Звонки", "Команда", "Офис" };
             for (int i = 0; i < tabs.Length; i++)
                 if (Button(344 + i * 176, 120, 160, 48, tabs[i], !busy && !voice.Working && !voice.Recording, (int)deskPage == i))
                 { voice.Cancel(); deskPage = (DeskPage)i; GUI.FocusControl(null); }
-            if (IsWorkMode)
+            if (IsWorkMode || IsFounderMode)
             {
                 bool notebookReady = !busy && !voice.Working && !voice.Recording;
                 if (Button(888, 120, 240, 48, "База клиентов", notebookReady)) OpenWorkNotebook();
                 if (Button(1144, 120, 256, 48, "История дней", notebookReady)) OpenWorkNotebook(true);
             }
             if (deskPage == DeskPage.Calls) { DrawClientRail(); DrawCallWorkspace(); }
-            else { DrawDayRail(); if (deskPage == DeskPage.Team) { if (IsEmployeeMode) DrawSupervisorWorkspace(); else DrawTeamWorkspace(); } else DrawOfficeWorkspace(); }
+            else { DrawDayRail(); if (IsFounderMode) { if (deskPage == DeskPage.Team) DrawFirmOffice(); else DrawFirmConnection(); } else if (deskPage == DeskPage.Team) { if (IsEmployeeMode) DrawSupervisorWorkspace(); else DrawTeamWorkspace(); } else DrawOfficeWorkspace(); }
             if (Button(40, 840, 264, 48, "Журнал офиса")) showNews = true;
             Label(344, 880, 1056, 56, busy ? "Клиент отвечает…" : voiceEnabled ? (voice.Status.Length > 110 ? voice.Status.Substring(0, 107) + "…" : voice.Status) : "Локальный режим  /  без сервера", theme.Small);
             GUI.enabled = true;
@@ -52,7 +52,7 @@ namespace Broker.Runtime
         private void DrawClientRail()
         {
             Label(40, 128, 264, 32, "Клиенты", theme.Heading);
-            var relationships = IsWorkMode ? workCareer.Clients : null;
+            var relationships = IsFounderMode ? firmCareer.Clients : IsWorkMode ? workCareer.Clients : null;
             for (int i = 0; i < day.Clients.Count; i++)
             {
                 var c = day.Clients[i]; float y = 184 + i * 140;
@@ -62,13 +62,13 @@ namespace Broker.Runtime
                 if (selected) Paint(new Rect(48, y + 16, 3, 88), theme.Accent);
                 Label(60, y + 16, 160, 32, c.Name, theme.Heading);
                 Label(224, y + 20, 68, 24, "$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(c.Commission) : c.Commission), theme.Small);
-                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.ComplaintPending && !c.ComplaintResolved ? "Есть претензия" : c.Returning ? "Вернулся за отчётом" : IsWorkMode ? "Готов к звонку" : "Первый контакт", theme.Small);
+                Label(60, y + 66, 220, 32, c.DealClosed ? "Сделка закрыта" : c.Call == CallStatus.Closed ? "Звонок завершён" : c.Call == CallStatus.Active ? "На линии" : c.ComplaintPending && !c.ComplaintResolved ? "Есть претензия" : c.Returning ? "Вернулся за отчётом" : IsWorkMode || IsFounderMode ? "Готов к звонку" : "Первый контакт", theme.Small);
                 if (relationships != null) Label(60, y + 96, 220, 22, "Отношения " + Signed(relationships[ClientCatalog.Index(c.Id)].relationship), theme.Small);
             }
             Panel(40, 632, 264, 168, ""); Label(64, 656, 216, 28, IsEmployeeMode ? "Ориентир · без штрафа" : "План дня", theme.Small);
             Label(64, 696, 216, 44, day.DealsCount + " / " + (IsEmployeeMode ? day.SalesTarget : 3) + " сделки", theme.Title);
-            Meter(64, IsEmployeeMode ? 744 : 768, 216, day.DealsCount / (float)(IsEmployeeMode ? day.SalesTarget : 3), theme.Accent);
-            if (IsEmployeeMode && Button(64, 756, 216, 36, "Следующий клиент", day.RecommendedClientIndex >= 0
+            Meter(64, IsEmployeeMode || IsFounderMode ? 744 : 768, 216, day.DealsCount / (float)(IsEmployeeMode ? day.SalesTarget : 3), theme.Accent);
+            if ((IsEmployeeMode || IsFounderMode) && Button(64, 756, 216, 36, "Следующий клиент", day.RecommendedClientIndex >= 0
                 && day.Call != CallStatus.Active && !busy && !voice.Recording && !voice.Working))
             { CancelPending(); day.SelectClient(day.RecommendedClientIndex); message = ""; replyScroll = Vector2.zero; }
         }
@@ -76,10 +76,10 @@ namespace Broker.Runtime
         {
             Label(40, 128, 264, 32, "Сегодня", theme.Heading);
             MetricCard(40, 184, 264, "Сделки", day.DealsCount + " / 3");
-            MetricCard(40, 320, 264, IsEmployeeMode ? "Ваша выплата за день" : "Команда", IsEmployeeMode ? "$" + day.Earned : day.TeamMorale + "%");
+            MetricCard(40, 320, 264, IsFounderMode ? "Комиссия в кассу" : IsEmployeeMode ? "Ваша выплата за день" : "Команда", IsEmployeeMode || IsFounderMode ? "$" + day.Earned : day.TeamMorale + "%");
             MetricCard(40, 456, 264, IsEmployeeMode ? "Комиссия фирмы" : "Обязательства", "$" + (IsEmployeeMode ? day.FirmRevenue : day.TotalExpenses));
             Label(48, 616, 248, 54, day.DayTitle, theme.Heading);
-            Label(48, 692, 248, 116, IsEmployeeMode ? "Лена и Макс — коллеги. Аренда и зарплаты — за счёт работодателя." : "Квартал открыт для прогулки. Поручения временно скрыты.", theme.Small);
+            Label(48, 692, 248, 116, IsFounderMode ? (day.HasFounderAssistant ? "Помощник: только досье. Аренда $60 + зарплата $40. Вся комиссия — фирме, резерв отдельно." : "Пока работаете один. Вся комиссия — фирме; аренда $60 в день. Найм доступен между днями.") : IsEmployeeMode ? "Лена и Макс — коллеги. Аренда и зарплаты — за счёт работодателя." : "Квартал открыт для прогулки. Поручения временно скрыты.", theme.Small);
         }
         private void DrawCallWorkspace()
         {
@@ -98,11 +98,13 @@ namespace Broker.Runtime
             Label(376, 360, 760, 40, BrokerPresentation.ShortHint(day.ConversationStep, day.Current.Id), theme.Heading);
             if (Button(1144, 352, 104, 44, "История", !busy && !voice.Working && !voice.Recording)) OpenCallLog(false);
             if (Button(1264, 352, 104, 44, "Досье", !busy && !voice.Working && !voice.Recording)) OpenCallLog(true);
+            if (Button(376, 404, 616, 44, "Акции / " + day.CurrentStock.Ticker, !busy && !voice.Working && !voice.Recording)) OpenStocks();
+            if (Button(1008, 404, 360, 44, "Раскрыть свойства акции", day.Call == CallStatus.Active && !day.Current.ObjectionRaised && !busy && !voice.Working && !voice.Recording)) ExplainCurrentStock();
             string latest = day.Call == CallStatus.NotStarted ? "Начни разговор. Клиент ещё не знает, насколько мы солидны." : LatestClientReply();
             if (latest != shownReply) { shownReply = latest; replyScroll = Vector2.zero; }
-            Paint(new Rect(376, 428, 992, 184), BrokerTheme.Hex("#0F1B2D"));
+            Paint(new Rect(376, 460, 992, 152), BrokerTheme.Hex("#0F1B2D"));
             float height = theme.Text.CalcHeight(new GUIContent(latest), 920);
-            replyScroll = GUI.BeginScrollView(new Rect(392, 444, 960, 152), replyScroll, new Rect(0, 0, 928, Mathf.Max(152, height)));
+            replyScroll = GUI.BeginScrollView(new Rect(392, 476, 960, 120), replyScroll, new Rect(0, 0, 928, Mathf.Max(120, height)));
             GUI.Label(new Rect(0, 0, 920, height), latest, theme.Text); GUI.EndScrollView();
             Label(376, 640, 820, 28, day.Call == CallStatus.Active ? "Твоя реплика" : day.DealClosed ? "+$" + (IsEmployeeMode ? BrokerDay.PersonalPayout(day.Current.Commission) : day.Current.Commission) + (IsEmployeeMode ? " лично вам (20%)" : " в кассе") : "Одна линия. Один разговор.", theme.Small);
             bool canTalk = day.Call == CallStatus.Active && !busy && !voice.Recording && !voice.Working;
@@ -192,6 +194,7 @@ namespace Broker.Runtime
                 Label(252, 360, 936, 100, day.Current.Brief, theme.Text);
                 Label(252, 496, 936, 88, day.NextConversationStep, theme.Text);
                 Label(252, 620, 936, 88, "Личный вопрос: " + ClientConversation.Hint(day.Current.Id), theme.Small);
+                if (IsFounderMode) Label(252, 716, 936, 48, DossierStatus(day.SelectedClientIndex), theme.Small);
             }
             else
             {

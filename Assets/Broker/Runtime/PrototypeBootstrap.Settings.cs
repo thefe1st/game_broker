@@ -4,10 +4,10 @@ namespace Broker.Runtime
 {
     public sealed partial class PrototypeBootstrap
     {
-        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode, EndCall, StartWork }
+        private enum ConfirmationKind { None, RestartDay, NewCareer, SelectMode, EndCall, StartWork, StartFirm, HireAssistant }
         private ConfirmationKind confirmation;
         private bool showVoiceSetup;
-        private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || showWorkNotebook || confirmation != ConfirmationKind.None;
+        private bool UtilityOverlayOpen => showVoiceSetup || showCallLog || showWorkNotebook || showCareerPath || showStocks || confirmation != ConfirmationKind.None;
 
         private void OpenVoiceSetup()
         {
@@ -17,7 +17,7 @@ namespace Broker.Runtime
 
         private void CloseUtilityOverlay()
         {
-            voice.Cancel(); showVoiceSetup = false; showCallLog = false; showWorkNotebook = false; confirmation = ConfirmationKind.None;
+            voice.Cancel(); showVoiceSetup = false; showCallLog = false; showWorkNotebook = false; showCareerPath = false; showStocks = false; confirmation = ConfirmationKind.None;
             // Also called from Update on Escape: do not call IMGUI APIs here.
             // Return to the original intro/pause/desk, not directly to exploration.
         }
@@ -29,6 +29,8 @@ namespace Broker.Runtime
 
         private void DrawConfirmation()
         {
+            if (confirmation == ConfirmationKind.StartFirm) { DrawFirmConfirmation(); return; }
+            if (confirmation == ConfirmationKind.HireAssistant) { DrawAssistantConfirmation(); return; }
             Scrim(); Panel(340, 220, 760, 510, "ПОДТВЕРЖДЕНИЕ / ВРЕМЯ НА ПАУЗЕ");
             if (confirmation == ConfirmationKind.StartWork)
             {
@@ -49,7 +51,7 @@ namespace Broker.Runtime
             if (confirmation == ConfirmationKind.EndCall)
             {
                 Label(372, 290, 696, 64, "Завершить звонок: " + day.Current.Name + "?", theme.Title);
-                Label(372, 386, 696, 112, "Сегодня этому клиенту больше не позвонить. Сделка не заключена, комиссия не начислится. Можно вернуться в разговор — его условия и черновик сохранятся.", theme.Text);
+                Label(372, 386, 696, 112, "Сегодня этому клиенту больше не позвонить. Сделка не заключена, комиссия не начислится. Можно вернуться в разговор — его условия и черновик сохранятся." + (IsFounderMode && day.Employees[0].Work == Broker.Core.WorkKind.Research && day.Employees[0].TargetClient == day.SelectedClientIndex ? " Незавершённое досье отменится без бонуса." : ""), theme.Text);
                 if (Button(372, 546, 696, 52, "Продолжить разговор / Esc", true, true)) CloseUtilityOverlay();
                 if (Button(372, 626, 696, 52, "Да, завершить без сделки", day.Call == Broker.Core.CallStatus.Active && !day.DayEnded))
                 {
@@ -59,9 +61,9 @@ namespace Broker.Runtime
                 return;
             }
             bool wholeCareer = confirmation == ConfirmationKind.NewCareer;
-            Label(372, 290, 696, 64, wholeCareer ? (IsWorkMode ? "Сбросить рабочие дни?" : "Начать новую кампанию?") : "Начать этот день заново?", theme.Title);
+            Label(372, 290, 696, 64, wholeCareer ? (IsFounderMode ? "Сбросить свою контору?" : IsWorkMode ? "Сбросить рабочие дни?" : "Начать новую кампанию?") : "Начать этот день заново?", theme.Title);
             Label(372, 386, 696, 112, wholeCareer
-                ? (IsWorkMode ? "Рабочие дни вернутся к перенесённому состоянию перед днём 4. Вводная глава и кампания владельца не изменятся. Новые клиенты и заработок продолжения будут сброшены." : IsEmployeeMode ? "Будет сброшена только вводная глава наёмного брокера: личные деньги, отношения и результаты. Сохранение владельца не изменится." : "Будет сброшена только кампания владельца: деньги, долг, отношения и результаты. Сохранение наёмного брокера не изменится.")
+                ? (IsFounderMode ? "Контора вернётся к моменту открытия: касса $300, исходный личный резерв и база, без помощника. Итоги и найм будут сброшены в v2; старые режимы и контора v1 не изменятся." : IsWorkMode ? "Рабочие дни вернутся к перенесённому состоянию перед днём 4. Вводная глава и кампания владельца не изменятся. Новые клиенты и заработок продолжения будут сброшены." : IsEmployeeMode ? "Будет сброшена только вводная глава наёмного брокера: личные деньги, отношения и результаты. Сохранение владельца не изменится." : "Будет сброшена только кампания владельца: деньги, долг, отношения и результаты. Сохранение наёмного брокера не изменится.")
                 : "Все действия текущего дня будут потеряны: звонки, покупки и поручения. Завершённые дни сохранятся. Утро текущего дня начнётся заново.", theme.Text);
             if (Button(372, 546, 696, 52, "Нет, вернуться / Esc", true, true)) CloseUtilityOverlay();
             if (Button(372, 626, 696, 52, wholeCareer ? "Да, сбросить кампанию" : "Да, начать день заново"))

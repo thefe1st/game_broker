@@ -13,7 +13,7 @@ namespace Broker.FlowChecks
 {
     // Runs real bootstrap methods with explicit scene/GUI/serialization doubles.
     // Does not instantiate OfficeScene geometry, Unity physics, fonts or JsonUtility.
-    public sealed class BootstrapFlowTests
+    public sealed partial class BootstrapFlowTests
     {
         private PrototypeBootstrap game;
         private string folder;
@@ -327,10 +327,96 @@ namespace Broker.FlowChecks
         }
         [Test] public void InitialTransferWriteFailureStaysOnConfirmationAndCanRetry()
         {
-            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v2.json"); Directory.CreateDirectory(path);
-            Click("Перейти к рабочим дням"); Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.True);
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v2.json");
+            Click("Перейти к рабочим дням"); Directory.CreateDirectory(path);
+            Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.True);
             Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee)); Directory.Delete(path);
             Click("Да, начать рабочие дни"); Assert.That(OverlayOpen, Is.False); Assert.That(Day.DayNumber, Is.EqualTo(4));
+        }
+        [TestCase("v2", false)] [TestCase("v2", true)]
+        [TestCase("v2.bak", false)] [TestCase("v2.bak", true)]
+        [TestCase("v1", false)] [TestCase("v1", true)]
+        [TestCase("v1.bak", false)] [TestCase("v1.bak", true)]
+        public void UnreadableContinuationCannotOfferNewIntroTransfer(string source, bool directory)
+        {
+            CompleteIntroForWork(); var same = Day;
+            string path = Path.Combine(folder, "broker-employee-work-" + source.Replace(".bak", "") + ".json" + (source.EndsWith(".bak") ? ".bak" : ""));
+            if (directory) Directory.CreateDirectory(path);
+            else File.WriteAllText(path, "{\"schemaVersion\":99,\"mode\":\"employee-work\"}");
+            var files = Directory.GetFiles(folder); var contents = Array.ConvertAll(files, File.ReadAllText);
+            Click("Перейти к рабочим дням");
+            Assert.That(OverlayOpen, Is.False, "Unreadable progress is not an absent continuation.");
+            Assert.That(Day, Is.SameAs(same)); Assert.That(Get<string>("saveNotice"), Does.Contain("не прочитано"));
+            GUI.Click = "Да, начать рабочие дни"; Call("OnGUI"); Assert.That(GUI.Click, Is.Not.Null); GUI.Click = null;
+            CollectionAssert.AreEquivalent(files, Directory.GetFiles(folder));
+            for (int n = 0; n < files.Length; n++) Assert.That(File.ReadAllText(files[n]), Is.EqualTo(contents[n]));
+            Assert.That(UnityWebRequest.Sent, Is.Zero);
+        }
+        private string WriteAppearingContinuation(bool legacyBackup)
+        {
+            var c = WorkCareerState.FromIntro(Get<EmploymentState>("employment"));
+            var d = c.CreateDay(); Sell(d, 0); d.EndDay(); Assert.That(c.CompleteDay(d), Is.True);
+            string json = JsonUtility.ToJson(c.Capture());
+            if (legacyBackup)
+            {
+                var node = System.Text.Json.Nodes.JsonNode.Parse(json); node["schemaVersion"] = 1;
+                foreach (string key in new[] { "origin", "checkpoint" })
+                    foreach (var client in node[key]["clients"].AsArray()) client.AsObject().Remove("complaintPending");
+                foreach (var report in node["reports"].AsArray()) { report.AsObject().Remove("guaranteed"); report.AsObject().Remove("complaintResolved"); }
+                json = node.ToJsonString();
+            }
+            string path = Path.Combine(folder, legacyBackup ? "broker-employee-work-v1.json.bak" : "broker-employee-work-v2.json");
+            File.WriteAllText(path, json); return path;
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void ContinuationAppearingDuringConfirmationIsLoadedWithoutAnyWrite(bool legacyBackup)
+        {
+            CompleteIntroForWork(); Click("Перейти к рабочим дням");
+            string path = WriteAppearingContinuation(legacyBackup), before = File.ReadAllText(path);
+            var files = Directory.GetFiles(folder); Click("Да, начать рабочие дни");
+            Assert.That(OverlayOpen, Is.False); Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.OpeningCash, Is.EqualTo(30));
+            Assert.That(File.ReadAllText(path), Is.EqualTo(before)); CollectionAssert.AreEquivalent(files, Directory.GetFiles(folder));
+            Assert.That(Get<WorkCareerState>("workCareer").Clients[0].awaitingReport, Is.True);
+        }
+        [Test] public void UnreadableFileAppearingDuringConfirmationIsNotReplaced()
+        {
+            CompleteIntroForWork(); Click("Перейти к рабочим дням");
+            string path = Path.Combine(folder, "broker-employee-work-v2.json"); const string bytes = "future progress";
+            File.WriteAllText(path, bytes); Click("Да, начать рабочие дни");
+            Assert.That(OverlayOpen, Is.True); Assert.That(Day.Mode, Is.EqualTo(CareerMode.Employee));
+            Assert.That(NotebookText(), Does.Contain("не прочитано")); Assert.That(File.ReadAllText(path), Is.EqualTo(bytes));
+            Assert.That(Directory.GetFiles(folder, "*.unreadable-*").Length, Is.Zero);
+            Click("Нет, вернуться / Esc"); Assert.That(OverlayOpen, Is.False);
+        }
+        [Test] public void RetryFromModeMenuLoadsRepairedBackupWithoutResettingContinuation()
+        {
+            CompleteIntroForWork(); string primary = WriteAppearingContinuation(false);
+            string healthy = File.ReadAllText(primary); File.WriteAllText(primary, "broken progress");
+            Click("Выбрать режим"); Click("Начать рабочие дни с дня 4");
+            Assert.That(OverlayOpen, Is.False); Assert.That(Get<bool>("selectingMode"), Is.True);
+            Assert.That(NotebookText(), Does.Contain("не прочитано"));
+            File.WriteAllText(primary + ".bak", healthy); Click("Повторить загрузку рабочих дней");
+            Assert.That(Day.DayNumber, Is.EqualTo(5)); Assert.That(Day.OpeningCash, Is.EqualTo(30));
+            Assert.That(Get<string>("saveNotice"), Does.Contain("резервная"));
+            Assert.That(File.ReadAllText(primary), Is.EqualTo("broken progress")); Assert.That(File.ReadAllText(primary + ".bak"), Is.EqualTo(healthy));
+        }
+        [Test] public void FreshMenuOffersLoadRetryEvenWithoutCompletedIntro()
+        {
+            string path = Path.Combine(folder, "broker-employee-work-v2.json"); File.WriteAllText(path, "broken progress");
+            Call("OnDestroy"); game = new PrototypeBootstrap(); Call("Awake");
+            Click("Повторить загрузку рабочих дней");
+            Assert.That(Get<bool>("selectingMode"), Is.True); Assert.That(OverlayOpen, Is.False);
+            Assert.That(NotebookText(), Does.Contain("Новый перенос заблокирован"));
+            Assert.That(File.ReadAllText(path), Is.EqualTo("broken progress"));
+            CollectionAssert.AreEquivalent(new[] { path }, Directory.GetFiles(folder));
+        }
+        [Test] public void MissingFilesAfterFailedLoadOfferExplicitTransferAgain()
+        {
+            CompleteIntroForWork(); string path = Path.Combine(folder, "broker-employee-work-v2.json"); File.WriteAllText(path, "broken progress");
+            Click("Выбрать режим"); Click("Начать рабочие дни с дня 4"); Assert.That(OverlayOpen, Is.False);
+            File.Delete(path); Click("Повторить загрузку рабочих дней"); Assert.That(OverlayOpen, Is.True);
+            Assert.That(File.Exists(path), Is.False); Click("Нет, вернуться / Esc");
+            Assert.That(NotebookText(), Does.Contain("Начать рабочие дни с дня 4"));
         }
         [Test] public void FailedWorkSaveBlocksModeSwitchUntilRetryWithoutDuplicatePayout()
         {

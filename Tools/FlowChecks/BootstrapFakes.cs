@@ -102,11 +102,13 @@ namespace Broker.Runtime.Office
     {
         public FakePlayer Player = new FakePlayer();
         public bool IsInCity, WorldMotionEnabled;
+        public float MapX = CityBlockPlan.SpawnX, MapZ = CityBlockPlan.SpawnZ;
         public CareerMode Mode;
         public void VisitCity(bool outside) { IsInCity = outside; }
         public void Present(bool atDesk, float scale, UnityEngine.Vector2 offset) { }
         public void Refresh(BrokerDay day) { }
-        public void ConfigureCareerMode(CareerMode mode) { Mode = mode; }
+        public bool FounderAssistant { get; private set; }
+        public void ConfigureCareerMode(CareerMode mode, bool founderAssistant = false) { Mode = mode; FounderAssistant = founderAssistant; }
         public void ResetPlayer() { IsInCity = false; }
     }
 }

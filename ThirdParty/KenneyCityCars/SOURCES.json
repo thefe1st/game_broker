@@ -1,0 +1,61 @@
+{
+    "author":  "Kenney",
+    "pack":  "City Kit Cars",
+    "license":  "CC0-1.0",
+    "checkedOn":  "2026-10-21",
+    "assetPage":  "https://kenney.nl/assets/car-kit",
+    "termsPage":  "https://kenney.nl/support",
+    "licenseUrl":  "https://creativecommons.org/publicdomain/zero/1.0/",
+    "archiveUrl":  "https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip",
+    "archiveSha256":  "fac7dacac5c7874348cf19729af3ef205f3d366493edaf0a827d93f4fdf3d0c4",
+    "files":  [
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/sedan.obj",
+                      "archiveEntry":  "Models/OBJ format/sedan.obj",
+                      "bytes":  118672,
+                      "sha256":  "6c2f029d7110ffa3a572bd11a87275ae6732f701a58b8e5801fa11c75826381b"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/sedan.mtl",
+                      "archiveEntry":  "Models/OBJ format/sedan.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/suv.obj",
+                      "archiveEntry":  "Models/OBJ format/suv.obj",
+                      "bytes":  151422,
+                      "sha256":  "57c3fceab76e002d202e6e66141140c161595aeb171968f84466ea708a591cae"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/suv.mtl",
+                      "archiveEntry":  "Models/OBJ format/suv.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/wheel-default.obj",
+                      "archiveEntry":  "Models/OBJ format/wheel-default.obj",
+                      "bytes":  30740,
+                      "sha256":  "c8ade934b7f340e1d52d2dfa168d170e3faf05a89055194d7a97602eaed6599d"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/wheel-default.mtl",
+                      "archiveEntry":  "Models/OBJ format/wheel-default.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityCars/Textures/colormap.png",
+                      "archiveEntry":  "Models/OBJ format/Textures/colormap.png",
+                      "bytes":  12371,
+                      "sha256":  "f3622a03a20c6696065cae9cbe391351be873508af190c2ebd1d420c055787a5"
+                  },
+                  {
+                      "path":  "ThirdParty/KenneyCityCars/License.txt",
+                      "archiveEntry":  "License.txt",
+                      "bytes":  696,
+                      "sha256":  "c33b7f6453d134deae7b1b8493717d9ccfa754c25ab97f6de89b88f8fda19b00"
+                  }
+              ]
+}

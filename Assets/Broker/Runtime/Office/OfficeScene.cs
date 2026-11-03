@@ -105,6 +105,7 @@ namespace Broker.Runtime.Office
                 var leaf = Box("Plant leaf", new Vector3(5.3f + (i % 2 == 0 ? -0.2f : 0.2f), 1.0f + i * 0.16f, 3.3f), new Vector3(0.65f, 0.1f, 0.35f), green, false);
                 leaf.transform.localEulerAngles = new Vector3(0, i * 65, i % 2 == 0 ? -25 : 25);
             }
+            BuildImportedFurniture();
             var player = new GameObject("Player - WASD and mouse"); player.transform.SetParent(transform, false);
             player.transform.localPosition = new Vector3(0, 0.05f, -3.4f); player.AddComponent<CharacterController>();
             Player = player.AddComponent<FirstPersonOfficeController>();
@@ -175,6 +176,7 @@ namespace Broker.Runtime.Office
             Box("Coffee cabinet", new Vector3(-5.25f, 0.5f, -1.1f), new Vector3(1.1f, 1, 0.8f), wood);
             var coffee = Box("Coffee machine - interact", new Vector3(-5.25f, 1.3f, -1.1f), new Vector3(0.7f, 0.6f, 0.55f), ink);
             Interactable(coffee, OfficeStation.Coffee, "Кофемашина / корпоративная мотивация", "Купить кофе для команды");
+            coffeeStation = coffee.GetComponent<OfficeInteractable>();
             Box("Coffee front", new Vector3(-5.25f, 1.3f, -1.4f), new Vector3(0.5f, 0.4f, 0.05f), brass, false);
             Box("Coffee button", new Vector3(-5.05f, 1.45f, -1.44f), new Vector3(0.08f, 0.08f, 0.03f), green, false);
             Shape(PrimitiveType.Cylinder, "Coffee cup", transform, new Vector3(-5.55f, 1.08f, -1.38f), new Vector3(0.18f, 0.12f, 0.18f), cream, false);
@@ -218,7 +220,7 @@ namespace Broker.Runtime.Office
                 var worker = day.Employees[i]; bool working = worker.Work == WorkKind.Leads || worker.Work == WorkKind.Research;
                 screens[i].sharedMaterial = working ? green : amber;
                 workerLabels[i].transform.rotation = active.transform.rotation;
-                workerLabels[i].text = worker.Name + " / " + (employeeMode ? "КОЛЛЕГА" : worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
+                workerLabels[i].text = worker.Name + " / " + (employeeMode ? "КОЛЛЕГА" : day.IsFounder ? (working ? "ДОСЬЕ / В РАБОТЕ" : "ПОМОЩНИК / ДОСЬЕ") : worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
                 heads[i].localRotation = Quaternion.Euler(0, working ? Mathf.Sin(Time.unscaledTime * 1.7f + i) * 8 : 0, 0);
                 for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? -22 + Mathf.Sin(Time.unscaledTime * 3 + a) * 5 : 0, 0, 0);
             }

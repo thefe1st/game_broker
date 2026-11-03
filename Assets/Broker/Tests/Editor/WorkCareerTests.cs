@@ -9,6 +9,10 @@ namespace Broker.Tests
         public static void Sell(BrokerDay d, int index)
         {
             Assert.That(d.SelectClient(index), Is.True); d.StartCall();
+            SellAfterStarted(d);
+        }
+        public static void SellAfterStarted(BrokerDay d)
+        {
             d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт.");
             d.OfferDeal();
             d.Say(ClientConversation.AnswerIntent(d.Current.Id) == DialogueIntent.Reserve ? "Оставьте резерв, не вкладывайте всю сумму."

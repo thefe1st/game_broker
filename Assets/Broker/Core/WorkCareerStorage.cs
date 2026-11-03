@@ -4,6 +4,8 @@ using System.Text;
 
 namespace Broker.Core
 {
+    public enum WorkCareerLoadStatus { Missing, Loaded, Unreadable }
+
     // Serializer is injected: Unity uses JsonUtility, headless tests use System.Text.Json.
     public sealed class WorkCareerStorage
     {
@@ -20,35 +22,44 @@ namespace Broker.Core
             decode = deserializer ?? throw new ArgumentNullException(nameof(deserializer));
         }
         public bool TryLoad(out WorkCareerState state, out string notice)
+            => TryLoad(out state, out notice, out _);
+        public bool TryLoad(out WorkCareerState state, out string notice, out WorkCareerLoadStatus status)
         {
             // Never roll back to v1 merely because a newer save is broken, unknown, or a directory.
-            bool newerExists = File.Exists(SavePath) || File.Exists(SavePath + ".bak")
-                || Directory.Exists(SavePath) || Directory.Exists(SavePath + ".bak");
+            bool newerExists = ExistsOrUnreadable(SavePath) || ExistsOrUnreadable(SavePath + ".bak");
             bool legacy = !newerExists && legacyPath != null;
             string source = legacy ? legacyPath : SavePath;
-            state = null; notice = ""; bool found = false;
+            state = null; notice = ""; status = WorkCareerLoadStatus.Missing; bool found = false;
             foreach (string path in new[] { source, source + ".bak" })
             {
                 try
                 {
+                    if (!ExistsOrUnreadable(path)) continue;
                     if (Directory.Exists(path)) { found = true; continue; }
-                    if (!File.Exists(path)) continue;
                     found = true; long size = new FileInfo(path).Length;
                     if (size <= 0 || size > MaxBytes) continue;
                     var data = decode(File.ReadAllText(path, Encoding.UTF8));
                     if ((legacy && (data == null || data.schemaVersion != 1)) || !WorkCareerState.TryRestore(data, out state)) continue;
                     if (path != source) notice = "Восстановлена резервная копия: основной файл сохранения не прочитан. ";
                     if (legacy) notice += "Загружена копия v1. После завершения дня прогресс запишется отдельно в v2; старые v1 и .bak не меняются.";
-                    return true;
+                    status = WorkCareerLoadStatus.Loaded; return true;
                 }
-                catch { state = null; }
+                catch { found = true; state = null; }
             }
-            if (found) notice = "Сохранение не прочитано или имеет другую версию. Продолжение не загружено; старые файлы пока не изменены.";
+            if (found)
+            {
+                status = WorkCareerLoadStatus.Unreadable;
+                notice = "Сохранение не прочитано или имеет другую версию. Новый перенос заблокирован; файлы не изменены. Проверьте сохранение и .bak, затем повторите загрузку.";
+            }
             return false;
         }
         public bool TrySave(WorkCareerState state, out string notice)
+            => TryWrite(state, false, out notice);
+        public bool TryCreate(WorkCareerState state, out string notice)
+            => TryWrite(state, true, out notice);
+        private bool TryWrite(WorkCareerState state, bool createOnly, out string notice)
         {
-            notice = ""; string temporary = SavePath + ".tmp"; bool preservedUnreadable = false;
+            notice = ""; string temporary = SavePath + (createOnly ? ".tmp-" + Guid.NewGuid().ToString("N") : ".tmp"); bool preservedUnreadable = false;
             try
             {
                 if (state == null || !WorkCareerState.TryRestore(state.Capture(), out _)) throw new InvalidDataException();
@@ -56,9 +67,20 @@ namespace Broker.Core
                 if (string.IsNullOrWhiteSpace(json) || Encoding.UTF8.GetByteCount(json) > MaxBytes) throw new InvalidDataException();
                 // Validate serialized data before replacing the previous save.
                 if (!WorkCareerState.TryRestore(decode(json), out _)) throw new InvalidDataException();
+                if (createOnly)
+                {
+                    TryLoad(out _, out notice, out var status);
+                    if (status != WorkCareerLoadStatus.Missing)
+                    {
+                        if (status == WorkCareerLoadStatus.Loaded) notice = "Продолжение уже существует. Повторите загрузку; новый перенос не записан.";
+                        return false;
+                    }
+                }
                 Directory.CreateDirectory(Path.GetDirectoryName(SavePath));
                 File.WriteAllText(temporary, json, new UTF8Encoding(false));
-                if (File.Exists(SavePath))
+                // Creation must never replace a primary that appeared after the load check.
+                if (createOnly) File.Move(temporary, SavePath);
+                else if (File.Exists(SavePath))
                 {
                     // When the primary is damaged, retain the last usable backup instead of
                     // backing up the corrupt bytes on top of it during the first recovery save.
@@ -77,6 +99,13 @@ namespace Broker.Core
             }
             catch { notice = "Не удалось сохранить прогресс на диск. В текущем запуске можно продолжить."; return false; }
             finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
+        }
+        private static bool ExistsOrUnreadable(string path)
+        {
+            try { File.GetAttributes(path); return true; }
+            catch (FileNotFoundException) { return false; }
+            catch (DirectoryNotFoundException) { return false; }
+            catch { return true; }
         }
         private bool IsValidFile(string path)
         {

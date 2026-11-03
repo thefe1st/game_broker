@@ -1,0 +1,97 @@
+{
+    "author":  "Kenney",
+    "pack":  "City Kit Roads",
+    "license":  "CC0-1.0",
+    "checkedOn":  "2026-10-21",
+    "assetPage":  "https://kenney.nl/assets/city-kit-roads",
+    "termsPage":  "https://kenney.nl/support",
+    "licenseUrl":  "https://creativecommons.org/publicdomain/zero/1.0/",
+    "archiveUrl":  "https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1791628607/kenney_city-kit-roads.zip",
+    "archiveSha256":  "374a4552115cbd11b4ec5c930ee31a533562dc78a09af249a655d03f7ea3b959",
+    "files":  [
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/light-curved.obj",
+                      "archiveEntry":  "Models/OBJ format/light-curved.obj",
+                      "bytes":  7989,
+                      "sha256":  "628ebacd073f5704c24829aff401438eb161e7d06e1642b864d42d733d446403"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/light-curved.mtl",
+                      "archiveEntry":  "Models/OBJ format/light-curved.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/dumpster.obj",
+                      "archiveEntry":  "Models/OBJ format/dumpster.obj",
+                      "bytes":  20242,
+                      "sha256":  "a24bd858d4ac3e651f8a102b5dc8126ecaa5747dcfd61ab294dc956fb371d1fe"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/dumpster.mtl",
+                      "archiveEntry":  "Models/OBJ format/dumpster.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/construction-barrier.obj",
+                      "archiveEntry":  "Models/OBJ format/construction-barrier.obj",
+                      "bytes":  5567,
+                      "sha256":  "2abfd844589255c891710c08f51dc8e95882e63e336b0e78749e85f1f0bda2dd"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/construction-barrier.mtl",
+                      "archiveEntry":  "Models/OBJ format/construction-barrier.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/construction-cone.obj",
+                      "archiveEntry":  "Models/OBJ format/construction-cone.obj",
+                      "bytes":  5733,
+                      "sha256":  "5d229a62751f525b79ee17d621550d7fad7e02a0bc9a47237d802d85ccb3bbf2"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/construction-cone.mtl",
+                      "archiveEntry":  "Models/OBJ format/construction-cone.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/road-sign-empty.obj",
+                      "archiveEntry":  "Models/OBJ format/road-sign-empty.obj",
+                      "bytes":  3836,
+                      "sha256":  "9592a75853b6967b78d4c19940d4c91223919827be8ca27402129809d2889bd7"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/road-sign-empty.mtl",
+                      "archiveEntry":  "Models/OBJ format/road-sign-empty.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/traffic-light.obj",
+                      "archiveEntry":  "Models/OBJ format/traffic-light.obj",
+                      "bytes":  18890,
+                      "sha256":  "a00df923e25306cd606b809a2feba5faa8ee964e37288dc538f6c7d127dbe24d"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/traffic-light.mtl",
+                      "archiveEntry":  "Models/OBJ format/traffic-light.mtl",
+                      "bytes":  98,
+                      "sha256":  "45a6736aa344a0c7e286b9c43c6a48f25b6a2f78d8c5949e430c3b4a93b4e060"
+                  },
+                  {
+                      "path":  "Assets/Broker/Resources/BrokerModels/KenneyCityRoads/Textures/colormap.png",
+                      "archiveEntry":  "Models/OBJ format/Textures/colormap.png",
+                      "bytes":  11428,
+                      "sha256":  "a48e2962661ae44368ffddf3054f80ed8491d082b757dcc3011184cd9a98b185"
+                  },
+                  {
+                      "path":  "ThirdParty/KenneyCityRoads/License.txt",
+                      "archiveEntry":  "License.txt",
+                      "bytes":  703,
+                      "sha256":  "d23f51360ca2cd81711bc5b09ddfb28ac94da96d7ca2dbdef12c50f33f35c353"
+                  }
+              ]
+}
