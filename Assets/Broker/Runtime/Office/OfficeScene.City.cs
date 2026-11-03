@@ -21,13 +21,13 @@ namespace Broker.Runtime.Office
         {
             previousFog = RenderSettings.fog; previousFogColor = RenderSettings.fogColor;
             previousFogMode = RenderSettings.fogMode; previousFogStart = RenderSettings.fogStartDistance; previousFogEnd = RenderSettings.fogEndDistance;
-            var pavement = Surface("pavers", "#FFFFFF", 2f, 0.1f, 0);
-            var asphalt = Surface("asphalt", "#FFFFFF", 2f, 0.04f, 0);
-            var concrete = Surface("concrete", "#FFFFFF", 2f, 0.08f, 0);
-            var grass = Surface("grass", "#FFFFFF", 2f, 0.03f, 0);
+            var pavement = Surface("pavers", "#FFFFFF", 2f, 0.1f);
+            var asphalt = Surface("asphalt", "#FFFFFF", 2f, 0.04f);
+            var concrete = Surface("concrete", "#FFFFFF", 2f, 0.08f);
+            var grass = Surface("grass", "#FFFFFF", 2f, 0.03f);
             var metal = Mat("#4B5157");
             var cityLight = Mat("#F3D9A6", true);
-            var facades = new[] { Surface("brick", "#FFFFFF", 2f, 0.12f, 0), Surface("concrete", "#D9D2C6", 2f, 0.12f, 0), Surface("plaster", "#FFFFFF", 2f, 0.12f, 0) };
+            var facades = new[] { Surface("brick", "#FFFFFF", 2f, 0.12f), Surface("concrete", "#D9D2C6", 2f, 0.12f), Surface("plaster", "#FFFFFF", 2f, 0.12f) };
             const float ground = CityBlockPlan.GroundY;
             Box("City / outer meadow", new Vector3(0, ground - 0.45f, CityScenery.TerrainCenterZ), new Vector3(CityScenery.TerrainSize, 0.5f, CityScenery.TerrainSize), grass, false);
             Box("City / terrain", new Vector3(0, CityBlockPlan.TerrainTopY - 0.25f, 59), new Vector3(120, 0.5f, 112), concrete, false);
@@ -106,8 +106,8 @@ namespace Broker.Runtime.Office
         // Hazy boxy skyline beyond the playable block: cheap textured boxes that the fog dissolves.
         private void BuildSkyline()
         {
-            var shades = new[] { Surface("windows", "#E8DED2", VoxelSurfaces.TileMetres("windows"), 0.05f, 0),
-                Surface("windows", "#C9CCD0", VoxelSurfaces.TileMetres("windows"), 0.05f, 0), Surface("windows", "#E0C9B2", VoxelSurfaces.TileMetres("windows"), 0.05f, 0) };
+            var shades = new[] { Surface("windows", "#E8DED2", VoxelSurfaces.TileMetres("windows"), 0.05f),
+                Surface("windows", "#C9CCD0", VoxelSurfaces.TileMetres("windows"), 0.05f), Surface("windows", "#E0C9B2", VoxelSurfaces.TileMetres("windows"), 0.05f) };
             foreach (var block in CityScenery.Skyline)
             {
                 var box = Box("City / distant block", new Vector3(block.X, CityBlockPlan.GroundY - 0.2f + block.Height / 2, block.Z),

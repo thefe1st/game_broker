@@ -54,11 +54,11 @@ namespace Broker.Runtime.Office
         {
             transform.position = new Vector3(500, 0, 0);
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            navy = Mat("#243A55"); wood = Surface("wood", "#FFFFFF", 2f, 0.2f, 0); brass = Mat("#D6A853"); green = Mat("#7CF0D2", true);
+            navy = Mat("#243A55"); wood = Surface("wood", "#FFFFFF", 2f, 0.2f); brass = Mat("#D6A853"); green = Mat("#7CF0D2", true);
             amber = Mat("#D08A3E"); ink = Mat("#1E2A33"); cream = Mat("#EDE3CC"); skin = Mat("#E3B48F");
             phoneMaterial = Mat("#2E3238");
-            var wall = Surface("plaster", "#FFFFFF", 2f, 0.06f, 0);
-            var floor = Surface("wood", "#FFFFFF", 2f, 0.18f, 0);
+            var wall = Surface("plaster", "#FFFFFF", 2f, 0.06f);
+            var floor = Surface("wood", "#FFFFFF", 2f, 0.18f);
             var lights = Mat("#FFE7B8", true);
             previousAmbientMode = RenderSettings.ambientMode; previousAmbient = RenderSettings.ambientLight;
             Box("Floor collider", new Vector3(0, -0.15f, 0), new Vector3(12.4f, 0.3f, 9.4f), floor);
@@ -70,7 +70,7 @@ namespace Broker.Runtime.Office
             Box("Left wall", new Vector3(-6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), navy);
             Box("Right wall", new Vector3(6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), wall);
             ceilingRenderer = Box("Ceiling", new Vector3(0, 3.9f, 0), new Vector3(12.4f, 0.2f, 9.4f), cream).GetComponent<Renderer>();
-            Box("Office carpet", new Vector3(0.4f, 0.012f, -0.7f), new Vector3(5.0f, 0.024f, 4.2f), Surface("carpet", "#FFFFFF", 2f, 0.02f, 0), false);
+            Box("Office carpet", new Vector3(0.4f, 0.012f, -0.7f), new Vector3(5.0f, 0.024f, 4.2f), Surface("carpet", "#FFFFFF", 2f, 0.02f), false);
             for (int i = 0; i < 3; i++)
             {
                 float x = -3.6f + i * 3.6f;

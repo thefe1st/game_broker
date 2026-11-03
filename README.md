@@ -63,7 +63,7 @@
 
 - [Server/README.md](Server/README.md) — необязательный шлюз Node.js 24, запуск `cd Server` → `npm start`.
 - [Docs/VOICE_SETUP.md](Docs/VOICE_SETUP.md) — настройка и ограничения. Секреты только в локальном `Server/.env`, не в Unity и не в Git.
-- [Docs/VOXEL_STYLE.md](Docs/VOXEL_STYLE.md) — воксельные модели, палитра, свет и Unity-чек-лист. [Docs/MATERIALS.md](Docs/MATERIALS.md) — пиксельные поверхности, метрические UV и прежние CC0-текстуры (резерв). [Docs/ART_BRIEF.md](Docs/ART_BRIEF.md) — стиль, источники/права и задания на авторские модели, если они понадобятся.
+- [Docs/VOXEL_STYLE.md](Docs/VOXEL_STYLE.md) — воксельные модели, палитра, свет и Unity-чек-лист. [Docs/MATERIALS.md](Docs/MATERIALS.md) — пиксельные поверхности и метрические UV. [Docs/ART_BRIEF.md](Docs/ART_BRIEF.md) — стиль, источники/права и задания на авторские модели, если они понадобятся.
 
 ## Проверки и честный статус
 
@@ -75,7 +75,6 @@
 - **36 Node.js-тестов** с подставным внешним API.
 - Синтаксис **85 C#-файлов в Assets × 4 конфигурации ввода** в C# 9 — без ошибок.
 - **Предпросмотр сцены:** `Tools/ScenePreview` компилирует настоящие построители офиса и города в C# 9 и рендерит 8 кадров без Unity; в CI — проверка `--check` (кадры не пустые, без предупреждений построения). Это приближение рендера, не Unity.
-- Прежний арт: **33 модели / 74 оригинальных файла Kenney + 4 карты поверхностей** (сценой больше не используются) — хеши, OBJ/MTL/атласы, размеры JPEG и CC0 проверены через `node Tools/Art/check-assets.mjs`.
 
 Проверки повторены для `game_broker-main/` 3 ноября 2026. SyntaxChecks теперь выбирает TargetFramework по встроенной версии SDK, поэтому штатная команда работает с SDK 8 и SDK 10; ошибка CS1705 в CI устранена.
 
@@ -91,7 +90,7 @@ cd Server
 npm test
 ```
 
-Кадры предпросмотра в PNG: `dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview` ([инструкция](Tools/ScenePreview/README.md)). Проверка прежних моделей: `node Tools/Art/check-assets.mjs` из корня проекта. Источники и оригинальная лицензия: `ThirdParty/KenneyFurniture/`.
+Кадры предпросмотра в PNG: `dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview` ([инструкция](Tools/ScenePreview/README.md)).
 
 **Unity-редактор в среде разработки недоступен.** 21 октября пользователь сообщил, что проверял предыдущую версию в Unity и всё работало; это общее пользовательское подтверждение, не отметка о прохождении каждого пункта QA. Контора и первый помощник добавлены после этого сообщения и ещё требуют [проверки в Unity](Docs/FOUNDER.md). Проверки разработчика не компилируют runtime против настоящего UnityEngine, не проверяют JsonUtility, физику, шрифты, компоновку, запись из Unity и desktop-сборку. Файловые тесты этого прогона выполнялись на Linux с System.Text.Json. Настоящий внешний API не проверен.
 

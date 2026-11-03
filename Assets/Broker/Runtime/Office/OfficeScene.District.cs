@@ -29,7 +29,7 @@ namespace Broker.Runtime.Office
                 Box("District / refuse collider", new Vector3(x + 10.8f, ground + 0.5f, -7), new Vector3(1.2f, 1, 1.6f), concrete).GetComponent<Renderer>().enabled = false;
                 PlaceVoxel("dumpster", VoxelProps.Dumpster, "District / voxel refuse container", transform, new Vector3(x + 10.8f, ground, -7));
             }
-            var grass = Surface("grass", "#FFFFFF", 2f, 0.03f, 0);
+            var grass = Surface("grass", "#FFFFFF", 2f, 0.03f);
             foreach (float x in new[] { -40f, -23f })
             {
                 Box("Park / planted bed", new Vector3(x, ground + 0.15f, 19), new Vector3(2.4f, 0.3f, 5), concrete);

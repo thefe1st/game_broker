@@ -5,45 +5,15 @@ using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    // Pixel-art surfaces generated from the voxel palette (point filtered), decoded once per scene.
-    // Keys without a pixel pattern fall back to the local CC0 photo sources; there are no downloads in the game.
-    // Native textures can override packed sources without changing scene code.
+    // Pixel-art surfaces generated from the voxel palette (point filtered), built once per scene.
+    // Everything comes from code: the game ships no texture files and downloads nothing.
     public sealed class SurfaceLibrary : IDisposable
     {
         private readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
         private readonly List<Texture2D> owned = new List<Texture2D>();
-        public Texture2D Load(string key, bool linear = false)
-        {
-            string cacheKey = key + (linear ? ":linear" : ":srgb");
-            if (cache.TryGetValue(cacheKey, out Texture2D found)) return found;
-            string path = "BrokerMaterials/" + key;
-            var native = Resources.Load<Texture2D>(path);
-            if (native != null) { cache[cacheKey] = native; return native; }
-            var packed = Resources.Load<TextAsset>(path + ".b64");
-            if (packed == null) { cache[cacheKey] = null; return null; }
-            Texture2D texture = null;
-            try
-            {
-                if (packed.text.Length > 3000000) throw new FormatException("Packed surface exceeds limit");
-                byte[] bytes = Convert.FromBase64String(packed.text);
-                texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, linear);
-                if (!ImageConversion.LoadImage(texture, bytes, true)) throw new FormatException("Invalid surface image");
-                texture.name = "Broker / " + key;
-                texture.wrapMode = TextureWrapMode.Repeat; texture.filterMode = FilterMode.Trilinear; texture.anisoLevel = 4;
-                owned.Add(texture); cache[cacheKey] = texture; return texture;
-            }
-            catch (Exception exception) when (exception is FormatException || exception is ArgumentException)
-            {
-                if (texture != null) UnityEngine.Object.Destroy(texture);
-                cache[cacheKey] = null;
-                Debug.LogWarning("Broker material '" + key + "' could not load. Using a flat fallback.");
-                return null;
-            }
-        }
         public Texture2D Pixel(string key)
         {
-            string cacheKey = key + ":pixel";
-            if (cache.TryGetValue(cacheKey, out Texture2D found)) return found;
+            if (cache.TryGetValue(key, out Texture2D found)) return found;
             byte[] rgba = VoxelSurfaces.Rgba(key);
             var pixels = new Color32[VoxelSurfaces.Size * VoxelSurfaces.Size];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]);
@@ -52,25 +22,21 @@ namespace Broker.Runtime.Office
             texture.SetPixels32(pixels);
             texture.wrapMode = TextureWrapMode.Repeat; texture.filterMode = FilterMode.Point; texture.anisoLevel = 2;
             texture.Apply(true, true);
-            owned.Add(texture); cache[cacheKey] = texture; return texture;
+            owned.Add(texture); cache[key] = texture; return texture;
         }
-        public void Apply(Material material, string key, float smoothness, float normalStrength)
+        // Unknown keys keep the flat tint and log once: a typo must not break the scene.
+        public void Apply(Material material, string key, float smoothness)
         {
-            bool pixel = VoxelSurfaces.Has(key);
-            Texture2D albedo = pixel ? Pixel(key) : Load(key + "_albedo");
-            if (albedo != null)
+            if (VoxelSurfaces.Has(key))
             {
+                Texture2D albedo = Pixel(key);
                 if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", albedo);
                 if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", albedo);
             }
+            else if (!cache.ContainsKey(key)) { cache[key] = null; Debug.LogWarning("Broker surface '" + key + "' has no pixel pattern. Using a flat colour."); }
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
-            if (pixel || !material.HasProperty("_BumpMap")) return;
-            Texture2D normal = Load(key + "_normal", true);
-            if (normal == null) return;
-            material.SetTexture("_BumpMap", normal); material.EnableKeyword("_NORMALMAP");
-            if (material.HasProperty("_BumpScale")) material.SetFloat("_BumpScale", normalStrength);
         }
         public void Dispose()
         {
