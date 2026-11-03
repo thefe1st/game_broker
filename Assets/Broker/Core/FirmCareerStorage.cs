@@ -6,36 +6,45 @@ namespace Broker.Core
 {
     public enum FirmCareerLoadStatus { Missing, Loaded, Unreadable }
 
-    // Read-only v1 import; all new founder writes go to the separate v2 file.
+    // Read-only v2/v1 imports; all new founder writes go to the separate v3 file.
     public sealed class FirmCareerStorage
     {
         public const int MaxBytes = 65536;
         public string SavePath { get; }
-        private readonly string legacyPath;
+        private sealed class Generation { public string FilePath, Label; public int Version; }
+        private readonly Generation[] generations;
         private readonly Func<FirmCareerSave, string> encode;
         private readonly Func<string, FirmCareerSave> decode;
-        public FirmCareerStorage(string path, Func<FirmCareerSave, string> serializer, Func<string, FirmCareerSave> deserializer, string legacyPath = null)
+        // legacyPath: previous v2 file; olderLegacyPath: original v1 file. Each accepts only its own schema.
+        public FirmCareerStorage(string path, Func<FirmCareerSave, string> serializer, Func<string, FirmCareerSave> deserializer,
+            string legacyPath = null, string olderLegacyPath = null)
         {
-            SavePath = Path.GetFullPath(path); this.legacyPath = legacyPath == null ? null : Path.GetFullPath(legacyPath);
-            if (string.Equals(this.legacyPath, SavePath, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Legacy path must be separate.");
+            SavePath = Path.GetFullPath(path);
+            var list = new System.Collections.Generic.List<Generation> { new Generation { FilePath = SavePath, Label = "v3", Version = FirmCareerState.SchemaVersion } };
+            if (legacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(legacyPath), Label = "v2", Version = 2 });
+            if (olderLegacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(olderLegacyPath), Label = "v1", Version = 1 });
+            for (int i = 0; i < list.Count; i++) for (int j = i + 1; j < list.Count; j++)
+                if (string.Equals(list[i].FilePath, list[j].FilePath, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Legacy path must be separate.");
+            generations = list.ToArray();
             encode = serializer ?? throw new ArgumentNullException(nameof(serializer));
             decode = deserializer ?? throw new ArgumentNullException(nameof(deserializer));
         }
         public bool TryLoad(out FirmCareerState state, out string notice, out FirmCareerLoadStatus status)
         {
             state = null; notice = ""; status = FirmCareerLoadStatus.Missing;
-            bool legacy = legacyPath != null && !ExistsOrUnreadable(SavePath) && !ExistsOrUnreadable(SavePath + ".bak");
-            string source = legacy ? legacyPath : SavePath;
+            // The newest generation with any file wins; a broken newer file never falls back to older progress.
+            var generation = Source(); bool legacy = generation != generations[0]; string source = generation.FilePath;
             foreach (var path in new[] { source, source + ".bak" })
             {
                 try
                 {
                     File.GetAttributes(path); status = FirmCareerLoadStatus.Unreadable;
-                    if (!ValidFile(path, out state, legacy ? 1 : 2)) continue;
+                    if (!ValidFile(path, out state, generation.Version)) continue;
                     status = FirmCareerLoadStatus.Loaded;
                     if (path != source) notice = "Своя контора восстановлена из резервной копии; основной файл не прочитан. ";
                     if (path != source && !legacy) notice += "Перед наймом восстановите основной файл либо завершите и сохраните день. ";
-                    if (legacy) notice += "Загружена копия конторы v1. Найм и новые дни запишутся отдельно в v2; исходные v1 и .bak не меняются.";
+                    if (legacy) notice += "Загружена копия конторы " + generation.Label + ". Найм и новые дни запишутся отдельно в v3; исходные "
+                        + generation.Label + " и .bak не меняются.";
                     return true;
                 }
                 catch (FileNotFoundException) { }
@@ -64,7 +73,7 @@ namespace Broker.Core
                 string json = encode(state.Capture());
                 if (string.IsNullOrWhiteSpace(json) || Encoding.UTF8.GetByteCount(json) > MaxBytes) throw new InvalidDataException();
                 var serialized = decode(json);
-                if (serialized == null || serialized.schemaVersion != 2 || !FirmCareerState.TryRestore(serialized, out var roundtrip)
+                if (serialized == null || serialized.schemaVersion != FirmCareerState.SchemaVersion || !FirmCareerState.TryRestore(serialized, out var roundtrip)
                     || !state.SameSnapshot(roundtrip)) throw new InvalidDataException();
                 if (createOnly)
                 {
@@ -78,8 +87,8 @@ namespace Broker.Core
                 if (expected != null)
                 {
                     // Recovery is valid for playing, not proof that the primary is unchanged.
-                    // A read-only legacy import is safe only while both v2 paths are absent.
-                    bool legacy = legacyPath != null && !ExistsOrUnreadable(SavePath) && !ExistsOrUnreadable(SavePath + ".bak");
+                    // A read-only legacy import is safe only while both v3 paths are absent.
+                    bool legacy = Source() != generations[0];
                     FirmCareerState stored;
                     bool loaded = legacy ? TryLoad(out stored, out _, out _) : ValidFile(SavePath, out stored);
                     if (!loaded || !stored.SameSnapshot(expected))
@@ -101,6 +110,11 @@ namespace Broker.Core
             catch { notice = "Не удалось записать свою контору на диск. Повторите запись; текущий запуск не гарантирует сохранение прогресса."; return false; }
             finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
         }
+        private Generation Source()
+        {
+            foreach (var g in generations) if (ExistsOrUnreadable(g.FilePath) || ExistsOrUnreadable(g.FilePath + ".bak")) return g;
+            return generations[0];
+        }
         private static bool ExistsOrUnreadable(string path)
         {
             try { File.GetAttributes(path); return true; }
@@ -108,7 +122,7 @@ namespace Broker.Core
             catch (DirectoryNotFoundException) { return false; }
             catch { return true; }
         }
-        private bool ValidFile(string path, out FirmCareerState state, int version = 2)
+        private bool ValidFile(string path, out FirmCareerState state, int version = FirmCareerState.SchemaVersion)
         {
             state = null;
             try

@@ -7,17 +7,26 @@ namespace Broker.Core
     public enum WorkCareerLoadStatus { Missing, Loaded, Unreadable }
 
     // Serializer is injected: Unity uses JsonUtility, headless tests use System.Text.Json.
+    // Writes go only to SavePath (v3). Older generations are read-only imports, newest first.
     public sealed class WorkCareerStorage
     {
         public const int MaxBytes = 65536;
         public string SavePath { get; }
-        private readonly string legacyPath;
+        private sealed class Generation { public string FilePath, Label; public int MaxVersion; }
+        private readonly Generation[] generations;
         private readonly Func<WorkCareerSave, string> encode;
         private readonly Func<string, WorkCareerSave> decode;
-        public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer, string legacyPath = null)
+        // legacyPath: previous v2 file (accepts v1/v2 data); olderLegacyPath: original v1 file.
+        public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer,
+            string legacyPath = null, string olderLegacyPath = null)
         {
-            SavePath = Path.GetFullPath(path); this.legacyPath = legacyPath == null ? null : Path.GetFullPath(legacyPath);
-            if (this.legacyPath == SavePath) throw new ArgumentException("Legacy path must be separate.");
+            SavePath = Path.GetFullPath(path);
+            var list = new System.Collections.Generic.List<Generation> { new Generation { FilePath = SavePath, Label = "v3", MaxVersion = WorkCareerState.SchemaVersion } };
+            if (legacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(legacyPath), Label = "v2", MaxVersion = 2 });
+            if (olderLegacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(olderLegacyPath), Label = "v1", MaxVersion = 1 });
+            for (int i = 0; i < list.Count; i++) for (int j = i + 1; j < list.Count; j++)
+                if (string.Equals(list[i].FilePath, list[j].FilePath, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Legacy path must be separate.");
+            generations = list.ToArray();
             encode = serializer ?? throw new ArgumentNullException(nameof(serializer));
             decode = deserializer ?? throw new ArgumentNullException(nameof(deserializer));
         }
@@ -25,10 +34,9 @@ namespace Broker.Core
             => TryLoad(out state, out notice, out _);
         public bool TryLoad(out WorkCareerState state, out string notice, out WorkCareerLoadStatus status)
         {
-            // Never roll back to v1 merely because a newer save is broken, unknown, or a directory.
-            bool newerExists = ExistsOrUnreadable(SavePath) || ExistsOrUnreadable(SavePath + ".bak");
-            bool legacy = !newerExists && legacyPath != null;
-            string source = legacy ? legacyPath : SavePath;
+            // The newest generation with any file wins. Never roll back to an older one
+            // merely because a newer save is broken, unknown, or a directory.
+            var generation = Source(); bool legacy = generation != generations[0]; string source = generation.FilePath;
             state = null; notice = ""; status = WorkCareerLoadStatus.Missing; bool found = false;
             foreach (string path in new[] { source, source + ".bak" })
             {
@@ -39,9 +47,10 @@ namespace Broker.Core
                     found = true; long size = new FileInfo(path).Length;
                     if (size <= 0 || size > MaxBytes) continue;
                     var data = decode(File.ReadAllText(path, Encoding.UTF8));
-                    if ((legacy && (data == null || data.schemaVersion != 1)) || !WorkCareerState.TryRestore(data, out state)) continue;
+                    if (data == null || data.schemaVersion > generation.MaxVersion || !WorkCareerState.TryRestore(data, out state)) continue;
                     if (path != source) notice = "Восстановлена резервная копия: основной файл сохранения не прочитан. ";
-                    if (legacy) notice += "Загружена копия v1. После завершения дня прогресс запишется отдельно в v2; старые v1 и .bak не меняются.";
+                    if (legacy) notice += "Загружена копия " + generation.Label + ". После завершения дня прогресс запишется отдельно в v3; старые "
+                        + generation.Label + " и .bak не меняются.";
                     status = WorkCareerLoadStatus.Loaded; return true;
                 }
                 catch { found = true; state = null; }
@@ -99,6 +108,11 @@ namespace Broker.Core
             }
             catch { notice = "Не удалось сохранить прогресс на диск. В текущем запуске можно продолжить."; return false; }
             finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
+        }
+        private Generation Source()
+        {
+            foreach (var g in generations) if (ExistsOrUnreadable(g.FilePath) || ExistsOrUnreadable(g.FilePath + ".bak")) return g;
+            return generations[0];
         }
         private static bool ExistsOrUnreadable(string path)
         {

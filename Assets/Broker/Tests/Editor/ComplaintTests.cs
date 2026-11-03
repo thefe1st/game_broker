@@ -119,7 +119,7 @@ namespace Broker.Tests
                 case 2: s.reports[0].complaintResolved[0] = true; break;
                 case 3: s.reports[0].closed[0] = false; break;
                 case 4: s.origin.clients[0].complaintPending = true; break;
-                case 5: s.schemaVersion = 1; break;
+                case 5: StockHistoryTests.Legacy(s, 1); break;
             }
             Assert.That(WorkCareerState.TryRestore(s, out _), Is.False);
         }
@@ -127,9 +127,9 @@ namespace Broker.Tests
         {
             var c = WorkCareerState.FromIntro(WorkCareerTests.Intro(true));
             for (int n = 0; n < 10; n++) { var d = c.CreateDay(); WorkCareerTests.Sell(d, 0); Settle(c, d); }
-            var s = c.Capture(); s.schemaVersion = 1; foreach (var r in s.reports) { r.guaranteed = null; r.complaintResolved = null; }
+            var s = StockHistoryTests.Legacy(c.Capture(), 1); foreach (var r in s.reports) { r.guaranteed = null; r.complaintResolved = null; }
             Assert.That(WorkCareerState.TryRestore(s, out var loaded), Is.True); Assert.That(s.schemaVersion, Is.EqualTo(1));
-            Assert.That(s.reports[0].guaranteed, Is.Null); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(2));
+            Assert.That(s.reports[0].guaranteed, Is.Null); Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(3));
             Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings)); Assert.That(loaded.TotalDeals, Is.EqualTo(c.TotalDeals));
             foreach (var client in loaded.Clients) Assert.That(client.complaintPending, Is.False);
         }
@@ -141,7 +141,7 @@ namespace Broker.Tests
         { Assert.That(DialogueRules.Has(DialogueRules.Analyze(phrase), DialogueIntent.AdmitError), Is.EqualTo(expected)); }
         [Test] public void MalformedLegacyArraysFailWithoutThrowing()
         {
-            var s = WithComplaint().Capture(); s.schemaVersion = 1; s.reports[0].guaranteed = null;
+            var s = StockHistoryTests.Legacy(WithComplaint().Capture(), 1); s.reports[0].guaranteed = null;
             s.reports[0].complaintResolved = null; s.reports[0].sold = null;
             Assert.That(WorkCareerState.TryRestore(s, out _), Is.False);
         }

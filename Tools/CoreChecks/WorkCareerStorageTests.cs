@@ -15,7 +15,7 @@ namespace Broker.Tests
         private WorkCareerStorage Store() => new WorkCareerStorage(path, Encode, Decode);
         private static WorkCareerState NewState() => WorkCareerState.FromIntro(WorkCareerTests.Intro(true));
         private static void Finish(WorkCareerState c) { var d = c.CreateDay(); WorkCareerTests.Sell(d, 1); d.EndDay(); Assert.That(c.CompleteDay(d), Is.True); }
-        [SetUp] public void Setup() { folder = Path.Combine(Path.GetTempPath(), "work-career-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-employee-work-v2.json"); }
+        [SetUp] public void Setup() { folder = Path.Combine(Path.GetTempPath(), "work-career-" + Guid.NewGuid()); Directory.CreateDirectory(folder); path = Path.Combine(folder, "broker-employee-work-v3.json"); }
         [TearDown] public void Cleanup() { Directory.Delete(folder, true); }
         [Test] public void MissingFileDoesNotCreateOne()
         { Assert.That(Store().TryLoad(out _, out var notice, out var status), Is.False); Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Missing)); Assert.That(notice, Is.Empty); Assert.That(Directory.GetFiles(folder), Is.Empty); }
@@ -70,27 +70,83 @@ namespace Broker.Tests
             Assert.That(File.ReadAllText(owner), Is.EqualTo("owner main")); Assert.That(File.ReadAllText(owner + ".bak"), Is.EqualTo("owner backup"));
         }
         private string LegacyPath => Path.Combine(folder, "broker-employee-work-v1.json");
-        private WorkCareerStorage WithLegacy() => new WorkCareerStorage(path, Encode, Decode, LegacyPath);
+        private string V2Path => Path.Combine(folder, "broker-employee-work-v2.json");
+        private WorkCareerStorage WithLegacy() => new WorkCareerStorage(path, Encode, Decode, V2Path, LegacyPath);
+        // Real v1/v2 JSON has no stock fields at all; v1 also lacks complaint fields.
+        private static System.Text.Json.Nodes.JsonNode WithoutStocks(WorkCareerState c, int version)
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(Encode(c.Capture())); node["schemaVersion"] = version; node.AsObject().Remove("stockHistoryFromDay");
+            foreach (string key in new[] { "origin", "checkpoint" })
+                foreach (var client in node[key]["clients"].AsArray()) { client.AsObject().Remove("lastStockId"); client.AsObject().Remove("lastStockDay"); }
+            foreach (var report in node["reports"].AsArray()) report.AsObject().Remove("soldStockIds");
+            return node;
+        }
+        private static string V2Json(WorkCareerState c) => WithoutStocks(c, 2).ToJsonString();
         private static string LegacyJson(WorkCareerState c)
         {
-            var node = System.Text.Json.Nodes.JsonNode.Parse(Encode(c.Capture())); node["schemaVersion"] = 1;
+            var node = WithoutStocks(c, 1);
             foreach (string key in new[] { "origin", "checkpoint" })
                 foreach (var client in node[key]["clients"].AsArray()) client.AsObject().Remove("complaintPending");
             foreach (var report in node["reports"].AsArray())
             { report.AsObject().Remove("guaranteed"); report.AsObject().Remove("complaintResolved"); }
             return node.ToJsonString();
         }
-        [Test] public void LegacyImportLoadsWithoutWritesAndSavesOnlySeparateV2()
+        [Test] public void LegacyImportLoadsWithoutWritesAndSavesOnlySeparateV3()
         {
             var c = NewState(); for (int n = 0; n < 12; n++) Finish(c);
             string json = LegacyJson(c); File.WriteAllText(LegacyPath, json); File.WriteAllText(LegacyPath + ".bak", json);
             Assert.That(WithLegacy().TryLoad(out var loaded, out var notice), Is.True);
             Assert.That(notice, Does.Contain("копия v1")); Assert.That(File.Exists(path), Is.False);
             Assert.That(loaded.PersonalSavings, Is.EqualTo(c.PersonalSavings)); Assert.That(loaded.CompletedDays, Is.EqualTo(12));
-            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(2)); Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
+            Assert.That(loaded.Capture().schemaVersion, Is.EqualTo(3)); Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
             Finish(loaded); WithLegacy().TrySave(loaded, out _); WithLegacy().TrySave(loaded.RestartFromOrigin(), out _);
             Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo(json)); Assert.That(File.ReadAllText(LegacyPath + ".bak"), Is.EqualTo(json));
-            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(2));
+            Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(3)); Assert.That(File.Exists(V2Path), Is.False);
+        }
+        [Test] public void V2ImportIsReadOnlyWinsOverV1AndStartsStockHistoryNextDay()
+        {
+            var c = NewState(); for (int n = 0; n < 12; n++) Finish(c);
+            string v2 = V2Json(c), v1 = LegacyJson(NewState());
+            File.WriteAllText(V2Path, v2); File.WriteAllText(V2Path + ".bak", v2); File.WriteAllText(LegacyPath, v1);
+            Assert.That(WithLegacy().TryLoad(out var loaded, out var notice), Is.True);
+            Assert.That(notice, Does.Contain("копия v2")); Assert.That(notice, Does.Contain("в v3")); Assert.That(File.Exists(path), Is.False);
+            Assert.That(loaded.CompletedDays, Is.EqualTo(12)); Assert.That(loaded.StockHistoryFromDay, Is.EqualTo(16));
+            foreach (var r in loaded.RecentReports) Assert.That(r.soldStockIds, Is.EqualTo(new[] { "", "", "" }));
+            Finish(loaded); Assert.That(WithLegacy().TrySave(loaded, out _), Is.True);
+            Assert.That(WithLegacy().TryLoad(out var read, out notice), Is.True); Assert.That(notice, Is.Empty);
+            Assert.That(read.LastReport.soldStockIds[1], Is.EqualTo(StockCatalog.DefaultFor(read.LastReport.clientIds[1])));
+            Assert.That(read.StockHistoryFromDay, Is.EqualTo(16)); Assert.That(Decode(File.ReadAllText(path)).schemaVersion, Is.EqualTo(3));
+            Assert.That(File.ReadAllText(V2Path), Is.EqualTo(v2)); Assert.That(File.ReadAllText(V2Path + ".bak"), Is.EqualTo(v2)); Assert.That(File.ReadAllText(LegacyPath), Is.EqualTo(v1));
+        }
+        [TestCase(false, false)] [TestCase(false, true)] [TestCase(true, false)] [TestCase(true, true)]
+        public void UnreadableV2NeverFallsBackToHealthyV1(bool backup, bool directory)
+        {
+            File.WriteAllText(LegacyPath, LegacyJson(NewState())); string p = V2Path + (backup ? ".bak" : "");
+            if (directory) Directory.CreateDirectory(p); else File.WriteAllText(p, "future v2 bytes");
+            Assert.That(WithLegacy().TryLoad(out var state, out var notice, out var status), Is.False);
+            Assert.That(state, Is.Null); Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Unreadable)); Assert.That(notice, Does.Contain("перенос заблокирован"));
+            Assert.That(WithLegacy().TryCreate(NewState(), out _), Is.False); Assert.That(File.Exists(path), Is.False);
+        }
+        [Test] public void V3BackupWinsOverOlderGenerationsAndV3DataIsNotReadAsV2()
+        {
+            File.WriteAllText(V2Path, V2Json(NewState())); File.WriteAllText(LegacyPath, LegacyJson(NewState()));
+            var c = NewState(); Finish(c); WithLegacy().TrySave(c, out _); Finish(c); WithLegacy().TrySave(c, out _); File.WriteAllText(path, "broken");
+            Assert.That(WithLegacy().TryLoad(out var loaded, out var notice), Is.True); Assert.That(notice, Does.Contain("резервная"));
+            Assert.That(notice, Does.Not.Contain("копия v")); Assert.That(loaded.CompletedDays, Is.EqualTo(1));
+            Directory.Delete(folder, true); Directory.CreateDirectory(folder); File.WriteAllText(V2Path, Encode(NewState().Capture()));
+            Assert.That(WithLegacy().TryLoad(out _, out _, out var status), Is.False); Assert.That(status, Is.EqualTo(WorkCareerLoadStatus.Unreadable));
+            Assert.Throws<ArgumentException>(() => new WorkCareerStorage(path, Encode, Decode, path.ToUpperInvariant()));
+            Assert.Throws<ArgumentException>(() => new WorkCareerStorage(path, Encode, Decode, V2Path, V2Path.ToUpperInvariant()));
+        }
+        [Test] public void StockHistoryRoundTripsThroughJsonAndStaysBounded()
+        {
+            var c = NewState();
+            for (int n = 0; n < 60; n++) { var d = c.CreateDay(); for (int i = 0; i < 3; i++) WorkCareerTests.Sell(d, i); d.EndDay(); Assert.That(c.CompleteDay(d), Is.True); }
+            Assert.That(Store().TrySave(c, out _), Is.True); Assert.That(Store().TryLoad(out var read, out _), Is.True);
+            Assert.That(read.LastReport.soldStockIds, Is.EqualTo(c.LastReport.soldStockIds)); Assert.That(read.LastReport.soldStockIds[2], Is.Not.Empty);
+            for (int i = 0; i < 6; i++)
+            { Assert.That(read.Clients[i].lastStockId, Is.EqualTo(c.Clients[i].lastStockId)); Assert.That(read.Clients[i].lastStockDay, Is.EqualTo(c.Clients[i].lastStockDay)); }
+            Assert.That(new FileInfo(path).Length, Is.LessThan(20000));
         }
         [Test] public void LegacyBackupRecoveryDoesNotAlterDamagedPrimaryOrBackup()
         {
@@ -160,7 +216,7 @@ namespace Broker.Tests
             else Assert.That(File.ReadAllText(source), Is.EqualTo(text));
             Assert.That(File.Exists(path + ".tmp"), Is.False);
         }
-        [Test] public void FirstTransferWritesOnlyV2AndReportsLoadedOnRead()
+        [Test] public void FirstTransferWritesOnlyV3AndReportsLoadedOnRead()
         {
             Assert.That(WithLegacy().TryCreate(NewState(), out _), Is.True);
             CollectionAssert.AreEquivalent(new[] { path }, Directory.GetFiles(folder));
