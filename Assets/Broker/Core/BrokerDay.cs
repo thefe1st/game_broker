@@ -23,9 +23,10 @@ namespace Broker.Core
         public int DayNumber { get; }
         public int OpeningCash { get; }
         public int CarryDebt { get; }
-        public int DailyRent => IsEmployee ? 0 : Rent + (DayNumber - 1) * 20;
-        public int DailyPayroll => IsEmployee ? 0 : Payroll + (DayNumber - 1) * 20;
-        public string DayTitle => IsEmployee ? EmploymentTitle : DayNumber == 1 ? "Большие амбиции" : DayNumber == 2 ? "Вам уже перезванивают" : "Проверка на солидность";
+        public int DailyRent => IsFounder ? FirmCareerState.DailyRent : IsEmployee ? 0 : Rent + (DayNumber - 1) * 20;
+        public bool HasFounderAssistant { get; }
+        public int DailyPayroll => IsFounder ? (HasFounderAssistant ? FirmCareerState.AssistantSalary : 0) : IsEmployee ? 0 : Payroll + (DayNumber - 1) * 20;
+        public string DayTitle => IsFounder ? "Своя вывеска, свои счета" : IsEmployee ? EmploymentTitle : DayNumber == 1 ? "Большие амбиции" : DayNumber == 2 ? "Вам уже перезванивают" : "Проверка на солидность";
         public int SelectedClientIndex { get; private set; }
         public ClientRecord Current => clients[SelectedClientIndex];
         public int Cash { get; private set; }
@@ -52,22 +53,24 @@ namespace Broker.Core
         public int TeamMorale => (employees[0].Morale + employees[1].Morale) / 2;
 
         public BrokerDay(int dayNumber = 1, int openingCash = 0, int reputation = 50, bool goldenPhone = false,
-            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner, string[] clientIds = null, bool[] complaints = null)
+            int[] relationshipBonuses = null, bool[] returning = null, int carryDebt = 0, CareerMode mode = CareerMode.Owner, string[] clientIds = null, bool[] complaints = null, bool founderAssistant = false)
         {
-            if (!Enum.IsDefined(typeof(CareerMode), mode) || (mode != CareerMode.Owner && (carryDebt != 0 || goldenPhone))
-                || dayNumber < 1 || (mode == CareerMode.EmployeeWork ? dayNumber < 4 : dayNumber > 3)
-                || openingCash < 0 || openingCash > (mode == CareerMode.EmployeeWork ? int.MaxValue - 1000 : 100000)
+            bool repeatable = mode == CareerMode.EmployeeWork || mode == CareerMode.Founder;
+            if (!Enum.IsDefined(typeof(CareerMode), mode) || ((mode == CareerMode.Employee || mode == CareerMode.EmployeeWork) && (carryDebt != 0 || goldenPhone))
+                || (mode == CareerMode.Founder && goldenPhone) || (founderAssistant && mode != CareerMode.Founder)
+                || dayNumber < 1 || (repeatable ? dayNumber < 4 : dayNumber > 3)
+                || openingCash < 0 || openingCash > (repeatable ? int.MaxValue - 1000 : 100000)
                 || reputation < 0 || reputation > 100
-                || carryDebt < 0 || carryDebt > 100000 || (relationshipBonuses != null && relationshipBonuses.Length != 3)
+                || carryDebt < 0 || carryDebt > (mode == CareerMode.Founder ? int.MaxValue - 1000 : 100000) || (relationshipBonuses != null && relationshipBonuses.Length != 3)
                 || (returning != null && returning.Length != 3)
-                || (complaints != null && (mode != CareerMode.EmployeeWork || complaints.Length != 3))
-                || (mode != CareerMode.EmployeeWork && clientIds != null)
-                || (mode == CareerMode.EmployeeWork && !ValidAppointments(dayNumber, clientIds))) throw new ArgumentException("Invalid day opening state");
-            Mode = mode; DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
+                || (complaints != null && (!repeatable || complaints.Length != 3))
+                || (!repeatable && clientIds != null)
+                || (repeatable && !ValidAppointments(dayNumber, clientIds))) throw new ArgumentException("Invalid day opening state");
+            Mode = mode; HasFounderAssistant = founderAssistant; DayNumber = dayNumber; OpeningCash = openingCash; Cash = openingCash; CarryDebt = carryDebt;
             Reputation = reputation; HasGoldenPhone = goldenPhone;
             string[] ids = clientIds ?? new[] { "boris", "inna", "artem" };
             clients = new List<ClientRecord>();
-            foreach (string id in ids) clients.Add(ClientCatalog.Create(id, IsEmployee));
+            foreach (string id in ids) clients.Add(ClientCatalog.Create(id, IsEmployee || IsFounder));
             for (int i = 0; i < clients.Count; i++)
             {
                 int bonus = relationshipBonuses == null ? 0 : Math.Max(-1, Math.Min(2, relationshipBonuses[i]));
@@ -76,9 +79,13 @@ namespace Broker.Core
                 clients[i].ReportReviewed = !clients[i].Returning;
                 clients[i].ComplaintPending = complaints != null && complaints[i];
             }
-            employees = new List<EmployeeRecord> { new EmployeeRecord("Лена", "Досье за 20 секунд. Верит в порядок, но не в ваш галстук."), new EmployeeRecord("Макс", "Побочные продажи приносят 55. Энтузиазма больше, чем осторожности.") };
+            employees = new List<EmployeeRecord> { new EmployeeRecord("Лена", IsFounder
+                ? "Помощник по досье: 25 игровых секунд, зарплата $40 за день. Продажи ведёт основатель."
+                : "Досье за 20 секунд. Верит в порядок, но не в ваш галстук."), new EmployeeRecord("Макс", "Побочные продажи приносят 55. Энтузиазма больше, чем осторожности.") };
             Clients = clients.AsReadOnly(); Employees = employees.AsReadOnly();
-            if (IsEmployee) Notify(SupervisorBrief);
+            if (IsFounder) Notify("Ваша контора: всю комиссию получает фирма. Аренда $60 за день; личный резерв отдельно. "
+                + (HasFounderAssistant ? "Помощник готовит досье по поручению; зарплата $40 за день. Звонки ведёте сами." : "Пока работаете один. Помощника можно нанять между днями."));
+            else if (IsEmployee) Notify(SupervisorBrief);
             else Notify("Лена: День " + DayNumber + ". На обязательства нужно $" + TotalExpenses + ". На визитках у нас уже холдинг.");
             if (CarryDebt > 0) Notify("Бухгалтерия: Долг $" + CarryDebt + " перенесён в счёт этого дня. Второй раз из кассы его не списываем.");
         }
@@ -125,7 +132,7 @@ namespace Broker.Core
                 if (Current.ComplaintPending && !Current.ComplaintResolved) return ConversationStage.Complaint;
                 if (!Current.ReportReviewed) return ConversationStage.Report;
                 if (!NeedsKnown) return ConversationStage.Goal;
-                if (!RisksExplained) return ConversationStage.Risk;
+                if (!RisksExplained || (CurrentStock.Risk == StockRisk.Speculative && !Current.StockRiskExplained)) return ConversationStage.Risk;
                 if (!FeesExplained) return ConversationStage.Fee;
                 if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed) return ConversationStage.Term;
                 if (ClientCatalog.NeedsService(Current.Id) && !Current.SpecialDiscussed) return ConversationStage.Service;
@@ -149,13 +156,13 @@ namespace Broker.Core
                         : "Объясни риск заново: например, «Есть риск убытка». Затем можно обсудить отчёт и условия.";
                     case ConversationStage.Report: return "Сначала обсуди отчёт по прошлому разговору.";
                     case ConversationStage.Goal: return "Дальше: спроси о цели клиента — например, «Для чего нужны деньги?»";
-                    case ConversationStage.Risk: return "Дальше: объясни риск убытка, без обещаний гарантированной прибыли.";
+                    case ConversationStage.Risk: return "Дальше: объясни риск акций «" + CurrentStock.Name + "», без обещаний гарантированной прибыли. " + CurrentStock.RiskDisclosure;
                     case ConversationStage.Fee: return "Дальше: назови комиссию 2% — отдельно от доходности.";
                     case ConversationStage.Term: return "Дальше: назови срок вложения — год или 12 месяцев.";
                     case ConversationStage.Service: return "Дальше: обсуди персональный отчёт или личное сопровождение.";
                     case ConversationStage.Proposal: return "Условия раскрыты. Предложи сделку и выслушай последний вопрос клиента.";
                     case ConversationStage.Objection: return ClientConversation.Hint(Current.Id);
-                    case ConversationStage.Trust: return IsEmployee
+                    case ConversationStage.Trust: return IsEmployee || (IsFounder && !HasFounderAssistant)
                         ? "Не хватает доверия. Если раньше давили, скажите «Решение за вами». Потерю доверия от ложных гарантий так не исправить."
                         : "Не хватает доверия: поможет досье; после давления — «Решение за вами».";
                     default: return "Вопрос клиента закрыт. Можно завершить сделку.";
@@ -171,10 +178,10 @@ namespace Broker.Core
             DialogueIntent facts = DialogueRules.Analyze(message);
             if (DialogueRules.Has(facts, DialogueIntent.Guarantee))
             {
-                if (IsRepeatingWork) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; }
+                if (IsRepeatableCareer) { Current.FalseGuaranteeMade = true; Current.ComplaintResolved = false; }
                 Current.Trust = Math.Max(0, Trust - 1); Reputation = Math.Max(0, Reputation - 10);
-                string consequence = IsRepeatingWork ? " На следующем звонке вернёмся к этому обещанию: у меня претензия к гарантии." : "";
-                if (Trust == 0) { Current.Call = CallStatus.Closed; return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно." + consequence; }
+                string consequence = IsRepeatableCareer ? " На следующем звонке вернёмся к этому обещанию: у меня претензия к гарантии." : "";
+                if (Trust == 0) { CloseCurrentCall(); return Current.Name + ": Гарантии без риска? Спасибо, на сегодня достаточно." + consequence; }
                 return Current.Name + ": Уже подозрительно. Давайте без гарантий прибыли и отсутствия риска." + consequence;
             }
             var answers = new List<string>();
@@ -214,6 +221,8 @@ namespace Broker.Core
             }
             if (!RisksExplained && DialogueRules.Has(facts, DialogueIntent.Risk))
             { Current.RisksExplained = true; answers.Add(ClientConversation.Risk(Current.Id)); }
+            if (DialogueRules.Has(facts, DialogueIntent.Risk) && (CurrentStock.Risk != StockRisk.Speculative
+                || StockDialogueRules.DisclosesSpeculativeRisk(message))) Current.StockRiskExplained = true;
             if (!FeesExplained && DialogueRules.Has(facts, DialogueIntent.Fee))
             { Current.FeesExplained = true; answers.Add(ClientConversation.Fee(Current.Id)); }
             if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed && DialogueRules.Has(facts, DialogueIntent.Year))
@@ -247,19 +256,22 @@ namespace Broker.Core
                 return Current.Name + ": Сначала разберём претензию к гарантии. " + NextConversationStep;
             if (!Current.ReportReviewed) return Current.Name + ": Сначала обсудим отчёт по прошлому разговору.";
             if (!NeedsKnown) return Current.Name + ": Вы даже не спросили, зачем мне это.";
+            if (!StockCatalog.Fits(Current.Id, CurrentStock)) return Current.Name + ": " + StockCatalog.Suitability(Current.Id, CurrentStock);
             if (!RisksExplained) return Current.Name + ": Сначала расскажите, что может пойти не так.";
+            if (CurrentStock.Risk == StockRisk.Speculative && !Current.StockRiskExplained)
+                return Current.Name + ": Для «" + CurrentStock.Name + "» общего слова «риск» мало. Раскройте высокий риск, возможность потери всей суммы и отсутствие покупателя; можно нажать «Раскрыть свойства акции».";
             if (!FeesExplained) return Current.Name + ": А ваша комиссия какая?";
             if (ClientCatalog.NeedsYear(Current.Id) && !Current.SpecialDiscussed) return Current.Name + ": А срок вложения мы так и не обсудили.";
             if (ClientCatalog.NeedsService(Current.Id) && !Current.SpecialDiscussed) return Current.Name + ": Где обещанное личное внимание? Расскажите о персональном отчёте.";
             if (!Current.ObjectionRaised)
             {
                 Current.ObjectionRaised = true;
-                return Current.Name + ": " + ClientConversation.Objection(Current.Id);
+                return Current.Name + ": По акциям «" + CurrentStock.Name + "» (" + CurrentStock.Ticker + "): " + ClientConversation.Objection(Current.Id);
             }
             if (!Current.ObjectionResolved) return Current.Name + ": Мой вопрос всё ещё открыт. " + ClientConversation.Objection(Current.Id);
-            if (Trust < 2) return Current.Name + (IsEmployee ? ": Пока не доверяю. Если раньше торопили — дайте мне подумать. Одной вежливостью ложные гарантии не исправить."
+            if (Trust < 2) return Current.Name + (IsEmployee || (IsFounder && !HasFounderAssistant) ? ": Пока не доверяю. Если раньше торопили — дайте мне подумать. Одной вежливостью ложные гарантии не исправить."
                 : ": Пока не доверяю. Подготовьте досье или вернёмся к разговору без давления.");
-            Current.DealClosed = true; Current.Call = CallStatus.Closed;
+            Current.DealClosed = true; CloseCurrentCall();
             FirmRevenue += Current.Commission;
             int payout = IsEmployee ? PersonalPayout(Current.Commission) : Current.Commission;
             Credit(payout); Reputation = Math.Min(100, Reputation + 5);
@@ -269,38 +281,54 @@ namespace Broker.Core
                 : Current.Id == "inna" ? "Условия согласованы. Год, комиссия, риск и письменный договор. Теперь можно работать."
                 : "Договорились. Личный контакт записал. Если ответит робот, назову его вашим именем.";
             return Current.Name + ": " + agreement + (IsEmployee ? "\nКомиссия фирмы: $" + Current.Commission + ". Лично вам: +$" + payout + " (20%)."
-                : "\nКомиссия: +" + Current.Commission + ".") + " Все деньги и продукты вымышлены.";
+                : "\nКомиссия: +" + Current.Commission + ".") + "\nКуплены акции «" + CurrentStock.Name + "» (" + CurrentStock.Ticker + "), вложение $" + CurrentInvestment + ". Доходность не гарантирована. Все деньги и продукты вымышлены.";
         }
         public string EndCall()
         {
             if (DayEnded || Call != CallStatus.Active) return "Нет активного звонка.";
-            Current.Call = CallStatus.Closed;
+            CloseCurrentCall();
             return Current.Name + ": Ладно, на этом всё. Хотя трубку вы тоже могли бы продавать.";
+        }
+        private void CloseCurrentCall()
+        {
+            Current.Call = CallStatus.Closed;
+            if (!IsFounder) return;
+            foreach (var worker in employees)
+            {
+                if (worker.Work != WorkKind.Research || worker.TargetClient != SelectedClientIndex) continue;
+                worker.Work = WorkKind.Idle; worker.Remaining = 0;
+                Notify(worker.Name + ": Досье «" + Current.Name + "» отменено без бонуса: звонок завершён. Можно поручить другого клиента.");
+            }
         }
         public string AssignTask(int workerIndex, WorkKind work, int clientIndex)
         {
+            if (IsFounder && (!HasFounderAssistant || workerIndex != 0 || work != WorkKind.Research))
+                return "Помощник доступен после найма и готовит только досье. Звонки и продажи ведёте сами.";
             if (IsEmployee) return "Лена и Макс — ваши коллеги, не подчинённые. Звонки ведите лично.";
             if (DayEnded || PendingEvent != null || workerIndex < 0 || workerIndex >= employees.Count
                 || clientIndex < 0 || clientIndex >= clients.Count || work == WorkKind.Idle || !Enum.IsDefined(typeof(WorkKind), work)) return "Поручение недоступно.";
             var worker = employees[workerIndex];
             if (worker.Work != WorkKind.Idle) return worker.Name + ": Сначала закончу текущее.";
             if (work == WorkKind.Research && clients[clientIndex].Researched) return "Досье уже готово.";
+            if (IsFounder && clients[clientIndex].Call == CallStatus.Closed) return "Звонок завершён: досье сегодня уже не нужно.";
             if (work == WorkKind.Leads && worker.SideDealDone) return worker.Name + ": Моя побочная сделка сегодня уже закрыта.";
             worker.Work = work; worker.TargetClient = clientIndex;
-            worker.Duration = work == WorkKind.Research ? (workerIndex == 0 ? 20 : 35) : work == WorkKind.Leads ? 40 : 18;
-            if (work != WorkKind.Break && worker.Morale < 40) worker.Duration *= 1.5f;
+            worker.Duration = IsFounder ? FirmCareerState.DossierSeconds : work == WorkKind.Research ? (workerIndex == 0 ? 20 : 35) : work == WorkKind.Leads ? 40 : 18;
+            if (!IsFounder && work != WorkKind.Break && worker.Morale < 40) worker.Duration *= 1.5f;
             worker.Remaining = worker.Duration;
-            worker.Morale = Math.Max(0, worker.Morale - (work == WorkKind.Break ? 0 : 6));
+            if (!IsFounder) worker.Morale = Math.Max(0, worker.Morale - (work == WorkKind.Break ? 0 : 6));
             return worker.Name + (work == WorkKind.Research ? ": Готовлю досье на клиента «" + clients[clientIndex].Name + "»." : work == WorkKind.Leads ? ": Обзвоню старые контакты. Один раз, не до бесконечности." : ": Ушла" + (workerIndex == 1 ? "… ладно, ушёл" : "") + " на перерыв.");
         }
         public string BuyCoffee()
         {
+            if (IsFounder) return "Закупки для команды на этом этапе недоступны.";
             if (IsEmployee) return "Офисные закупки оплачивает работодатель. Личные деньги не списаны.";
             if (DayEnded || PendingEvent != null || CoffeeBought || Cash < 40) return "Кофе недоступен: нужен 40, покупка один раз за день.";
             Spend(40); CoffeeBought = true; ChangeMorale(20); return "Команда получила кофе. -40 денег, +20 настроения. Теперь хотя бы бодро паникуем.";
         }
         public string BuyGoldenPhone()
         {
+            if (IsFounder) return "Улучшения новой конторы пока недоступны. Сначала личные продажи и аренда.";
             if (IsEmployee) return "Улучшениями офиса занимается работодатель. Личные деньги не списаны.";
             if (DayEnded || PendingEvent != null || HasGoldenPhone || Cash < 90) return "Телефон недоступен: нужен 90, покупка один раз.";
             Spend(90); HasGoldenPhone = true;
@@ -334,9 +362,9 @@ namespace Broker.Core
             }
             // The closing bell wins ties: an uncollected city errand never pays automatically.
             if (RemainingSeconds <= 0) { EndDay(); return; }
-            if (!IsEmployee) AdvanceCityActivity(actual, inCity);
-            if (!IsEmployee) MaybeEvent();
-            if (PendingEvent == null && !IsEmployee) OfficeBanter();
+            if (Mode == CareerMode.Owner) AdvanceCityActivity(actual, inCity);
+            if (Mode == CareerMode.Owner) MaybeEvent();
+            if (PendingEvent == null && Mode == CareerMode.Owner) OfficeBanter();
         }
         private void OfficeBanter()
         {

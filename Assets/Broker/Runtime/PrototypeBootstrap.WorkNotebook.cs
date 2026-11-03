@@ -10,7 +10,7 @@ namespace Broker.Runtime
 
         private void OpenWorkNotebook(bool history = false)
         {
-            if (!ApplicationActive || !IsWorkMode || workCareer == null || selectingMode || intro || day.DayEnded || UtilityOverlayOpen
+            if (!ApplicationActive || (!IsWorkMode && !IsFounderMode) || selectingMode || intro || day.DayEnded || UtilityOverlayOpen
                 || busy || voice.Recording || voice.Working) return;
             voice.Cancel(); showWorkNotebook = true; workNotebookHistory = history; workNotebookScroll = Vector2.zero;
             office.Player.SetControl(false); GUI.FocusControl(null);
@@ -21,7 +21,7 @@ namespace Broker.Runtime
             Label(200, 104, 1040, 32, "РАБОЧИЙ БЛОКНОТ / ВРЕМЯ НА ПАУЗЕ", theme.Tag);
             if (Button(200, 160, 504, 48, "База клиентов", true, !workNotebookHistory))
             { workNotebookHistory = false; workNotebookScroll = Vector2.zero; }
-            if (Button(728, 160, 512, 48, "История рабочих дней", true, workNotebookHistory))
+            if (Button(728, 160, 512, 48, IsFounderMode ? "История своей конторы" : "История рабочих дней", true, workNotebookHistory))
             { workNotebookHistory = true; workNotebookScroll = Vector2.zero; }
             Label(200, 228, 1040, 60, !saveSucceeded
                 ? "ВНИМАНИЕ: есть незаписанный прогресс. Здесь итоги завершённых дней текущего запуска, не гарантия записи на диск. Текущий день ещё не включён."
@@ -45,7 +45,7 @@ namespace Broker.Runtime
             float y = 8;
             if (!workNotebookHistory)
             {
-                foreach (var client in workCareer.Clients)
+                foreach (var client in IsFounderMode ? firmCareer.Clients : workCareer.Clients)
                 {
                     var profile = ClientCatalog.Create(client.id);
                     y = NotebookLine(y, profile.Name + " / " + profile.Role, theme.Heading, draw, 34);
@@ -53,11 +53,12 @@ namespace Broker.Runtime
                         + (client.awaitingReport ? " · остался отчёт по сделке" : " · необсуждённых отчётов нет")
                         + (client.complaintPending ? " · ПРЕТЕНЗИЯ К ГАРАНТИИ" : " · претензий нет"), theme.Small, draw);
                     y = NotebookLine(y, WorkNotebookToday(client), theme.Small, draw);
-                    y = NotebookLine(y, "Комиссия фирмы $" + profile.Commission + " · лично вам $" + BrokerDay.PersonalPayout(profile.Commission) + " (20%). " + profile.Brief, theme.Small, draw);
+                    y = NotebookLine(y, "Комиссия фирмы $" + profile.Commission + (IsFounderMode ? " · вся сумма в кассу фирмы. " : " · лично вам $" + BrokerDay.PersonalPayout(profile.Commission) + " (20%). ") + profile.Brief, theme.Small, draw);
                     y += 24;
                 }
                 return y;
             }
+            if (IsFounderMode) return FirmNotebookHistory(y, draw);
             var reports = workCareer.RecentReports;
             if (reports.Length == 0)
                 return NotebookLine(y, "Рабочие дни ещё не завершены. Перенесённые накопления вступления не считаются заработком рабочего дня.", theme.Text, draw, 60);
@@ -86,13 +87,33 @@ namespace Broker.Runtime
                 string state = c.DealClosed ? "сделка закрыта" : c.Call == CallStatus.Active ? "на линии"
                     : c.Call == CallStatus.Closed ? "звонок завершён без сделки" : "ещё не звонили";
                 return "Сегодня в списке: " + state
+                    + (IsFounderMode && c.Researched ? ". Досье подготовлено сегодня (+1 доверия, без автоматической продажи)." : "")
                     + (c.FalseGuaranteeMade ? ". Сегодня дана ложная гарантия; претензия останется на следующий звонок." : "")
                     + (c.ComplaintPending ? (c.ComplaintResolved ? ". Претензия урегулирована сегодня." : ". Претензия ещё не урегулирована.") : "")
                     + (c.Returning
                     ? (c.ReportReviewed ? ". Прошлый отчёт обсуждён сегодня." : ". Сначала обсудите прошлый отчёт.") : ".");
             }
-            return "Сегодня не в списке. " + (client.lastSeenWorkDay == 0 ? "В рабочих днях ещё не появлялся."
-                : "Последний раз в списке: день " + (client.lastSeenWorkDay + 3) + ". Это не означает, что вы звонили.");
+            return "Сегодня не в списке. " + (client.lastSeenWorkDay == 0 ? "В этом режиме ещё не появлялся."
+                : "Последний раз в списке: день " + (IsFounderMode ? firmCareer.OpeningDayNumber + client.lastSeenWorkDay - 1 : client.lastSeenWorkDay + 3) + ". Это не означает, что вы звонили.");
+        }
+        private float FirmNotebookHistory(float y, bool draw)
+        {
+            var reports = firmCareer.RecentReports;
+            y = NotebookLine(y, "Показано " + reports.Length + " из " + firmCareer.CompletedDays + " завершённых дней своей конторы. Личный резерв $" + firmCareer.PersonalReserve + ". Старые рабочие дни не включены."
+                + (firmCareer.CompletedDays > reports.Length ? " Более ранние подробности свёрнуты." : ""), theme.Small, draw);
+            y = NotebookLine(y, firmCareer.HasAssistant ? "Помощник нанят перед днём " + firmCareer.AssistantHireDay
+                + ": −$100 до утренней кассы этого дня. Зарплата $40/день. Текущая касса/долг $" + firmCareer.Balance + "."
+                : "Помощник не нанят; зарплата $0. Найм доступен утром или в итогах при кассе от $200.", theme.Small, draw);
+            for (int i = reports.Length - 1; i >= 0; i--)
+            {
+                var r = reports[i];
+                y = NotebookLine(y, "День " + r.day + " · касса/долг $" + r.balance, theme.Heading, draw, 34);
+                y = NotebookLine(y, "Фирма: $" + r.openingBalance + " + $" + r.revenue + " − $" + r.rent + " аренды − $" + r.salary + " зарплаты = $" + r.balance + ". Личной выплаты нет.", theme.Small, draw);
+                for (int c = 0; c < 3; c++) y = NotebookLine(y, ClientCatalog.Create(r.clientIds[c]).Name + ": "
+                    + (r.sold[c] ? "сделка" : r.closed[c] ? "звонок без сделки" : "не звонили")
+                    + (r.guaranteed[c] ? " · ложная гарантия" : "") + (r.complaintResolved[c] ? " · претензия урегулирована" : ""), theme.Small, draw);
+            }
+            return y;
         }
     }
 }
