@@ -12,7 +12,15 @@ namespace Broker.FlowChecks
 {
     public sealed partial class BootstrapFlowTests
     {
-        private string FirmPath => Path.Combine(folder, "broker-founder-v2.json");
+        private string FirmPath => Path.Combine(folder, "broker-founder-v3.json");
+        // Real v1/v2 founder JSON has no stock fields; explicit empty values are accepted too.
+        private static FirmCareerSave LegacyFirm(FirmCareerSave s, int version)
+        {
+            s.schemaVersion = version; s.stockHistoryFromDay = 0;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockId = ""; c.lastStockDay = 0; }
+            foreach (var r in s.reports) r.soldStockIds = null;
+            return s;
+        }
         private static void SellAny(BrokerDay d, int i)
         {
             Assert.That(d.SelectClient(i), Is.True); d.StartCall();
@@ -192,7 +200,7 @@ namespace Broker.FlowChecks
         [TestCase(false)] [TestCase(true)]
         public void LegacyFounderMenuHireAndResetNeverChangeV1OrBackup(bool backup)
         {
-            OpenFirm(false); var s = Get<FirmCareerState>("firmCareer").Capture(); s.schemaVersion = 1;
+            OpenFirm(false); var s = LegacyFirm(Get<FirmCareerState>("firmCareer").Capture(), 1);
             File.Delete(FirmPath); string legacy = Path.Combine(folder, "broker-founder-v1.json");
             string p = legacy + (backup ? ".bak" : ""); string bytes = JsonUtility.ToJson(s); File.WriteAllText(p, bytes);
             if (backup) File.WriteAllText(legacy, "broken v1");
