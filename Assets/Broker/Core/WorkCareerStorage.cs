@@ -7,7 +7,7 @@ namespace Broker.Core
     public enum WorkCareerLoadStatus { Missing, Loaded, Unreadable }
 
     // Serializer is injected: Unity uses JsonUtility, headless tests use System.Text.Json.
-    // Writes go only to SavePath (v3). Older generations are read-only imports, newest first.
+    // Writes go only to SavePath (v4). Older generations are read-only imports, newest first.
     public sealed class WorkCareerStorage
     {
         public const int MaxBytes = 65536;
@@ -16,14 +16,19 @@ namespace Broker.Core
         private readonly Generation[] generations;
         private readonly Func<WorkCareerSave, string> encode;
         private readonly Func<string, WorkCareerSave> decode;
-        // legacyPath: previous v2 file (accepts v1/v2 data); olderLegacyPath: original v1 file.
+        // legacyPaths, newest first: v3, v2, v1 files. A null entry skips that generation;
+        // each file accepts its own and older schemas (a v3 file may still hold v2 data).
         public WorkCareerStorage(string path, Func<WorkCareerSave, string> serializer, Func<string, WorkCareerSave> deserializer,
-            string legacyPath = null, string olderLegacyPath = null)
+            params string[] legacyPaths)
         {
             SavePath = Path.GetFullPath(path);
-            var list = new System.Collections.Generic.List<Generation> { new Generation { FilePath = SavePath, Label = "v3", MaxVersion = WorkCareerState.SchemaVersion } };
-            if (legacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(legacyPath), Label = "v2", MaxVersion = 2 });
-            if (olderLegacyPath != null) list.Add(new Generation { FilePath = Path.GetFullPath(olderLegacyPath), Label = "v1", MaxVersion = 1 });
+            var list = new System.Collections.Generic.List<Generation> { new Generation { FilePath = SavePath, Label = "v" + WorkCareerState.SchemaVersion, MaxVersion = WorkCareerState.SchemaVersion } };
+            if (legacyPaths != null && legacyPaths.Length >= WorkCareerState.SchemaVersion) throw new ArgumentException("Too many legacy paths.");
+            for (int i = 0; legacyPaths != null && i < legacyPaths.Length; i++)
+            {
+                int version = WorkCareerState.SchemaVersion - 1 - i;
+                if (legacyPaths[i] != null) list.Add(new Generation { FilePath = Path.GetFullPath(legacyPaths[i]), Label = "v" + version, MaxVersion = version });
+            }
             for (int i = 0; i < list.Count; i++) for (int j = i + 1; j < list.Count; j++)
                 if (string.Equals(list[i].FilePath, list[j].FilePath, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Legacy path must be separate.");
             generations = list.ToArray();
@@ -49,7 +54,7 @@ namespace Broker.Core
                     var data = decode(File.ReadAllText(path, Encoding.UTF8));
                     if (data == null || data.schemaVersion > generation.MaxVersion || !WorkCareerState.TryRestore(data, out state)) continue;
                     if (path != source) notice = "Восстановлена резервная копия: основной файл сохранения не прочитан. ";
-                    if (legacy) notice += "Загружена копия " + generation.Label + ". После завершения дня прогресс запишется отдельно в v3; старые "
+                    if (legacy) notice += "Загружена копия " + generation.Label + ". После завершения дня прогресс запишется отдельно в v" + WorkCareerState.SchemaVersion + "; старые "
                         + generation.Label + " и .bak не меняются.";
                     status = WorkCareerLoadStatus.Loaded; return true;
                 }

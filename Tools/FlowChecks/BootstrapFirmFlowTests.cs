@@ -12,11 +12,16 @@ namespace Broker.FlowChecks
 {
     public sealed partial class BootstrapFlowTests
     {
-        private string FirmPath => Path.Combine(folder, "broker-founder-v3.json");
-        // Real v1/v2 founder JSON has no stock fields; explicit empty values are accepted too.
+        private string FirmPath => Path.Combine(folder, "broker-founder-v4.json");
+        // Real v3 founder JSON has no quotes, prices or rate counters; v1/v2 also have no stock fields.
+        // Explicit empty values are accepted too. Only 2% days convert: older schemas had no other rate.
         private static FirmCareerSave LegacyFirm(FirmCareerSave s, int version)
         {
-            s.schemaVersion = version; s.stockHistoryFromDay = 0;
+            s.schemaVersion = version; s.marketFromDay = 0;
+            foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockPrice = 0; c.dealsAt3 = 0; c.dealsAt5 = 0; }
+            foreach (var r in s.reports) r.soldPrices = null;
+            if (version == 3) return s;
+            s.stockHistoryFromDay = 0;
             foreach (var clients in new[] { s.origin.clients, s.checkpoint.clients }) foreach (var c in clients) { c.lastStockId = ""; c.lastStockDay = 0; }
             foreach (var r in s.reports) r.soldStockIds = null;
             return s;
@@ -24,7 +29,7 @@ namespace Broker.FlowChecks
         private static void SellAny(BrokerDay d, int i)
         {
             Assert.That(d.SelectClient(i), Is.True); d.StartCall();
-            d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт.");
+            d.Say("Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия " + d.CurrentFeePercent + "%. Срок год. Персональный отчёт.");
             d.OfferDeal(); d.Say(ClientConversation.AnswerIntent(d.Current.Id) == DialogueIntent.Reserve ? "Оставьте резерв на оборудование."
                 : ClientConversation.AnswerIntent(d.Current.Id) == DialogueIntent.Written ? "Все условия в письменном договоре." : "Личный менеджер, буду на связи.");
             d.OfferDeal(); Assert.That(d.DealClosed, Is.True, d.Current.Id + ": " + d.NextConversationStep);
@@ -386,10 +391,10 @@ namespace Broker.FlowChecks
             Day.SelectClient(Array.IndexOf(ClientCatalog.Appointments(Day.DayNumber), id)); Interact(OfficeStation.Desk); Click("Позвонить");
             Assert.That(Day.ConversationStep, Is.EqualTo(ConversationStage.Complaint)); Click("Предложить сделку"); Assert.That(Day.DealClosed, Is.False);
             Set("message", "Признаю ошибку. Есть риск убытка."); Click("Сказать"); Assert.That(Day.ConversationStep, Is.EqualTo(ConversationStage.Report));
-            Set("message", "Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия 2%. Срок год. Персональный отчёт."); Click("Сказать"); Click("Предложить сделку");
+            Set("message", "Обсудим отчёт по прошлой сделке. Какая цель? Есть риск убытка. Комиссия " + Day.CurrentFeePercent + "%. Срок год. Персональный отчёт."); Click("Сказать"); Click("Предложить сделку");
             Set("message", ClientConversation.AnswerIntent(id) == DialogueIntent.Reserve ? "Оставьте резерв на оборудование."
                 : ClientConversation.AnswerIntent(id) == DialogueIntent.Written ? "Все условия в письменном договоре." : "Личный менеджер, буду на связи.");
-            Click("Сказать"); Click("Закрыть сделку"); Assert.That(Day.Earned, Is.EqualTo(Day.Current.Commission));
+            Click("Сказать"); Click("Закрыть сделку"); Assert.That(Day.Earned, Is.EqualTo(Day.CurrentCommission));
             Day.EndDay(); Frame(); FreshGame(); Click("Продолжить свою контору");
             Assert.That(Get<FirmCareerState>("firmCareer").Clients[ClientCatalog.Index(id)].complaintPending, Is.False);
             Assert.That(Get<FirmCareerState>("firmCareer").Clients[ClientCatalog.Index(id)].awaitingReport, Is.True);

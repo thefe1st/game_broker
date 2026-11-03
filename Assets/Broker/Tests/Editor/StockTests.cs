@@ -93,7 +93,7 @@ namespace Broker.Tests
             Assert.That(d.Trust, Is.EqualTo(trust)); Assert.That(d.NeedsKnown || d.Current.SpecialDiscussed || d.Current.ObjectionRaised, Is.False);
             Assert.That(d.Spent + d.Earned, Is.Zero); Assert.That(d.Call, Is.EqualTo(CallStatus.Active));
         }
-        [Test] public void EveryCatalogSaleSettlesAndIsRecordedInFounderV3History()
+        [Test] public void EveryCatalogSaleSettlesAndIsRecordedInFounderHistoryWithItsRateAndQuote()
         {
             foreach (var s in StockCatalog.Offers)
             {
@@ -103,8 +103,10 @@ namespace Broker.Tests
                 d.SelectStock(s.Id); d.StartCall(); d.Say("Какая цель? Обсудим отчёт. Персональный отчёт."); d.ExplainStockTerms();
                 d.OfferDeal(); d.Say("Личный менеджер, буду на связи."); d.OfferDeal(); Assert.That(d.DealClosed, Is.True);
                 d.EndDay(); Assert.That(firm.CompleteDay(d), Is.True); Assert.That(FirmCareerState.TryRestore(firm.Capture(), out var restored), Is.True);
-                Assert.That(firm.Capture().schemaVersion, Is.EqualTo(3));
-                Assert.That(restored.LastReport.soldStockIds[Array.IndexOf(restored.LastReport.clientIds, "artem")], Is.EqualTo(s.Id));
+                Assert.That(firm.Capture().schemaVersion, Is.EqualTo(4)); int slot = Array.IndexOf(restored.LastReport.clientIds, "artem");
+                Assert.That(restored.LastReport.soldStockIds[slot], Is.EqualTo(s.Id));
+                Assert.That(restored.LastReport.soldPrices[slot], Is.EqualTo(StockMarket.PriceCents(s.Id, restored.LastReport.day)));
+                Assert.That(restored.LastReport.revenue, Is.EqualTo(9000 * s.FeePercent / 100));
                 Assert.That(restored.Clients[ClientCatalog.Index("artem")].lastStockId, Is.EqualTo(s.Id));
             }
         }

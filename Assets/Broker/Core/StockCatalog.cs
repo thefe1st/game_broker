@@ -4,7 +4,7 @@ namespace Broker.Core
 {
     public enum StockRisk { Moderate = 1, Growth = 2, Speculative = 3 }
 
-    // Fictional static offering terms, not live prices or an investment simulation.
+    // Fictional offering terms. Daily quotes and per-risk fees for repeatable careers live in StockMarket.
     public sealed class StockOffer
     {
         public string Id { get; }
@@ -14,6 +14,8 @@ namespace Broker.Core
         public string Description { get; }
         public StockRisk Risk { get; }
         public int HorizonMonths { get; }
+        // v4 fee by risk for work days and the founder office; intro/owner modes keep StockCatalog.FeePercent.
+        public int FeePercent => Risk == StockRisk.Moderate ? 2 : Risk == StockRisk.Growth ? 3 : 5;
         public string RiskLabel => Risk == StockRisk.Moderate ? "Умеренный" : Risk == StockRisk.Growth ? "Повышенный" : "Высокий / спекулятивный";
         public string RiskDisclosure => Risk == StockRisk.Moderate
             ? "Есть риск убытка: цена акций может упасть, дивиденды не гарантированы."
@@ -25,6 +27,7 @@ namespace Broker.Core
 
     public static class StockCatalog
     {
+        // Fixed fee of the intro/owner modes and of days imported from v1-v3 saves.
         public const int FeePercent = 2;
         private static readonly StockOffer[] offers = {
             new StockOffer("utility", "SVET", "Городской Свет", "Коммунальная инфраструктура", "Действующий бизнес с обычными контрактами. В буклете меньше ракет, зато есть расходы на ремонт.", StockRisk.Moderate, 12),

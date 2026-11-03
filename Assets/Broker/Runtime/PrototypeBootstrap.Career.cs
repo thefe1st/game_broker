@@ -29,14 +29,16 @@ namespace Broker.Runtime
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<CareerSave>(text));
             employmentStorage = new EmploymentStorage(Path.Combine(Application.persistentDataPath, "broker-employee-intro-v1.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<EmploymentSave>(text));
-            // v3 adds stock history. v2/v1 are read-only imports, used only while no v3 file or .bak exists.
-            workStorage = new WorkCareerStorage(Path.Combine(Application.persistentDataPath, "broker-employee-work-v3.json"),
+            // v4 adds daily quotes and per-risk fees. v3/v2/v1 are read-only imports, used only while no newer file or .bak exists.
+            workStorage = new WorkCareerStorage(Path.Combine(Application.persistentDataPath, "broker-employee-work-v4.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<WorkCareerSave>(text),
+                Path.Combine(Application.persistentDataPath, "broker-employee-work-v3.json"),
                 Path.Combine(Application.persistentDataPath, "broker-employee-work-v2.json"),
                 Path.Combine(Application.persistentDataPath, "broker-employee-work-v1.json"));
             workStorage.TryLoad(out workCareer, out workLoadNotice, out workLoadStatus);
-            firmStorage = new FirmCareerStorage(Path.Combine(Application.persistentDataPath, "broker-founder-v3.json"),
+            firmStorage = new FirmCareerStorage(Path.Combine(Application.persistentDataPath, "broker-founder-v4.json"),
                 value => JsonUtility.ToJson(value, true), text => JsonUtility.FromJson<FirmCareerSave>(text),
+                Path.Combine(Application.persistentDataPath, "broker-founder-v3.json"),
                 Path.Combine(Application.persistentDataPath, "broker-founder-v2.json"),
                 Path.Combine(Application.persistentDataPath, "broker-founder-v1.json"));
             firmStorage.TryLoad(out firmCareer, out firmLoadNotice, out firmLoadStatus);
