@@ -11,6 +11,8 @@ namespace Broker.Core
         public string Role { get; }
         public string Brief { get; }
         public int Commission { get; }
+        public string StockId { get; internal set; }
+        public bool StockRiskExplained { get; internal set; }
         public int Trust { get; internal set; }
         public CallStatus Call { get; internal set; }
         public bool NeedsKnown { get; internal set; }
@@ -33,7 +35,7 @@ namespace Broker.Core
         public bool PressureTrustLost { get; internal set; }
         public int UnclearReplies { get; internal set; }
         public ClientRecord(string id, string name, string role, string brief, int commission, int trust)
-        { Id = id; Name = name; Role = role; Brief = brief; Commission = commission; Trust = trust; }
+        { Id = id; Name = name; Role = role; Brief = brief; Commission = commission; Trust = trust; StockId = StockCatalog.DefaultFor(id); }
     }
 
     public sealed class EmployeeRecord

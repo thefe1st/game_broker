@@ -188,7 +188,7 @@ namespace Broker.Core
             c.savings = r.savings; c.reputation = r.reputation; c.completedWorkDays++;
             return ValidCheckpoint(c);
         }
-        private static WorkClientState CopyClient(WorkClientState c) => new WorkClientState {
+        internal static WorkClientState CopyClient(WorkClientState c) => new WorkClientState {
             id = c.id, relationship = c.relationship, deals = c.deals, lastSeenWorkDay = c.lastSeenWorkDay, awaitingReport = c.awaitingReport, complaintPending = c.complaintPending };
         private static WorkCheckpoint CopyCheckpoint(WorkCheckpoint c)
         {

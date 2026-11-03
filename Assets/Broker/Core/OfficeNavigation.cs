@@ -1,7 +1,7 @@
 namespace Broker.Core
 {
-    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit, Street, ReturnOffice, CityContact, CityPickup, Supervisor }
-    public enum OfficeView { Explore, Desk, Employee, Coffee, Upgrade, Exit, Pause, CityContact, CityPickup, Supervisor }
+    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit, Street, ReturnOffice, CityContact, CityPickup, Supervisor, CityMap, CityCompanies }
+    public enum OfficeView { Explore, Desk, Employee, Coffee, Upgrade, Exit, Pause, CityContact, CityPickup, Supervisor, CityMap, CityCompanies }
 
     // UI routing only. Never grants money, ends calls or completes staff tasks.
     public sealed class OfficeNavigation
@@ -24,6 +24,8 @@ namespace Broker.Core
                 case OfficeStation.Exit: View = OfficeView.Exit; break;
                 case OfficeStation.CityContact: View = OfficeView.CityContact; break;
                 case OfficeStation.CityPickup: View = OfficeView.CityPickup; break;
+                case OfficeStation.CityMap: View = OfficeView.CityMap; break;
+                case OfficeStation.CityCompanies: View = OfficeView.CityCompanies; break;
                 default: return false;
             }
             return true;

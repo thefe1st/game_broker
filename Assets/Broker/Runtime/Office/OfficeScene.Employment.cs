@@ -11,6 +11,7 @@ namespace Broker.Runtime.Office
         private TextMesh roleLabel, supervisorLabel;
         private OfficeInteractable playerDesk;
         private bool employeeMode;
+        private OfficeInteractable coffeeStation;
 
         private void BuildSupervisor()
         {
@@ -39,13 +40,20 @@ namespace Broker.Runtime.Office
             supervisorLabel.transform.SetParent(supervisorRoot.transform, true);
             supervisorRoot.SetActive(false);
         }
-        public void ConfigureCareerMode(CareerMode mode)
+        public void ConfigureCareerMode(CareerMode mode, bool founderAssistant = false)
         {
-            employeeMode = mode != CareerMode.Owner;
+            employeeMode = mode == CareerMode.Employee || mode == CareerMode.EmployeeWork;
             supervisorRoot.SetActive(employeeMode);
-            foreach (var obj in ownerDisplay) obj.SetActive(!employeeMode);
-            roleLabel.text = employeeMode ? "БРОКЕР / ЛИЧНЫЕ ПРОДАЖИ" : "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР";
-            playerDesk.Configure(OfficeStation.Desk, employeeMode ? "Ваше рабочее место брокера" : "Рабочее место директора", "Открыть клиентскую базу");
+            foreach (var obj in ownerDisplay) obj.SetActive(mode == CareerMode.Owner);
+            for (int i = 0; i < people.Length; i++)
+            { bool visible = mode != CareerMode.Founder || (founderAssistant && i == 0);
+                people[i].gameObject.SetActive(visible); workerLabels[i].gameObject.SetActive(visible); }
+            people[0].GetComponent<OfficeInteractable>().Configure(OfficeStation.Employee,
+                mode == CareerMode.Founder ? "Лена / помощник по досье" : "Лена / порядок в хаосе",
+                mode == CareerMode.Founder ? "Поручить досье / 25 с" : "Поговорить и дать поручение", 0);
+            roleLabel.text = mode == CareerMode.Founder ? (founderAssistant ? "ОСНОВАТЕЛЬ / ПЕРВЫЙ ПОМОЩНИК" : "ОСНОВАТЕЛЬ / ПОКА ОДИН") : employeeMode ? "БРОКЕР / ЛИЧНЫЕ ПРОДАЖИ" : "ГЕНЕРАЛЬНЫЙ ДИРЕКТОР";
+            coffeeStation.gameObject.layer = mode == CareerMode.Founder ? 2 : 0; // Hide inactive shop from the interaction ray.
+            playerDesk.Configure(OfficeStation.Desk, mode == CareerMode.Founder ? "Ваш стол в своей конторе" : employeeMode ? "Ваше рабочее место брокера" : "Рабочее место директора", "Открыть клиентскую базу");
         }
     }
 }

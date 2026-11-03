@@ -1,18 +1,20 @@
 namespace Broker.Core
 {
     // Intro and repeatable work are separate modes; the intro length is not a career cap.
-    public enum CareerMode { Owner, Employee, EmployeeWork }
+    public enum CareerMode { Owner, Employee, EmployeeWork, Founder }
 
     public sealed partial class BrokerDay
     {
         public CareerMode Mode { get; }
-        public bool IsEmployee => Mode != CareerMode.Owner;
+        public bool IsEmployee => Mode == CareerMode.Employee || Mode == CareerMode.EmployeeWork;
+        public bool IsFounder => Mode == CareerMode.Founder;
+        public bool IsRepeatableCareer => IsRepeatingWork || IsFounder;
         public bool IsRepeatingWork => Mode == CareerMode.EmployeeWork;
         public const int PersonalCommissionPercent = 20;
         public int FirmRevenue { get; private set; }
         public int FirmRetained => IsEmployee ? FirmRevenue - Earned : FirmRevenue;
         public static int PersonalPayout(int commission) => commission * PersonalCommissionPercent / 100;
-        public int SalesTarget => IsRepeatingWork ? 2 : DayNumber; // Soft learning targets: 1 / 2 / 3. No fines or hard failure.
+        public int SalesTarget => IsFounder ? 3 : IsRepeatingWork ? 2 : DayNumber; // Soft learning targets; founder has no employer quota.
         public string EmploymentTitle => IsRepeatingWork ? "Клиенты помнят разговор" : DayNumber == 1 ? "Ваш первый рабочий день"
             : DayNumber == 2 ? "План не звонит сам" : "Разбор первых результатов";
         public string SupervisorBrief => IsRepeatingWork
@@ -42,13 +44,13 @@ namespace Broker.Core
         {
             get
             {
-                if (DayEnded) return "День завершён. Посмотрите расчёт личной комиссии.";
+                if (DayEnded) return IsFounder ? "День завершён. Посмотрите расчёт кассы и аренды." : "День завершён. Посмотрите расчёт личной комиссии.";
                 if (Call == CallStatus.Active) return Current.Name + ": " + NextConversationStep;
                 int next = RecommendedClientIndex;
                 if (next < 0) return "Все три звонка завершены. Подойдите к входной двери и подтвердите окончание дня.";
-                string lead = DealsCount >= SalesTarget ? "Ориентир выполнен; можно продолжить. " : "";
+                string lead = !IsFounder && DealsCount >= SalesTarget ? "Ориентир выполнен; можно продолжить. " : "";
                 return lead + "За рабочим столом выберите «" + Clients[next].Name + "» и нажмите «Позвонить»."
-                    + (Clients[next].ComplaintPending ? " Сначала разберите претензию к гарантии." : Clients[next].Returning ? (IsRepeatingWork ? " Сначала обсудите отчёт по прошлой сделке." : " Сначала обсудите вчерашний отчёт.") : " Начните с цели клиента.");
+                    + (Clients[next].ComplaintPending ? " Сначала разберите претензию к гарантии." : Clients[next].Returning ? (IsRepeatableCareer ? " Сначала обсудите отчёт по прошлой сделке." : " Сначала обсудите вчерашний отчёт.") : " Начните с цели клиента.");
             }
         }
         public string ColleagueAdvice(int index) => IsRepeatingWork

@@ -7,15 +7,20 @@ namespace Broker.Runtime
     {
         private void RequestWorkDays()
         {
-            if (!saveSucceeded) return;
-            if (workStorage.TryLoad(out workCareer, out workLoadNotice)) { LoadMode(CareerMode.EmployeeWork); return; }
+            if (!ApplicationActive || !saveSucceeded) return;
+            if (workStorage.TryLoad(out workCareer, out workLoadNotice, out workLoadStatus)) { LoadMode(CareerMode.EmployeeWork); return; }
+            if (workLoadStatus == WorkCareerLoadStatus.Unreadable) { saveNotice = workLoadNotice; News(workLoadNotice); return; }
             if (employment.IsIntroComplete) RequestConfirmation(ConfirmationKind.StartWork);
         }
         private void StartWorkFromIntro()
         {
-            if (!employment.IsIntroComplete) return;
+            if (!ApplicationActive || !saveSucceeded || !employment.IsIntroComplete) return;
+            // The confirmation can stay open while files are restored externally.
+            if (workStorage.TryLoad(out workCareer, out workLoadNotice, out workLoadStatus))
+            { CloseUtilityOverlay(); LoadMode(CareerMode.EmployeeWork); return; }
+            if (workLoadStatus != WorkCareerLoadStatus.Missing) return;
             var candidate = WorkCareerState.FromIntro(employment);
-            if (!workStorage.TrySave(candidate, out workLoadNotice)) return;
+            if (!workStorage.TryCreate(candidate, out workLoadNotice)) return;
             CloseUtilityOverlay(); LoadMode(CareerMode.EmployeeWork);
         }
         private void DrawWorkResults()
@@ -42,7 +47,8 @@ namespace Broker.Runtime
             if (Button(240, 740, 464, 48, saveSucceeded ? "Следующий рабочий день" : "Продолжить без записи", true, true)) Restart();
             if (Button(736, 740, 464, 48, saveSucceeded ? "Сбросить рабочие дни" : "Повторить сохранение"))
             { if (saveSucceeded) RequestConfirmation(ConfirmationKind.NewCareer); else SaveCareer(); }
-            if (Button(240, 812, 960, 40, "Выбрать режим", saveSucceeded)) selectingMode = true;
+            if (Button(240, 812, 464, 40, "Выбрать режим", saveSucceeded)) selectingMode = true;
+            if (Button(736, 812, 464, 40, "Карьера")) OpenCareerPath();
         }
     }
 }
