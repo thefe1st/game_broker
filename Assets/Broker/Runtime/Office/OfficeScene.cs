@@ -5,7 +5,7 @@ using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
-    // Procedural low-poly set. All objects are visible/editable in Play Mode.
+    // Procedural voxel set: gameplay boxes keep their colliders, voxel meshes carry the look. All objects are visible/editable in Play Mode.
     public sealed partial class OfficeScene : MonoBehaviour
     {
         private readonly List<Material> materials = new List<Material>();
@@ -54,17 +54,14 @@ namespace Broker.Runtime.Office
         {
             transform.position = new Vector3(500, 0, 0);
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            navy = Mat("#182B40"); wood = Surface("wood", "#FFFFFF", 1.4f, 0.28f, 0.25f); brass = Mat("#D2A352"); green = Mat("#70CDBF", true);
-            amber = Mat("#D99149"); ink = Mat("#14232A"); cream = Mat("#E9E1CE"); skin = Mat("#DCB18B");
-            phoneMaterial = Mat("#294650");
-            var wall = Surface("plaster", "#D5DDE5", 2f, 0.08f, 0.25f);
-            var floor = Surface("wood", "#C5CAD0", 1.4f, 0.2f, 0.22f);
-            var plank = Surface("wood", "#CED3D9", 1.4f, 0.2f, 0.22f);
-            var lights = Mat("#DDEEE9", true);
+            navy = Mat("#243A55"); wood = Surface("wood", "#FFFFFF", 2f, 0.2f, 0); brass = Mat("#D6A853"); green = Mat("#7CF0D2", true);
+            amber = Mat("#D08A3E"); ink = Mat("#1E2A33"); cream = Mat("#EDE3CC"); skin = Mat("#E3B48F");
+            phoneMaterial = Mat("#2E3238");
+            var wall = Surface("plaster", "#FFFFFF", 2f, 0.06f, 0);
+            var floor = Surface("wood", "#FFFFFF", 2f, 0.18f, 0);
+            var lights = Mat("#FFE7B8", true);
             previousAmbientMode = RenderSettings.ambientMode; previousAmbient = RenderSettings.ambientLight;
-            RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.51f, 0.56f, 0.61f);
             Box("Floor collider", new Vector3(0, -0.15f, 0), new Vector3(12.4f, 0.3f, 9.4f), floor);
-            for (int i = 0; i < 12; i++) Box("Wood floor strip", new Vector3(-5.5f + i, 0.005f, 0), new Vector3(0.985f, 0.01f, 9), i % 2 == 0 ? floor : plank, false);
             Box("Rear wall / base", new Vector3(0, 0.65f, 4.6f), new Vector3(12.4f, 1.3f, 0.2f), wall);
             Box("Rear wall / lintel", new Vector3(0, 3.6f, 4.6f), new Vector3(12.4f, 0.6f, 0.2f), wall);
             foreach (float x in new[] { -5.625f, -1.8f, 1.8f, 5.625f })
@@ -73,7 +70,7 @@ namespace Broker.Runtime.Office
             Box("Left wall", new Vector3(-6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), navy);
             Box("Right wall", new Vector3(6.1f, 1.9f, 0), new Vector3(0.2f, 3.8f, 9), wall);
             ceilingRenderer = Box("Ceiling", new Vector3(0, 3.9f, 0), new Vector3(12.4f, 0.2f, 9.4f), cream).GetComponent<Renderer>();
-            Box("Office carpet", new Vector3(0.4f, 0.022f, -0.7f), new Vector3(5.0f, 0.015f, 4.2f), navy, false);
+            Box("Office carpet", new Vector3(0.4f, 0.012f, -0.7f), new Vector3(5.0f, 0.024f, 4.2f), Surface("carpet", "#FFFFFF", 2f, 0.02f, 0), false);
             for (int i = 0; i < 3; i++)
             {
                 float x = -3.6f + i * 3.6f;
@@ -99,13 +96,7 @@ namespace Broker.Runtime.Office
             BuildCity();
             BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor(); BuildSupervisor();
             Box("Plant pot", new Vector3(5.3f, 0.32f, 3.3f), new Vector3(0.6f, 0.64f, 0.6f), brass);
-            Box("Plant stem", new Vector3(5.3f, 0.96f, 3.3f), new Vector3(0.08f, 0.8f, 0.08f), wood, false);
-            for (int i = 0; i < 4; i++)
-            {
-                var leaf = Box("Plant leaf", new Vector3(5.3f + (i % 2 == 0 ? -0.2f : 0.2f), 1.0f + i * 0.16f, 3.3f), new Vector3(0.65f, 0.1f, 0.35f), green, false);
-                leaf.transform.localEulerAngles = new Vector3(0, i * 65, i % 2 == 0 ? -25 : 25);
-            }
-            BuildImportedFurniture();
+            BuildVoxelFurniture();
             var player = new GameObject("Player - WASD and mouse"); player.transform.SetParent(transform, false);
             player.transform.localPosition = new Vector3(0, 0.05f, -3.4f); player.AddComponent<CharacterController>();
             Player = player.AddComponent<FirstPersonOfficeController>();
@@ -115,6 +106,7 @@ namespace Broker.Runtime.Office
             overview.orthographicSize = 5.5f; overview.nearClipPlane = 0.1f; overview.farClipPlane = 180;
             camera.transform.localPosition = new Vector3(10, 12, -14); camera.transform.LookAt(transform.TransformPoint(new Vector3(0, 0.9f, 0.4f)));
             overview.enabled = false;
+            BuildAtmosphere();
         }
         private void BuildBossDesk()
         {
@@ -150,26 +142,12 @@ namespace Broker.Runtime.Office
             screens[index] = Box("Employee screen", new Vector3(x + 0.4f, 1.12f, 1.08f), new Vector3(0.58f, 0.39f, 0.025f), green, false).GetComponent<Renderer>();
             Box("Employee papers", new Vector3(x - 0.55f, 0.87f, 1.2f), new Vector3(0.4f, 0.06f, 0.3f), cream, false);
             Chair(x, 2.9f);
-            var person = new GameObject(index == 0 ? "Lena - low poly" : "Max - low poly"); person.transform.SetParent(transform, false);
+            var person = new GameObject(index == 0 ? "Lena - voxel" : "Max - voxel"); person.transform.SetParent(transform, false);
             person.transform.localPosition = new Vector3(x, 0, 2.45f); people[index] = person.transform;
             var hitbox = person.AddComponent<CapsuleCollider>(); hitbox.height = 1.85f; hitbox.radius = 0.3f; hitbox.center = new Vector3(0, 0.94f, 0);
             Interactable(person, OfficeStation.Employee, index == 0 ? "Лена / порядок в хаосе" : "Макс / отдел громких обещаний", "Поговорить и дать поручение", index);
-            var suit = index == 0 ? navy : amber;
-            Shape(PrimitiveType.Cube, "Suit torso", person.transform, new Vector3(0, 1.1f, 0), new Vector3(0.52f, 0.62f, 0.3f), suit, false);
-            Shape(PrimitiveType.Cube, "Shirt", person.transform, new Vector3(0, 1.2f, -0.16f), new Vector3(0.15f, 0.38f, 0.03f), cream, false);
-            Shape(PrimitiveType.Cube, "Tie", person.transform, new Vector3(0, 1.14f, -0.185f), new Vector3(0.06f, 0.31f, 0.02f), index == 0 ? brass : navy, false);
-            foreach (float side in new[] { -1f, 1f })
-            {
-                Shape(PrimitiveType.Cube, "Trouser leg", person.transform, new Vector3(side * 0.14f, 0.46f, 0), new Vector3(0.21f, 0.75f, 0.24f), navy, false);
-                Shape(PrimitiveType.Cube, "Shoe", person.transform, new Vector3(side * 0.14f, 0.08f, -0.07f), new Vector3(0.24f, 0.14f, 0.4f), ink, false);
-                var arm = Shape(PrimitiveType.Cube, "Sleeve", person.transform, new Vector3(side * 0.34f, 1.05f, -0.04f), new Vector3(0.14f, 0.55f, 0.17f), suit, false);
-                arms[index * 2 + (side < 0 ? 0 : 1)] = arm.transform;
-                Shape(PrimitiveType.Cube, "Hand", arm.transform, new Vector3(0, -0.56f, 0), new Vector3(0.9f, 0.2f, 0.9f), skin, false);
-            }
-            var head = Shape(PrimitiveType.Sphere, "Head", person.transform, new Vector3(0, 1.65f, 0), new Vector3(0.38f, 0.44f, 0.35f), skin, false); heads[index] = head.transform;
-            Shape(PrimitiveType.Cube, "Hair", person.transform, new Vector3(0, 1.85f, 0.04f), new Vector3(0.4f, 0.14f, 0.36f), index == 0 ? ink : wood, false);
-            foreach (float side in new[] { -1f, 1f }) Shape(PrimitiveType.Cube, "Eye", person.transform, new Vector3(side * 0.08f, 1.68f, -0.17f), new Vector3(0.035f, 0.035f, 0.025f), ink, false);
-            workerLabels[index] = Text("Employee label", index == 0 ? "ЛЕНА" : "МАКС", new Vector3(x, 2.2f, 2.45f), 48, 0.035f, new Color(0.95f, 0.88f, 0.7f));
+            PlaceFigure(index == 0 ? PersonStyle.Lena : PersonStyle.Max, person.transform, out heads[index], out arms[index * 2], out arms[index * 2 + 1]);
+            workerLabels[index] = Text("Employee label", index == 0 ? "ЛЕНА" : "МАКС", new Vector3(x, 2.25f, 2.45f), 48, 0.035f, new Color(0.98f, 0.93f, 0.82f));
         }
         private void BuildCoffee()
         {
@@ -203,7 +181,8 @@ namespace Broker.Runtime.Office
         {
             if (overview == null || Player == null) return;
             overview.enabled = atDesk; Player.Eye.enabled = !atDesk;
-            ceilingRenderer.enabled = !atDesk; // The desk overview must see inside the room, not the roof.
+            // The desk overview must see inside the room, not the roof; the roof still shades the room from the low sun.
+            ceilingRenderer.shadowCastingMode = atDesk ? ShadowCastingMode.ShadowsOnly : ShadowCastingMode.On;
             if (atDesk) overview.rect = new Rect(0, 0, 1, 1);
             else Player.Eye.rect = new Rect(0, 0, 1, 1);
         }
@@ -222,13 +201,16 @@ namespace Broker.Runtime.Office
                 workerLabels[i].transform.rotation = active.transform.rotation;
                 workerLabels[i].text = worker.Name + " / " + (employeeMode ? "КОЛЛЕГА" : day.IsFounder ? (working ? "ДОСЬЕ / В РАБОТЕ" : "ПОМОЩНИК / ДОСЬЕ") : worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
                 heads[i].localRotation = Quaternion.Euler(0, working ? Mathf.Sin(Time.unscaledTime * 1.7f + i) * 8 : 0, 0);
-                for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? -22 + Mathf.Sin(Time.unscaledTime * 3 + a) * 5 : 0, 0, 0);
+                // Arms hang from the shoulder joint; a positive pitch reaches forward to the keyboard.
+                for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? 26 + Mathf.Sin(Time.unscaledTime * 3 + a * 1.7f) * 6 : 0, 0, 0);
             }
         }
         private void OnDestroy()
         {
+            RestoreAtmosphere();
             RestoreCityEnvironment();
             ReleaseSurfaces();
+            ReleaseVoxels();
             RenderSettings.ambientMode = previousAmbientMode; RenderSettings.ambientLight = previousAmbient;
             foreach (var material in materials) if (material != null) Destroy(material);
         }

@@ -35,3 +35,6 @@ TestResults/
 
 # Bootstrap flow tests with explicit scene/GUI doubles
 !Tools/FlowChecks/FlowChecks.csproj
+
+# Offline scene stills: real scene builders against engine stand-ins; not a Unity build
+!Tools/ScenePreview/ScenePreview.csproj

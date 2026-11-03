@@ -1,5 +1,6 @@
 using Broker.Core;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
@@ -18,12 +19,17 @@ namespace Broker.Runtime.Office
 
         private void BuildCity()
         {
-            var pavement = Surface("concrete", "#B9C7D0", 2f, 0.12f, 0.3f);
-            var asphalt = Surface("asphalt", "#8998A8", 3f, 0.04f, 0.3f);
-            var concrete = Surface("concrete", "#8D9DAF", 2f, 0.08f, 0.25f);
-            var cityLight = Mat("#A5DAD5", true); var warmLight = Mat("#EBCB99", true);
-            var facades = new[] { Surface("brick", "#FFFFFF", 2f, 0.12f, 0.2f), Surface("concrete", "#697784", 2f, 0.12f, 0.2f), Surface("plaster", "#7B8B86", 2f, 0.12f, 0.2f) };
+            previousFog = RenderSettings.fog; previousFogColor = RenderSettings.fogColor;
+            previousFogMode = RenderSettings.fogMode; previousFogStart = RenderSettings.fogStartDistance; previousFogEnd = RenderSettings.fogEndDistance;
+            var pavement = Surface("pavers", "#FFFFFF", 2f, 0.1f, 0);
+            var asphalt = Surface("asphalt", "#FFFFFF", 2f, 0.04f, 0);
+            var concrete = Surface("concrete", "#FFFFFF", 2f, 0.08f, 0);
+            var grass = Surface("grass", "#FFFFFF", 2f, 0.03f, 0);
+            var metal = Mat("#4B5157");
+            var cityLight = Mat("#F3D9A6", true);
+            var facades = new[] { Surface("brick", "#FFFFFF", 2f, 0.12f, 0), Surface("concrete", "#D9D2C6", 2f, 0.12f, 0), Surface("plaster", "#FFFFFF", 2f, 0.12f, 0) };
             const float ground = CityBlockPlan.GroundY;
+            Box("City / outer meadow", new Vector3(0, ground - 0.45f, CityScenery.TerrainCenterZ), new Vector3(CityScenery.TerrainSize, 0.5f, CityScenery.TerrainSize), grass, false);
             Box("City / terrain", new Vector3(0, CityBlockPlan.TerrainTopY - 0.25f, 59), new Vector3(120, 0.5f, 112), concrete, false);
             Box("City / walkable plaza", new Vector3(0, ground - 0.12f, 18), new Vector3(32, 0.24f, 22), pavement);
             foreach (float x in new[] { -30f, 30f })
@@ -31,9 +37,8 @@ namespace Broker.Runtime.Office
                 Box("District / promenade wing", new Vector3(x, ground - 0.12f, 18), new Vector3(28, 0.24f, 22), pavement);
                 Box("District / side street sidewalk", new Vector3(x, ground - 0.12f, -2.5f), new Vector3(28, 0.24f, 19), pavement);
             }
-            for (int i = 0; i < 9; i++)
-                Box("Plaza / paving joint", new Vector3(-14 + i * 3.5f, ground + 0.008f, 18), new Vector3(0.025f, 0.012f, 20), concrete, false);
             Box("City / boulevard", new Vector3(0, ground + 0.015f, 35), new Vector3(112, 0.03f, 12), asphalt, false);
+            Box("City / far sidewalk", new Vector3(0, ground + 0.06f, 42.6f), new Vector3(112, 0.12f, 3.2f), pavement, false);
             for (int lane = 0; lane < 3; lane++) for (int mark = 0; mark < 14; mark++)
                 Box("Road / lane marking", new Vector3(-47 + mark * 7, ground + 0.04f, 32 + lane * 3), new Vector3(2.4f, 0.02f, 0.09f), cream, false);
             // Pedestrian wings share a floor; moving traffic remains behind a visible barrier.
@@ -47,84 +52,68 @@ namespace Broker.Runtime.Office
             trafficBarrier.GetComponent<Renderer>().enabled = false;
             Box("Plaza / boulevard curb", new Vector3(0, ground + 0.17f, 28.5f), new Vector3(89, 0.34f, 0.35f), concrete);
             for (int post = 0; post < 25; post++)
-                Box("Plaza / railing post", new Vector3(-44 + post * 3.67f, ground + 0.8f, 28.5f), new Vector3(0.09f, 1.1f, 0.12f), concrete, false);
+                Box("Plaza / railing post", new Vector3(-44 + post * 3.67f, ground + 0.8f, 28.5f), new Vector3(0.1f, 1.1f, 0.1f), metal, false);
+            Box("Plaza / railing", new Vector3(0, ground + 1.33f, 28.5f), new Vector3(89, 0.08f, 0.14f), metal, false);
             Box("Plaza / rear boundary", new Vector3(0, ground + 1.5f, 7.5f), new Vector3(31, 3, 0.4f), facades[0]);
-            Box("Plaza / light rail", new Vector3(0, ground + 1.33f, 28.5f), new Vector3(89, 0.06f, 0.4f), cityLight, false);
+            // The office reads as the top floor of a building instead of floating above the plaza.
+            PlaceVoxel("office block", () => VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false),
+                "City / office building", transform, new Vector3(0, ground, -2.35f), 180);
             var plan = new CityBlockPlan();
             int number = 0;
             foreach (var b in plan.Buildings)
             {
-                Material facade = facades[b.Style];
-                string imported = number < 6 ? "building-skyscraper-" + (char)('a' + number % 3) : "low-detail-building-" + (char)('a' + number % 3);
-                if (PlaceLocalModel("KenneyCityCommercial", imported, "City / textured tower " + number,
-                    new Vector3(b.X, ground, b.Z), new Vector3(b.Width, b.Height, b.Depth), transform, true) != null)
-                { number++; continue; }
-                Box("City tower " + number, new Vector3(b.X, ground + b.Height / 2, b.Z), new Vector3(b.Width, b.Height, b.Depth), facade, false);
-                Box("Tower / crown", new Vector3(b.X, ground + b.Height + 0.2f, b.Z), new Vector3(b.Width + 0.25f, 0.4f, b.Depth + 0.25f), concrete, false);
-                for (int floor = 0; floor < 6; floor++)
-                {
-                    float y = ground + 2.2f + floor * (b.Height - 3) / 6;
-                    Box("Tower / lit floor", new Vector3(b.X, y, b.Z - b.Depth / 2 - 0.02f), new Vector3(b.Width * 0.76f, 0.16f, 0.03f), (floor + number) % 3 == 0 ? warmLight : cityLight, false);
-                }
-                Box("Tower / vertical reveal", new Vector3(b.X - b.Width * 0.34f, ground + b.Height / 2, b.Z - b.Depth / 2 - 0.04f), new Vector3(0.12f, b.Height * 0.88f, 0.04f), concrete, false);
-                if (b.Style == 1) Box("Tower / rooftop plant", new Vector3(b.X, ground + b.Height + 1, b.Z), new Vector3(b.Width * 0.5f, 1.6f, b.Depth * 0.4f), facades[0], false);
+                var building = b; int seed = number;
+                PlaceVoxel("tower/" + number, () => VoxelProps.Tower(building.Width, building.Depth, building.Height, (TowerStyle)building.Style, seed),
+                    "City / voxel tower " + number, transform, new Vector3(b.X, CityBlockPlan.TerrainTopY, b.Z));
                 number++;
             }
             for (int i = 0; i < 6; i++)
             {
-                float x = -12.5f + i * 5;
-                Box("Plaza / planter", new Vector3(x, ground + 0.28f, 25.5f), new Vector3(2.2f, 0.56f, 1.25f), concrete);
-                Shape(PrimitiveType.Sphere, "Plaza / clipped shrub", transform, new Vector3(x, ground + 0.78f, 25.5f), new Vector3(1.8f, 0.95f, 0.9f), green, false);
-                if (PlaceLocalModel("KenneyCityRoads", "light-curved", "Street / imported light", new Vector3(x, ground, 29), new Vector3(0.35f, 5, 1.65f), transform, true) == null)
-                {
-                    Box("Street / lamp pole", new Vector3(x, ground + 2.5f, 29), new Vector3(0.12f, 5, 0.12f), navy, false);
-                    Box("Street / lamp head", new Vector3(x, ground + 5, 29), new Vector3(0.9f, 0.08f, 0.36f), cityLight, false);
-                }
+                float x = -12.5f + i * 5; int seed = i % 3;
+                Box("Plaza / planter", new Vector3(x, ground + 0.28f, 25.5f), new Vector3(2.2f, 0.56f, 1.25f), concrete).GetComponent<Renderer>().enabled = false;
+                PlaceVoxel("planter/" + seed, () => VoxelProps.Planter(seed), "Plaza / voxel planter", transform, new Vector3(x, ground, 25.5f));
+                PlaceVoxel("street lamp", VoxelProps.StreetLamp, "Street / voxel lamp", transform, new Vector3(x, ground, 27.9f));
             }
             foreach (float x in new[] { -9f, 9f })
             {
-                Box("Plaza / bench seat", new Vector3(x, ground + 0.48f, 17), new Vector3(3, 0.16f, 0.75f), wood);
-                Box("Plaza / bench base", new Vector3(x, ground + 0.2f, 17), new Vector3(2.4f, 0.4f, 0.5f), concrete);
+                Box("Plaza / bench seat", new Vector3(x, ground + 0.48f, 17), new Vector3(3, 0.16f, 0.75f), wood).GetComponent<Renderer>().enabled = false;
+                Box("Plaza / bench base", new Vector3(x, ground + 0.2f, 17), new Vector3(2.4f, 0.4f, 0.5f), concrete).GetComponent<Renderer>().enabled = false;
+                PlaceVoxel("plaza bench", () => VoxelProps.Bench(30, false), "Plaza / voxel bench", transform, new Vector3(x, ground, 17));
             }
             BuildDistrict(concrete, facades);
+            BuildSkyline();
             // City errands are temporarily hidden by the approved career plan. Builder retained.
             // Elevator portals are explicit prototype transitions; the end-day door stays separate.
             var entry = Box("City / office elevator", new Vector3(0, ground + 1.35f, 8.2f), new Vector3(2.5f, 2.7f, 0.35f), navy);
             Interactable(entry, OfficeStation.ReturnOffice, "Лифт в офис", "Вернуться в Мойка Капитал");
             Box("Elevator / city indicator", new Vector3(0, ground + 2.95f, 8.12f), new Vector3(2.5f, 0.12f, 0.2f), cityLight, false);
-            var sign = Text("City / elevator sign", "ОФИС", new Vector3(0, ground + 2.05f, 8.43f), 48, 0.048f, new Color(0.83f, 0.96f, 0.96f));
+            var sign = Text("City / elevator sign", "ОФИС", new Vector3(0, ground + 2.05f, 8.43f), 48, 0.048f, new Color(0.98f, 0.93f, 0.82f));
             sign.transform.localEulerAngles = new Vector3(0, 180, 0);
             var portal = Box("Office / street elevator", new Vector3(5.85f, 1.3f, -0.2f), new Vector3(0.14f, 2.6f, 1.3f), navy);
             Interactable(portal, OfficeStation.Street, "Лифт в квартал", "Выйти на площадь");
             Box("Office / elevator light", new Vector3(5.74f, 2.5f, -0.2f), new Vector3(0.05f, 0.06f, 1.15f), cityLight, false);
-            var label = Text("Office / street sign", "КВАРТАЛ", new Vector3(5.72f, 1.8f, -0.2f), 48, 0.03f, new Color(0.83f, 0.96f, 0.96f));
+            var label = Text("Office / street sign", "КВАРТАЛ", new Vector3(5.72f, 1.8f, -0.2f), 48, 0.03f, new Color(0.98f, 0.93f, 0.82f));
             label.transform.localEulerAngles = new Vector3(0, 90, 0);
             for (int lane = 0; lane < cityCars.Length; lane++)
             {
                 var car = new GameObject("City / visual traffic " + lane); car.transform.SetParent(transform, false); cityCars[lane] = car.transform;
-                var importedCar = PlaceLocalModel("KenneyCityCars", lane % 2 == 0 ? "sedan" : "suv", "Car / imported body",
-                    new Vector3(0, -0.15f, 0), new Vector3(3.6f, 1.25f, 1.65f), car.transform, true, 90);
-                if (importedCar != null)
-                {
-                    foreach (float x in new[] { -1.1f, 1.1f }) foreach (float z in new[] { -0.8f, 0.8f })
-                        if (PlaceLocalModel("KenneyCityCars", "wheel-default", "Car / imported wheel", new Vector3(x, -0.32f, z),
-                            new Vector3(0.5f, 0.5f, 0.18f), car.transform, true, 90) == null)
-                            Shape(PrimitiveType.Sphere, "Car / fallback wheel", car.transform, new Vector3(x, -0.07f, z), new Vector3(0.5f, 0.5f, 0.18f), ink, false);
-                    car.transform.localRotation = Quaternion.Euler(0, lane % 2 == 0 ? 0 : 180, 0);
-                    continue;
-                }
-                Shape(PrimitiveType.Cube, "Car / body", car.transform, Vector3.zero, new Vector3(3.6f, 0.65f, 1.65f), lane % 2 == 0 ? facades[1] : cream, false);
-                Shape(PrimitiveType.Cube, "Car / cabin", car.transform, new Vector3(-0.1f, 0.48f, 0), new Vector3(1.8f, 0.5f, 1.45f), navy, false);
-                Shape(PrimitiveType.Cube, "Car / headlight", car.transform, new Vector3(1.81f, 0.08f, 0), new Vector3(0.04f, 0.12f, 1.25f), warmLight, false);
-                Shape(PrimitiveType.Cube, "Car / tail light", car.transform, new Vector3(-1.81f, 0.08f, 0), new Vector3(0.04f, 0.1f, 1.25f), amber, false);
-                foreach (float x in new[] { -1.1f, 1.1f }) foreach (float z in new[] { -0.8f, 0.8f })
-                    Shape(PrimitiveType.Sphere, "Car / wheel", car.transform, new Vector3(x, -0.15f, z), new Vector3(0.5f, 0.5f, 0.18f), ink, false);
+                CarStyle style = lane == 1 ? CarStyle.Suv : lane == 2 ? CarStyle.Taxi : CarStyle.Sedan; int seed = lane * 3 + 1;
+                // The car root rides 0.48 m above the road; the voxel body's wheels touch the asphalt.
+                PlaceVoxel("car/" + lane, () => VoxelProps.Car(style, seed), "Car / voxel body", car.transform, new Vector3(0, -0.45f, 0));
                 car.transform.localRotation = Quaternion.Euler(0, lane % 2 == 0 ? 0 : 180, 0);
             }
-            previousFog = RenderSettings.fog; previousFogColor = RenderSettings.fogColor;
-            previousFogMode = RenderSettings.fogMode; previousFogStart = RenderSettings.fogStartDistance; previousFogEnd = RenderSettings.fogEndDistance;
-            RenderSettings.fog = true; RenderSettings.fogColor = new Color(0.09f, 0.14f, 0.22f); RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 45; RenderSettings.fogEndDistance = 145;
+        }
+        // Hazy boxy skyline beyond the playable block: cheap textured boxes that the fog dissolves.
+        private void BuildSkyline()
+        {
+            var shades = new[] { Surface("windows", "#E8DED2", VoxelSurfaces.TileMetres("windows"), 0.05f, 0),
+                Surface("windows", "#C9CCD0", VoxelSurfaces.TileMetres("windows"), 0.05f, 0), Surface("windows", "#E0C9B2", VoxelSurfaces.TileMetres("windows"), 0.05f, 0) };
+            foreach (var block in CityScenery.Skyline)
+            {
+                var box = Box("City / distant block", new Vector3(block.X, CityBlockPlan.GroundY - 0.2f + block.Height / 2, block.Z),
+                    new Vector3(block.Width, block.Height, block.Depth), shades[block.Shade], false);
+                box.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+            }
         }
         public void VisitCity(bool outside)
         {

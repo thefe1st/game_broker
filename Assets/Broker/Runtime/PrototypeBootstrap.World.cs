@@ -54,27 +54,27 @@ namespace Broker.Runtime
         }
         private void DrawWorldHUD()
         {
-            Panel(32, 32, 320, 80, ""); Label(56, 44, 272, 32, "МОЙКА КАПИТАЛ", theme.Heading);
+            HudPanel(32, 32, 320, 80); Label(56, 44, 272, 32, "МОЙКА КАПИТАЛ", theme.Heading);
             Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : (IsFounderMode ? "Своя контора · день " : IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.Small);
-            Panel(616, 32, 208, 80, ""); Label(648, 48, 160, 44, ClockText(), theme.Title);
-            Panel(1104, 32, 304, 80, ""); Label(1128, 44, 256, 36, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
+            HudPanel(616, 32, 208, 80); Label(648, 48, 160, 44, ClockText(), theme.Title);
+            HudPanel(1104, 32, 304, 80); Label(1128, 44, 256, 36, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
             Meter(1128, 96, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Accent);
             if (!navigation.IsExploring || day.PendingEvent != null) return;
             var player = office.Player;
-            Paint(new Rect(718, 478, 4, 4), player.Target != null ? theme.Accent : theme.Ink);
+            Crosshair(player.Target != null);
             string target;
             if (!OfficeInput.Available) target = "Ввод недоступен · открой рабочий экран";
             else if (!player.Captured) target = "Нажми в окне Game";
             else if (player.Target != null) target = player.Target.Title.Split('/')[0].Trim();
             else target = office.IsInCity ? "Прогулка · лифт ведёт в офис" : "Телефон — звонки";
-            Panel(420, 784, 600, 88, "");
-            if (player.Target != null) { Paint(new Rect(444, 804, 48, 48), theme.Border); Label(459, 811, 32, 36, "E", theme.Heading); }
+            HudPanel(420, 784, 600, 88);
+            if (player.Target != null) { HudFrame(444, 804, 48, 48, 2); Label(459, 811, 32, 36, "E", theme.Heading); }
             Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
             if (IsEmployeeMode || IsFounderMode)
             {
                 string guidance = office.IsInCity ? "Вернитесь в офис через лифт. " + day.EmploymentNextAction : day.EmploymentNextAction;
                 float guidanceHeight = Mathf.Max(56, theme.Small.CalcHeight(new GUIContent(guidance), 624));
-                Panel(384, 136, 672, guidanceHeight + 68, "");
+                HudPanel(384, 136, 672, guidanceHeight + 68);
                 Label(408, 152, 624, 24, IsFounderMode ? "ДАЛЬШЕ / СВОЯ КОНТОРА" : "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.Tag);
                 Label(408, 192, 624, guidanceHeight, guidance, theme.Small);
             }
@@ -88,11 +88,32 @@ namespace Broker.Runtime
             if (office.IsInCity && navigation.IsExploring)
             {
                 var destination = CityDistrictPlan.Find(cityDestinationId);
-                Panel(32, 288, 320, 144, "");
+                HudPanel(32, 288, 320, 144);
                 Label(56, 308, 272, 28, destination.Name, theme.Heading);
                 Label(56, 348, 272, 64, Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, destination)) + " м · "
                     + CityDistrictPlan.Direction(office.MapX, office.MapZ, destination) + "\nКарта — у стенда / в паузе", theme.Small);
             }
+        }
+        // Exploration HUD: a light translucent wash with thin white rules instead of solid cards,
+        // so the voxel city stays visible around the text.
+        private void HudPanel(float x, float y, float w, float h)
+        {
+            Paint(new Rect(x, y, w, h), new Color(0.04f, 0.05f, 0.07f, 0.34f));
+            HudFrame(x, y, w, h, 12);
+        }
+        private void HudFrame(float x, float y, float w, float h, float corner)
+        {
+            var line = new Color(1, 1, 1, 0.82f); const float t = 1.5f;
+            Paint(new Rect(x, y, w, t), line); Paint(new Rect(x, y + h - t, w, t), line);
+            Paint(new Rect(x, y, t, corner), line); Paint(new Rect(x + w - t, y, t, corner), line);
+            Paint(new Rect(x, y + h - corner, t, corner), line); Paint(new Rect(x + w - t, y + h - corner, t, corner), line);
+        }
+        // Thin white cross with a soft shadow; it widens and takes the accent colour over an interactable.
+        private void Crosshair(bool target)
+        {
+            float arm = target ? 10 : 7; var color = target ? theme.Accent : new Color(1, 1, 1, 0.9f); var shadow = new Color(0, 0, 0, 0.35f);
+            Paint(new Rect(720 - arm + 1, 480, arm * 2, 2), shadow); Paint(new Rect(720, 480 - arm + 1, 2, arm * 2), shadow);
+            Paint(new Rect(720 - arm, 479, arm * 2, 2), color); Paint(new Rect(719, 480 - arm, 2, arm * 2), color);
         }
         private void DrawStationPanel()
         {
