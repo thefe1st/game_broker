@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Offline still renderer for the procedural office and city: compiles the real scene builders against engine stand-ins. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <!-- Unity 6 compiles game scripts as C# 9; keeping the preview at 9 catches newer syntax early. -->
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+    <NoWarn>CS0067;CS0169;CS0414;CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Assets/Broker/Core/*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Office/OfficeScene*.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Office/SurfaceLibrary.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Office/OfficeInteractable.cs" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+</Project>
