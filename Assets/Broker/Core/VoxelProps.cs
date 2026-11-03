@@ -20,7 +20,7 @@ namespace Broker.Core
 
     // Deterministic voxel scenery and furniture. No trigonometry: the same seed gives the same cells everywhere.
     // Fronts face −Z unless noted; cars face +X. Pivots are at the bottom centre of the footprint.
-    public static class VoxelProps
+    public static partial class VoxelProps
     {
         public const float NatureVoxel = 0.25f, CarVoxel = 0.15f, PersonVoxel = 0.0625f, FurnitureVoxel = 0.05f, TowerVoxel = 0.5f, ShopVoxel = 0.25f;
         private const byte E = VoxelPalette.Empty;

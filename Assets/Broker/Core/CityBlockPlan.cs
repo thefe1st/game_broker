@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
 namespace Broker.Core
@@ -12,7 +13,8 @@ namespace Broker.Core
         { X = x; Z = z; Width = width; Depth = depth; Height = height; Style = style; }
     }
 
-    // Local coordinates relative to the procedural office. A small explorable plaza, not an open world.
+    // Local coordinates relative to the procedural office. A small explorable district, not an open world.
+    // Three rows of towers north of the boulevard; the two middle towers of the first rows give way to the Exchange.
     public sealed class CityBlockPlan
     {
         public const float GroundY = -8f;
@@ -22,24 +24,16 @@ namespace Broker.Core
         public ReadOnlyCollection<CityBuilding> Buildings { get; }
         public CityBlockPlan()
         {
-            var buildings = new CityBuilding[18];
-            int index = 0;
+            var buildings = new List<CityBuilding>();
             for (int row = 0; row < 3; row++)
                 for (int column = 0; column < 6; column++)
                 {
+                    if (row < 2 && (column == 2 || column == 3)) continue;
                     float height = 12 + ((column * 7 + row * 11) % 9) * 3;
-                    buildings[index++] = new CityBuilding(-37.5f + column * 15, 49 + row * 24,
-                        8 + (column % 3), 11, height, (column + row) % 3);
+                    buildings.Add(new CityBuilding(-37.5f + column * 15, (row == 0 ? 50 : 49) + row * 24,
+                        8 + (column % 3), 11, height, (column + row) % 3));
                 }
-            Buildings = Array.AsReadOnly(buildings);
-        }
-        public static float TrafficX(double elapsedSeconds, int lane)
-        {
-            if (lane < 0 || lane > 3) throw new ArgumentOutOfRangeException(nameof(lane));
-            if (double.IsNaN(elapsedSeconds) || double.IsInfinity(elapsedSeconds) || elapsedSeconds < 0)
-                throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
-            double distance = (elapsedSeconds * (lane % 2 == 0 ? 5.0 : 6.0) + lane * 23) % 100.0;
-            return lane % 2 == 0 ? (float)(distance - 50) : (float)(50 - distance);
+            Buildings = Array.AsReadOnly(buildings.ToArray());
         }
     }
 }

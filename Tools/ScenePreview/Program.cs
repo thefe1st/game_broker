@@ -1,5 +1,5 @@
 // Renders still previews of the procedural office and city without the Unity editor:
-//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud]
+//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud] [--at=SECONDS]
 //   dotnet run --project Tools/ScenePreview -c Release -- --check      (CI smoke check, no image files)
 // The real OfficeScene builders run against UnityStubs.cs; Renderer.cs approximates the built-in forward renderer.
 using System;
@@ -8,7 +8,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using Broker.Core;
 using Broker.Runtime.Office;
 using UnityEngine;
@@ -18,7 +17,10 @@ namespace Broker.Tools.ScenePreview
     public sealed class Shot
     {
         public string Name; public Vector3 Local; public float Yaw, Pitch, Fov = 72; public bool Employee, City, Hud = true; public string Target;
+        // Seconds on the boulevard clock from a fresh start: 18–32 s is the pedestrians' green.
         public double Traffic = 1.6;
+        // Quotes: a work day with prices on the Exchange board. Crossing: the HUD shows the signal panel.
+        public bool Quotes, Crossing;
     }
 
     public static class Program
@@ -26,19 +28,27 @@ namespace Broker.Tools.ScenePreview
         private static readonly Shot[] Shots =
         {
             new Shot { Name = "plaza-north", Local = new Vector3(0, CityBlockPlan.GroundY + 1.7f, 15), Yaw = 0, Pitch = -4, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "plaza-office", Local = new Vector3(0.5f, CityBlockPlan.GroundY + 1.7f, 23.5f), Yaw = 182, Pitch = -11, City = true, Target = "Прогулка · лифт ведёт в офис" },
+            new Shot { Name = "plaza-office", Local = new Vector3(3.2f, CityBlockPlan.GroundY + 1.7f, 22.6f), Yaw = 192, Pitch = -9, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 14 },
             new Shot { Name = "sunset-west", Local = new Vector3(-12, CityBlockPlan.GroundY + 1.7f, 21), Yaw = -96, Pitch = -2, City = true, Target = "Прогулка · лифт ведёт в офис" },
             new Shot { Name = "east-street", Local = new Vector3(31, CityBlockPlan.GroundY + 1.7f, 13), Yaw = 200, Pitch = 2, City = true, Target = "Прогулка · лифт ведёт в офис" },
             new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 1.8 },
+            new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 21, Crossing = true },
+            new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
+            new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true },
+            new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»" },
+            new Shot { Name = "tunnel", Local = new Vector3(36, CityBlockPlan.GroundY + 1.7f, 27.2f), Yaw = 80, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 6 },
             new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Target = "Телефон — звонки" },
             new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true, Target = "Телефон — звонки" },
-            new Shot { Name = "aerial", Local = new Vector3(0, 32, -36), Yaw = 0, Pitch = 28, Fov = 60, City = true, Hud = false },
+            new Shot { Name = "aerial", Local = new Vector3(0, 60, -32), Yaw = 0, Pitch = 42, Fov = 60, City = true, Hud = false },
         };
 
         public static int Main(string[] args)
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture; CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
             bool check = args.Contains("--check"), noHud = args.Contains("--no-hud"), fast = args.Contains("--fast");
+            // --at=SECONDS re-times the selected shots on the boulevard clock (to pick a moment for a new shot).
+            var at = args.FirstOrDefault(a => a.StartsWith("--at="));
+            double? retime = at == null ? null : double.Parse(at.Substring(5), CultureInfo.InvariantCulture);
             var positional = args.Where(a => !a.StartsWith("--")).ToList();
             string output = check ? null : positional.Count > 0 ? positional[0] : "preview";
             var wanted = new HashSet<string>(positional.Skip(check ? 0 : 1));
@@ -46,7 +56,7 @@ namespace Broker.Tools.ScenePreview
             var clock = Stopwatch.StartNew();
             var root = new GameObject("Office scene");
             var scene = root.AddComponent<OfficeScene>();
-            var day = new BrokerDay();
+            var day = new BrokerDay(); var quotesDay = new BrokerDay(6, mode: CareerMode.EmployeeWork, clientIds: ClientCatalog.Appointments(6));
             Console.WriteLine($"scene built in {clock.ElapsedMilliseconds} ms: {GameObject.All.Count} objects, warnings {UnityEngine.Debug.Warnings.Count}");
             foreach (var warning in UnityEngine.Debug.Warnings.Distinct().Take(8)) Console.WriteLine("  warning: " + warning);
             int failures = UnityEngine.Debug.Warnings.Count;
@@ -56,7 +66,7 @@ namespace Broker.Tools.ScenePreview
                 if (wanted.Count > 0 && !wanted.Contains(shot.Name)) continue;
                 if (shot.Employee && !employee) { employee = true; scene.ConfigureCareerMode(CareerMode.Employee); day = new BrokerDay(mode: CareerMode.Employee); }
                 var renderer = check ? new Renderer { Width = 240, Height = 160, Supersample = 1 } : new Renderer { Supersample = fast ? 1 : 2 };
-                var camera = Prepare(scene, root, shot, day);
+                var camera = Prepare(scene, root, shot, shot.Quotes ? quotesDay : day, retime ?? shot.Traffic);
                 renderer.Render(SceneSoup.Collect(), camera);
                 if (check)
                 {
@@ -80,10 +90,17 @@ namespace Broker.Tools.ScenePreview
             return failures == 0 ? 0 : 1;
         }
 
-        private static ViewCamera Prepare(OfficeScene scene, GameObject root, Shot shot, BrokerDay day)
+        private static ViewCamera Prepare(OfficeScene scene, GameObject root, Shot shot, BrokerDay day, double traffic)
         {
             scene.Present(false, 1, Vector2.zero);
-            SetTraffic(scene, shot.Traffic);
+            // Street shots stand the player where the camera is, so the passers-by stop for it as they do in the game.
+            if (shot.City && shot.Hud)
+            {
+                scene.VisitCity(true);
+                scene.Player.ResetAt(root.transform.TransformPoint(new Vector3(shot.Local.x, shot.Local.y - 1.65f, shot.Local.z)));
+            }
+            else scene.ResetPlayer();
+            SetTraffic(scene, traffic);
             scene.Refresh(day);
             var camera = ViewCamera.From(scene.Player.Eye);
             var rotation = Quaternion.Euler(shot.Pitch, shot.Yaw, 0);
@@ -95,11 +112,10 @@ namespace Broker.Tools.ScenePreview
             return camera;
         }
 
+        // Every shot starts the boulevard clock afresh, so the same shot always shows the same signal, cars and walkers.
         private static void SetTraffic(OfficeScene scene, double seconds)
         {
-            typeof(OfficeScene).GetField("cityElapsed", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(scene, seconds);
-            scene.WorldMotionEnabled = false;
-            typeof(OfficeScene).GetMethod("Update", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(scene, null);
+            scene.WorldMotionEnabled = false; scene.ResetCity(); scene.AdvanceCity(seconds);
         }
 
         private static string Rgba(Color c, float alpha = -1) =>
@@ -154,6 +170,19 @@ namespace Broker.Tools.ScenePreview
             Rect(720 - arm + 1, 480, arm * 2, 2, shadow); Rect(720, 480 - arm + 1, 2, arm * 2, shadow);
             Rect(720 - arm, 479, arm * 2, 2, cross); Rect(719, 480 - arm, 2, arm * 2, cross);
             Panel(420, 784, 600, 88); Text(452, 808, shot.Target ?? "", 22, ink, true);
+            if (shot.City)
+            {
+                // As in the game: the chosen landmark (the office lift by default), its distance and direction.
+                var destination = CityDistrictPlan.Find("office");
+                Panel(32, 288, 320, 144); Text(56, 308, destination.Name, 22, ink, true);
+                Text(56, 348, Math.Ceiling(CityDistrictPlan.Distance(shot.Local.x, shot.Local.z, destination)) + " м · "
+                    + CityDistrictPlan.Direction(shot.Local.x, shot.Local.z, destination) + "\nКарта — у стенда / в паузе", 16, muted, false);
+            }
+            if (shot.Crossing)
+            {
+                Panel(32, 448, 320, 96); Text(56, 462, "ПЕРЕХОД / СВЕТОФОР", 14, accent, true);
+                Text(56, 490, scene.Life.Hint, 16, muted, false);
+            }
             if (employee)
             {
                 Panel(384, 136, 672, 124); Text(408, 152, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, 16, accent, true);
