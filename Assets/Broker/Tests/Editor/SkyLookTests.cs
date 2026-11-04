@@ -7,9 +7,9 @@ namespace Broker.Tests
     public sealed class SkyLookTests
     {
         private static readonly SkyLook.Palette Sky = SkyLook.Palette.Default(true);
-        // Toward the low evening sun of the city scene (the light shines along OfficeScene.SunDirection, its opposite).
+        // Toward the daytime sun of the city scene, about 40° high (the light shines along OfficeScene.SunDirection, its opposite).
         private static readonly float Sx, Sy, Sz;
-        static SkyLookTests() { float l = (float)Math.Sqrt(0.88 * 0.88 + 0.29 * 0.29 + 0.31 * 0.31); Sx = -0.88f / l; Sy = 0.29f / l; Sz = -0.31f / l; }
+        static SkyLookTests() { float l = (float)Math.Sqrt(0.722 * 0.722 + 0.643 * 0.643 + 0.254 * 0.254); Sx = -0.722f / l; Sy = 0.643f / l; Sz = -0.254f / l; }
 
         private static SkyLook.Rgb At(float dx, float dy, float dz, float time = 0)
         {
@@ -37,15 +37,18 @@ namespace Broker.Tests
             return (float)Math.Cos(angle) * h * Sx + dy * Sy + (float)Math.Sin(angle) * h * Sz <= 0;
         }
 
-        [Test] public void ThePaletteIsAWarmHazeUnderAPeachHorizonAndALilacZenith()
+        [Test] public void ThePaletteIsABlueDaySkyOverAPaleHorizonAndAGreyBlueHaze()
         {
             Assert.That(SkyLook.Ground.R, Is.EqualTo(SkyLook.Haze.R)); Assert.That(SkyLook.Ground.G, Is.EqualTo(SkyLook.Haze.G)); Assert.That(SkyLook.Ground.B, Is.EqualTo(SkyLook.Haze.B));
-            Assert.That(Luma(SkyLook.Haze), Is.LessThan(Luma(SkyLook.Horizon)), "far blocks read as silhouettes against the horizon");
-            Assert.That(Saturation(SkyLook.Haze), Is.GreaterThan(Saturation(SkyLook.Horizon)), "the haze is a deeper orange");
-            foreach (var warm in new[] { SkyLook.Horizon, SkyLook.Haze, SkyLook.Glow, SkyLook.CloudLit }) { Assert.That(warm.R, Is.GreaterThan(warm.G)); Assert.That(warm.G, Is.GreaterThan(warm.B)); }
-            Assert.That(SkyLook.Zenith.B, Is.GreaterThan(SkyLook.Zenith.R).And.GreaterThan(SkyLook.Zenith.G), "lilac-grey zenith");
+            Assert.That(Luma(SkyLook.Haze), Is.LessThan(Luma(SkyLook.Horizon)), "far blocks read darker than the horizon behind them");
+            Assert.That(Saturation(SkyLook.Haze), Is.LessThan(Saturation(SkyLook.Horizon)), "the haze is greyer than the horizon");
+            foreach (var blue in new[] { SkyLook.Zenith, SkyLook.Horizon, SkyLook.Haze, SkyLook.CloudShade }) { Assert.That(blue.B, Is.GreaterThan(blue.G)); Assert.That(blue.G, Is.GreaterThan(blue.R)); }
+            foreach (var sunlit in new[] { SkyLook.Glow, SkyLook.CloudLit }) { Assert.That(sunlit.R, Is.GreaterThan(sunlit.G)); Assert.That(sunlit.G, Is.GreaterThan(sunlit.B)); }
+            Assert.That(Saturation(SkyLook.Zenith), Is.GreaterThan(Saturation(SkyLook.Horizon) * 2), "a clear blue zenith over a pale horizon");
             Assert.That(Luma(SkyLook.Zenith), Is.LessThan(Luma(SkyLook.Horizon)));
             Assert.That(Luma(SkyLook.CloudShade), Is.LessThan(Luma(SkyLook.CloudLit)));
+            Assert.That(Luma(SkyLook.CloudLit), Is.GreaterThan(Luma(SkyLook.Horizon)), "white clouds stand out against the sky");
+            Assert.That(Saturation(SkyLook.CloudLit), Is.LessThan(0.05f), "sunlit clouds are almost white");
             var srgb = SkyLook.Palette.Default(false);
             Assert.That(srgb.Horizon.R, Is.EqualTo(SkyLook.Horizon.R)); Assert.That(Sky.Horizon.R, Is.EqualTo(ScreenLook.SrgbToLinear(SkyLook.Horizon.R)));
         }
@@ -73,7 +76,7 @@ namespace Broker.Tests
                 Assert.That(Luma(c), Is.LessThanOrEqualTo(previous + 1e-6f), "turning away from the sun, step " + step); previous = Luma(c);
             }
             var toward = Around(0, sun);
-            Assert.That(Luma(toward), Is.GreaterThan(Luma(Sky.Horizon) * 1.5f)); Assert.That(toward.R / toward.B, Is.GreaterThan(Sky.Horizon.R / Sky.Horizon.B), "warmer toward the sun");
+            Assert.That(Luma(toward), Is.GreaterThan(Luma(Sky.Horizon) * 1.05f), "the halo lights the horizon under the high sun"); Assert.That(toward.R / toward.B, Is.GreaterThan(Sky.Horizon.R / Sky.Horizon.B), "warmer toward the sun");
             var disk = At(Sx, Sy, Sz);
             Assert.That(disk.Brightest, Is.GreaterThan(SkyLook.DiskStrength * (1 - SkyLook.CloudOpacity)), "clouds never hide the disk completely");
             Assert.That(disk.Brightest, Is.GreaterThan(Around(0, sun).Brightest), "the disk is the brightest point");

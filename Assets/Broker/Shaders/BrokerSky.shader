@@ -1,23 +1,23 @@
-// Golden-hour sky of the city: a pale peach horizon over the deeper orange haze, a lilac-grey zenith, a halo around the low sun
-// and soft clouds lit from the sun side. Mirrors Core/SkyLook.cs line for line (the offline preview evaluates that);
+// Daytime sky of the city: a pale blue horizon over the grey-blue haze, a clear blue zenith, a soft halo around the sun
+// and white clouds lit from the sun side. Mirrors Core/SkyLook.cs line for line (the offline preview evaluates that);
 // the scene writes every value from SkyLook into the material, the defaults below are the same numbers.
 Shader "Broker/Sky"
 {
     Properties
     {
-        _Zenith ("Zenith", Color) = (0.47, 0.47, 0.57, 1)
-        _Horizon ("Horizon", Color) = (0.72, 0.58, 0.52, 1)
-        _Ground ("Below the horizon (= haze)", Color) = (0.66, 0.47, 0.37, 1)
-        _Glow ("Sun glow", Color) = (1, 0.64, 0.36, 1)
-        _CloudLit ("Lit cloud", Color) = (0.92, 0.78, 0.68, 1)
-        _CloudShade ("Cloud shade", Color) = (0.58, 0.52, 0.56, 1)
-        _SunDirection ("Direction toward the sun", Vector) = (-0.901, 0.297, -0.317, 0)
-        _Sun ("Halo, halo power, glow, glow power", Vector) = (0.55, 5, 1.4, 160)
-        _Disk ("Disk, disk cos, soft cos, horizon falloff", Vector) = (16, 0.99955, 0.99975, 4.5)
-        _Cloud ("Cover, softness, scale, lift", Vector) = (0.38, 0.2, 1.5, 0.18)
-        _CloudShape ("Stretch, drift, fade low, fade high", Vector) = (0.5, 0.004, 0.015, 0.22)
-        _CloudLight ("Opacity, light step, light gain, silver", Vector) = (0.75, 0.16, 3.5, 0.8)
-        _CloudHaze ("Haze over far clouds", Float) = 0.6
+        _Zenith ("Zenith", Color) = (0.36, 0.56, 0.86, 1)
+        _Horizon ("Horizon", Color) = (0.76, 0.84, 0.92, 1)
+        _Ground ("Below the horizon (= haze)", Color) = (0.70, 0.76, 0.82, 1)
+        _Glow ("Sun glow", Color) = (1, 0.93, 0.80, 1)
+        _CloudLit ("Lit cloud", Color) = (0.98, 0.97, 0.95, 1)
+        _CloudShade ("Cloud shade", Color) = (0.70, 0.75, 0.84, 1)
+        _SunDirection ("Direction toward the sun", Vector) = (-0.722, 0.643, -0.254, 0)
+        _Sun ("Halo, halo power, glow, glow power", Vector) = (0.3, 6, 1.2, 220)
+        _Disk ("Disk, disk cos, soft cos, horizon falloff", Vector) = (20, 0.99955, 0.99975, 3.2)
+        _Cloud ("Cover, softness, scale, lift", Vector) = (0.34, 0.22, 1.3, 0.18)
+        _CloudShape ("Stretch, drift, fade low, fade high", Vector) = (0.5, 0.004, 0.015, 0.25)
+        _CloudLight ("Opacity, light step, light gain, silver", Vector) = (0.9, 0.16, 3.5, 0.5)
+        _CloudHaze ("Haze over far clouds", Float) = 0.45
     }
     SubShader
     {
