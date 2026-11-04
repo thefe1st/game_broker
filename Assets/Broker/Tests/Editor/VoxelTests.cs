@@ -146,7 +146,6 @@ namespace Broker.Tests
             var a = VoxelMesher.Build(VoxelProps.RoundTree(3)); var b = VoxelMesher.Build(VoxelProps.RoundTree(3));
             Assert.That(a.Positions, Is.EqualTo(b.Positions)); Assert.That(a.Triangles, Is.EqualTo(b.Triangles));
             Assert.That(VoxelProps.RoundTree(3).Filled, Is.Not.EqualTo(VoxelProps.RoundTree(4).Filled));
-            Assert.That(VoxelProps.Car(CarStyle.Sedan, 1).Filled, Is.EqualTo(VoxelProps.Car(CarStyle.Sedan, 1).Filled));
         }
         private static int Count(VoxelModel m, byte color)
         {
@@ -164,7 +163,6 @@ namespace Broker.Tests
             yield return ("map stand", VoxelProps.InfoStand(StandStyle.Map)); yield return ("company stand", VoxelProps.InfoStand(StandStyle.Companies));
             yield return ("barrier", VoxelProps.ConstructionBarrier()); yield return ("cone", VoxelProps.Cone());
             yield return ("bollard", VoxelProps.Bollard()); yield return ("bin", VoxelProps.Bin());
-            foreach (CarStyle style in Enum.GetValues(typeof(CarStyle))) yield return ("car " + style, VoxelProps.Car(style, 7));
             yield return ("desk", VoxelProps.Desk(3.6f, 0.85f, 1.25f, VoxelPalette.Wood, VoxelPalette.WoodDark));
             yield return ("chair", VoxelProps.OfficeChair(VoxelPalette.Navy)); yield return ("keyboard", VoxelProps.Keyboard());
             yield return ("mouse", VoxelProps.Mouse()); yield return ("coffee", VoxelProps.CoffeeMachine());
@@ -208,23 +206,6 @@ namespace Broker.Tests
                 float minY = float.MaxValue; for (int i = 1; i < mesh.Positions.Length; i += 3) minY = Math.Min(minY, mesh.Positions[i]);
                 if (!Hanging(name)) Assert.That(minY, Is.EqualTo(0).Within(1e-5), name + " stands on its pivot");
             }
-        }
-        [Test] public void CarsHaveLightsAtBothEndsAndFourWheelsOnTheGround()
-        {
-            foreach (CarStyle style in Enum.GetValues(typeof(CarStyle)))
-            {
-                var car = VoxelProps.Car(style, 2);
-                Assert.That(car.Width, Is.EqualTo(3.6f).Within(0.01f)); Assert.That(car.Depth, Is.EqualTo(1.65f).Within(0.01f));
-                Assert.That(Count(car, VoxelPalette.Headlight), Is.EqualTo(4), style.ToString());
-                Assert.That(Count(car, VoxelPalette.TailLight), Is.EqualTo(4), style.ToString());
-                for (int x = 0; x < car.SizeX; x++) for (int z = 0; z < car.SizeZ; z++)
-                {
-                    if (car.Get(x, 0, z) == VoxelPalette.Empty) continue;
-                    Assert.That(car.Get(x, 0, z), Is.EqualTo(VoxelPalette.Tire), "only tyres touch the road");
-                }
-                Assert.That(car.Get(23, car.SizeY - 1, 5), Is.EqualTo(VoxelPalette.Empty));
-            }
-            Assert.That(Count(VoxelProps.Car(CarStyle.Taxi, 0), VoxelPalette.SignalAmber), Is.GreaterThan(0));
         }
         [Test] public void TowersMatchTheCityPlanFootprintAndLightSomeWindows()
         {

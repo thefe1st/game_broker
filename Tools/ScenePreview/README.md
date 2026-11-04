@@ -20,6 +20,7 @@ shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' 
 | `sunset-west`, `east-street` | the western square against the sun, the business street |
 | `boulevard` | traffic along the railing, the Exchange quarter beyond |
 | `crosswalk` | the zebra on the pedestrians' green, cars at the stop lines, walkers crossing; the crossing HUD lines |
+| `cars`, `cars-rear` | close-ups of the low-poly cars waiting at the red light: from the front off the zebra, from behind with the brake lamps on; no HUD |
 | `exchange`, `exchange-hall` | the Exchange square and steps; the hall with the quote board of a work day, aimed at it (E and its title) |
 | `cafe` | the café «Бык и медведь»: counter, barista, tables, aimed at the counter |
 | `tunnel` | the eastern tunnel portal at the end of the boulevard |
@@ -38,7 +39,7 @@ E key with the target's title as one centred line; the others print the shot's t
 The project compiles the **actual Core, OfficeScene partials, SurfaceLibrary and
 OfficeInteractable** at C# 9 (the Unity 6 language level) against narrow engine stand-ins in
 `UnityStubs.cs` and `PreviewFakes.cs`. The builders run as in Play: same voxel meshes,
-pixel textures, lights, sky and fog values, same traffic positions for a given time.
+pixel textures, low-poly car meshes, lights, sky and fog values, same traffic positions for a given time.
 `Renderer.cs` is a small CPU rasteriser that approximates the built-in forward path of the
 project's **linear colour space with HDR cameras**: sRGB colours and textures are decoded before
 lighting, light colour × intensity goes through Unity's gamma-to-linear, Standard BRDF, trilight

@@ -38,6 +38,10 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
             new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true, Aim = true },
             new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»", Aim = true },
+            // Close-ups of the low-poly cars waiting at the red light (the walkers' green): the eastbound queue from the
+            // zebra, then from behind with the taxi that joins it and the brake lamps on.
+            new Shot { Name = "cars", Local = new Vector3(0.9f, CityBlockPlan.GroundY + 1.55f, 29.6f), Yaw = -66, Pitch = -8, Fov = 55, City = true, Hud = false, Traffic = 29 },
+            new Shot { Name = "cars-rear", Local = new Vector3(-16.0f, CityBlockPlan.GroundY + 1.8f, 28.1f), Yaw = 62, Pitch = -8, Fov = 55, City = true, Hud = false, Traffic = 28 },
             new Shot { Name = "tunnel", Local = new Vector3(36, CityBlockPlan.GroundY + 1.7f, 27.2f), Yaw = 80, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 6 },
             new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Target = "Телефон — звонки" },
             new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true, Target = "Телефон — звонки" },

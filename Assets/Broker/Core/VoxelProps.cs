@@ -2,7 +2,6 @@ using System;
 
 namespace Broker.Core
 {
-    public enum CarStyle { Sedan, Suv, Taxi }
     public enum PersonStyle { Lena, Max, Orlov }
     public enum TowerStyle { Brick, Glass, Plaster }
     public enum ShopStyle { BrickShop, Cafe, Office }
@@ -19,10 +18,10 @@ namespace Broker.Core
     }
 
     // Deterministic voxel scenery and furniture. No trigonometry: the same seed gives the same cells everywhere.
-    // Fronts face −Z unless noted; cars face +X. Pivots are at the bottom centre of the footprint.
+    // Fronts face −Z unless noted. Pivots are at the bottom centre of the footprint. Cars are low-poly (CarModels).
     public static partial class VoxelProps
     {
-        public const float NatureVoxel = 0.25f, CarVoxel = 0.15f, PersonVoxel = 0.0625f, FurnitureVoxel = 0.05f, TowerVoxel = 0.5f, ShopVoxel = 0.25f;
+        public const float NatureVoxel = 0.25f, PersonVoxel = 0.0625f, FurnitureVoxel = 0.05f, TowerVoxel = 0.5f, ShopVoxel = 0.25f;
         private const byte E = VoxelPalette.Empty;
 
         private static float Rand(int seed, int salt) => VoxelNoise.Value(salt, 7, 3, seed);
@@ -256,58 +255,6 @@ namespace Broker.Core
             m.Box(0, 8, 0, 5, 1, 5, VoxelPalette.Metal);
             m.Box(1, 8, 1, 3, 1, 3, VoxelPalette.Ink);
             m.Box(0, 4, 0, 5, 1, 5, VoxelPalette.Metal);
-            return m;
-        }
-
-        // ---------- Cars: 3.6 × 1.65 m, front +X ----------
-        public static VoxelModel Car(CarStyle style, int seed)
-        {
-            var m = new VoxelModel(24, 11, 11, CarVoxel);
-            byte[] paints = { VoxelPalette.CarRed, VoxelPalette.CarBlue, VoxelPalette.CarWhite, VoxelPalette.CarGreen, VoxelPalette.CarBlack, VoxelPalette.Navy };
-            byte paint = style == CarStyle.Taxi ? VoxelPalette.CarYellow : paints[RandInt(seed, 3, 0, paints.Length)];
-            bool suv = style == CarStyle.Suv;
-            int top = suv ? 5 : 4;
-            m.Box(1, 1, 1, 22, top, 9, paint);
-            m.Box(0, 1, 1, 1, 2, 9, VoxelPalette.MetalDark); m.Box(23, 1, 1, 1, 2, 9, VoxelPalette.MetalDark);
-            m.Box(0, 3, 1, 1, top - 2, 9, paint); m.Box(23, 3, 1, 1, top - 2, 9, paint);
-            m.Box(23, 2, 4, 1, 2, 3, VoxelPalette.MetalDark);
-            m.Box(0, 2, 4, 1, 1, 3, VoxelPalette.Cream); m.Box(23, 1, 4, 1, 1, 3, VoxelPalette.Cream);
-            foreach (int z in new[] { 2, 7 }) { m.Box(23, top - 1, z, 1, 1, 2, VoxelPalette.Headlight); m.Box(0, top - 1, z, 1, 1, 2, VoxelPalette.TailLight); }
-            // Cabin steps in at the windscreen and rear window.
-            int cabin0 = suv ? 3 : 6, cabin1 = suv ? 19 : 17, rows = suv ? 3 : 3;
-            for (int r = 0; r < rows + 1; r++)
-            {
-                int y = top + 1 + r; bool roof = r == rows;
-                int x0 = suv ? cabin0 + (r == rows ? 1 : 0) : cabin0 + r, x1 = suv ? cabin1 - (r >= rows - 1 ? 1 : 0) : cabin1 - r;
-                if (y >= m.SizeY) break;
-                for (int x = x0; x <= x1; x++) for (int z = 2; z <= 8; z++)
-                {
-                    bool edgeX = x == x0 || x == x1, side = z == 2 || z == 8;
-                    bool pillar = x == x0 || x == x1 || x == (x0 + x1) / 2;
-                    byte c = roof ? paint : edgeX ? VoxelPalette.GlassDark : side && !pillar ? VoxelPalette.Glass : paint;
-                    if (!roof && edgeX && side) c = paint;
-                    m.Set(x, y, z, c);
-                }
-            }
-            if (suv) { m.Box(4, 9, 2, 14, 1, 1, VoxelPalette.MetalDark); m.Box(4, 9, 8, 14, 1, 1, VoxelPalette.MetalDark); }
-            if (style == CarStyle.Taxi)
-            {
-                m.Box(10, top + 5, 4, 3, 1, 3, VoxelPalette.SignalAmber);
-                for (int x = 1; x < 23; x++) { byte c = x % 2 == 0 ? VoxelPalette.Ink : VoxelPalette.Cream; m.Set(x, top - 1, 1, c); m.Set(x, top - 1, 9, c); }
-            }
-            int mirrorX = suv ? cabin1 - 1 : cabin1 - 2;
-            m.Set(mirrorX, top + 1, 1, paint); m.Set(mirrorX, top + 1, 9, paint);
-            m.Set(mirrorX, top + 1, 0, VoxelPalette.MetalDark); m.Set(mirrorX, top + 1, 10, VoxelPalette.MetalDark);
-            foreach (int cx in new[] { 3, 17 })
-                foreach (int z in new[] { 0, 9 })
-                    for (int y = 0; y < 4; y++) for (int x = cx; x < cx + 4; x++)
-                    {
-                        bool corner = (y == 0 || y == 3) && (x == cx || x == cx + 3);
-                        if (corner) continue;
-                        m.Set(x, y, z, VoxelPalette.Tire); m.Set(x, y, z + 1, VoxelPalette.Tire);
-                        bool hub = y >= 1 && y <= 2 && x >= cx + 1 && x <= cx + 2;
-                        if (hub) m.Set(x, y, z == 0 ? 0 : 10, VoxelPalette.Chrome);
-                    }
             return m;
         }
 
