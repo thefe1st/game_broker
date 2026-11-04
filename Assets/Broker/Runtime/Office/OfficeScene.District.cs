@@ -62,13 +62,13 @@ namespace Broker.Runtime.Office
                     case SceneryKind.Hedge:
                         // The plan stores the footprint after the yaw; the hedge model runs along its own X.
                         float length = 2 * (Mathf.Abs(Mathf.Abs(yaw % 180) - 90) < 1 ? item.HalfZ : item.HalfX);
-                        PlaceVoxel("hedge/" + Mathf.RoundToInt(length * 4) + "/" + seed % 3, () => VoxelProps.Hedge(length, seed % 3), "Scenery / voxel hedge", transform, position, yaw); break;
+                        PlaceBuilding("hedge/" + Mathf.RoundToInt(length * 4) + "/" + seed % 3, () => StreetModels.Hedge(length, seed % 3), StreetModels.HedgeLook, "Scenery / hedge", position, yaw); break;
                     case SceneryKind.Lawn: PlaceVoxel("lawn/" + seed % 2, () => VoxelProps.Lawn(seed % 2), "Scenery / voxel lawn", transform, position, yaw); break;
-                    case SceneryKind.RostralColumn: PlaceVoxel("rostral column", VoxelProps.RostralColumn, "Exchange / rostral column", transform, position, yaw); break;
+                    case SceneryKind.RostralColumn: PlaceBuilding("rostral column", BuildingModels.RostralColumn, BuildingModels.ExchangeGranite, "Exchange / rostral column", position, yaw); break;
                     case SceneryKind.Kiosk:
-                        PlaceVoxel("kiosk", VoxelProps.Kiosk, "Exchange / press kiosk", transform, position, yaw);
+                        PlaceBuilding("kiosk", BuildingModels.Kiosk, BuildingModels.KioskWall, "Exchange / press kiosk", position, yaw);
                         Text("Exchange / kiosk sign", "ПРЕССА", position + new Vector3(0, 2.25f, -item.HalfZ - 0.02f), 48, 0.05f, new Color(0.98f, 0.93f, 0.82f)); break;
-                    case SceneryKind.ExchangeColumn: PlaceVoxel("exchange column", VoxelProps.ExchangeColumn, "Exchange / column", transform, position, yaw); break;
+                    case SceneryKind.ExchangeColumn: PlaceBuilding("exchange column", BuildingModels.ExchangeColumn, BuildingModels.ExchangeStone, "Exchange / column", position, yaw); break;
                     case SceneryKind.CafeCounter: PlaceVoxel("cafe counter", VoxelProps.CafeCounter, "Cafe / counter", transform, position, yaw); break;
                     case SceneryKind.CafeShelf: PlaceVoxel("cafe shelf/" + seed % 2, () => VoxelProps.CafeShelf(seed % 2), "Cafe / shelf", transform, position, yaw); break;
                     case SceneryKind.CafeTable: PlaceVoxel("cafe table", VoxelProps.CafeTable, "Cafe / table", transform, position, yaw); break;

@@ -4,8 +4,9 @@ using System.Collections.Generic;
 namespace Broker.Core
 {
     // Submeshes of a low-poly building: walls (box-mapped in metres; the material picks the surface and tint), palette
-    // details, glass that stays dark, and night glass — the same glass by day, the windows that light up after dark.
-    public enum BuildingPart { Wall, Trim, Glass, Night }
+    // details, glass that stays dark, night glass — the same glass by day, the windows that light up after dark — and
+    // two more palette parts: glowing details (lamps, flames, the LED strip) and polished metal (brass, bronze).
+    public enum BuildingPart { Wall, Trim, Glass, Night, Glow, Metal }
 
     // A wall surface of VoxelSurfaces and the sRGB tint its material multiplies it by.
     public readonly struct WallLook : IEquatable<WallLook>
@@ -23,7 +24,7 @@ namespace Broker.Core
     // sign bands and awnings, flat roofs with plant. Metres; pivot at the centre of the footprint on the ground, front −Z.
     public static partial class BuildingModels
     {
-        public const int PartCount = 4;
+        public const int PartCount = 6;
         public const float FloorHeight = 3f, MinFloorHeight = 2.8f, ShopFloorHeight = 4f, PlinthHeight = 1f;
         public const float ParapetHeight = 0.5f, ParapetThickness = 0.25f, CapHeight = 0.08f, CapOverhang = 0.05f, CorniceProud = 0.28f;
         // Share of tower windows that light up after dark; shop fronts and doors always do.
@@ -31,12 +32,16 @@ namespace Broker.Core
         // Cornice zone between the top floor and the roof.
         public const float TopZone = 0.9f;
         private const float ContactHeight = 1.2f, SmoothAngle = 25f;
-        private const int WallPart = (int)BuildingPart.Wall, TrimPart = (int)BuildingPart.Trim, GlassPart = (int)BuildingPart.Glass, NightPart = (int)BuildingPart.Night;
+        private const int WallPart = (int)BuildingPart.Wall, TrimPart = (int)BuildingPart.Trim, GlassPart = (int)BuildingPart.Glass, NightPart = (int)BuildingPart.Night,
+            GlowPart = (int)BuildingPart.Glow, MetalPart = (int)BuildingPart.Metal;
 
-        private static PolyBuilder NewBuilder() => new PolyBuilder(PartCount, SmoothAngle, WallPart, VoxelSurfaces.MetresPerTile) { Ambient = Contact };
+        private static PolyBuilder NewBuilder(float smoothAngle = SmoothAngle, float tile = VoxelSurfaces.MetresPerTile)
+            => new PolyBuilder(PartCount, smoothAngle, WallPart, tile) { Ambient = Contact };
         // The foot of a wall sits in its own contact shade.
-        private static float Contact(V3 p) { float t = Clamp01(p.Y / ContactHeight); return 0.8f + 0.2f * t * t * (3 - 2 * t); }
-        private static (float, float) PaletteUv(int part, byte color) => part == TrimPart ? (VoxelPalette.U(color), VoxelPalette.V(color)) : (0.5f, 0.5f);
+        internal static float Contact(V3 p) { float t = Clamp01(p.Y / ContactHeight); return 0.8f + 0.2f * t * t * (3 - 2 * t); }
+        // Trim, glow and metal sample their palette texel; glass needs no texture.
+        internal static (float, float) PaletteUv(int part, byte color)
+            => part == TrimPart || part == GlowPart || part == MetalPart ? (VoxelPalette.U(color), VoxelPalette.V(color)) : (0.5f, 0.5f);
         private static float Rand(int seed, int salt) => VoxelNoise.Value(salt, 13, 5, seed);
         private static T Pick<T>(int seed, int salt, params T[] options) => options[Math.Min(options.Length - 1, (int)(Rand(seed, salt) * options.Length))];
 

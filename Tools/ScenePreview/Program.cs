@@ -40,6 +40,8 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 1.8 },
             new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 21, Crossing = true },
             new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
+            // The west side of the Exchange square: the rostral column, the press kiosk and the bull on its cheek.
+            new Shot { Name = "exchange-square", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.7f, 42.6f), Yaw = -55, Pitch = -16, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
             new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true, Aim = true },
             new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»", Aim = true },
             // Close-ups of the low-poly cars waiting at the red light (the walkers' green): the eastbound queue from the

@@ -146,12 +146,18 @@ namespace Broker.Core
             if (bottom) b.Quad(f.At(r.U0, r.V0), f.At(r.U1, r.V0), f.At(r.U1, r.V0, -depth), f.At(r.U0, r.V0, -depth), Up, wall, 0, RevealShade);
         }
         // A glazed opening: reveals, the pane, a frame with its bars standing just proud of the glass, a sill and a lintel.
-        private static void Window(PolyBuilder b, Face f, List<Rect> holes, Rect r, Sash s, int glass)
+        // Through a wall `through` metres thick the reveals run on to its inner face and the glass shows into the room too.
+        private static void Window(PolyBuilder b, Face f, List<Rect> holes, Rect r, Sash s, int glass, float through = 0)
         {
             const int trim = (int)BuildingPart.Trim;
             holes.Add(r);
-            Reveal(b, f, r, s.Depth);
+            Reveal(b, f, r, Math.Max(s.Depth, through));
             Pane(b, f, r, -s.Depth, glass);
+            if (through > s.Depth)
+            {
+                float inner = -s.Depth - 0.003f;
+                b.Quad(f.At(r.U0, r.V0, inner), f.At(r.U1, r.V0, inner), f.At(r.U1, r.V1, inner), f.At(r.U0, r.V1, inner), f.N * -1, glass, 0, 0.85f);
+            }
             float o = -s.Depth + FrameProud, fw = s.Frame, bar = s.Bar;
             if (s.Blind > 0) Panel(b, f, r.U0 + fw, r.U1 - fw, r.V1 - fw - (r.V1 - r.V0 - 2 * fw) * s.Blind, r.V1 - fw, -s.Depth + 0.01f, trim, s.BlindColor, 0.9f);
             Panel(b, f, r.U0, r.U1, r.V0, r.V0 + fw, o, trim, s.FrameColor, 1);

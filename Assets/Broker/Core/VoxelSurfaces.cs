@@ -9,7 +9,7 @@ namespace Broker.Core
     {
         public const int Size = 128;
         public const float MetresPerTile = 2f;
-        private static readonly string[] keys = { "wood", "plaster", "concrete", "pavers", "asphalt", "brick", "grass", "carpet", "roof", "windows", "stucco" };
+        private static readonly string[] keys = { "wood", "plaster", "concrete", "pavers", "asphalt", "brick", "grass", "carpet", "roof", "windows", "stucco", "ashlar", "leaves" };
         // Distant facades tile two 3 m floors with two windows each; everything else is 2 m.
         public static float TileMetres(string key) => key == "windows" ? 6f : MetresPerTile;
         public static bool Has(string key) => Array.IndexOf(keys, key) >= 0;
@@ -30,6 +30,8 @@ namespace Broker.Core
                 case "roof": return VoxelPalette.RoofDark;
                 case "windows": return VoxelPalette.Concrete;
                 case "stucco": return VoxelPalette.Trim;
+                case "ashlar": return VoxelPalette.Trim;
+                case "leaves": return VoxelPalette.LeafMid;
                 default: throw new ArgumentException("Unknown surface: " + key, nameof(key));
             }
         }
@@ -76,6 +78,26 @@ namespace Broker.Core
                     // adds soft trowel clouds.
                     c = Mix(P(VoxelPalette.Trim), P(VoxelPalette.Cream), 0.5f * soft) * (0.96f + 0.04f * Fbm(x, y, seed + 9) + 0.02f * fine);
                     break;
+                case "ashlar":
+                {
+                    // Dressed stone for tinted masonry: courses of 0.5 m, blocks of 1 m, every other course shifted by half a
+                    // block; each block a shade of its own, thin soft joints.
+                    int course = y / 32, shift = course % 2 == 0 ? 0 : 32;
+                    float block = VoxelNoise.Value(Wrap(x + shift) / 64, course, 5, 37);
+                    c = Mix(P(VoxelPalette.Trim), P(VoxelPalette.StoneLight), 0.04f + 0.24f * block + 0.1f * soft) * (0.98f + 0.03f * fine);
+                    float joint = Math.Max(Seam(y, 32, 1.3f), Seam(x + shift, 64, 1.3f));
+                    c = Mix(c, P(VoxelPalette.Stone), 0.7f * joint);
+                    break;
+                }
+                case "leaves":
+                {
+                    // Clipped foliage: soft clumps of leaves, lighter where they catch the light, darker in the gaps between.
+                    float clump = 0.6f * Smooth(x, y, 16, seed + 3) + 0.4f * Smooth(x, y, 8, seed + 4);
+                    float t = (clump - 0.5f) * 1.6f;
+                    c = t > 0 ? Mix(P(VoxelPalette.LeafMid), P(VoxelPalette.LeafLight), t) : Mix(P(VoxelPalette.LeafMid), P(VoxelPalette.LeafDark), -t);
+                    c = c * (0.96f + 0.05f * soft + 0.04f * fine);
+                    break;
+                }
                 case "brick":
                 {
                     // Rows of 0.25 m, bricks 0.5 m, every other row shifted by half a brick; light mortar.
