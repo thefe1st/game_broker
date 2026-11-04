@@ -6,7 +6,7 @@ namespace Broker.Runtime.Office
 {
     // The old district south of the boulevard: closed street facades, the information stands of the plaza, area signs,
     // and the dressing of both quarters from CityScenery with the colliders the plan marks as solid: low-poly greenery,
-    // lamps, benches and bins (StreetModels), the rest still voxel.
+    // lamps, benches, bins, bollards, cones, works and stands (StreetModels); only the café's furniture is still voxel.
     public sealed partial class OfficeScene
     {
         private void BuildDistrict(Material[] facades)
@@ -52,13 +52,13 @@ namespace Broker.Runtime.Office
                     case SceneryKind.Conifer: PlaceTree(true, seed, position, yaw); break;
                     case SceneryKind.StreetLamp: PlaceBuilding("street lamp", StreetModels.StreetLamp, StreetModels.FurnitureLook, "Scenery / street lamp", position, yaw); break;
                     case SceneryKind.Bin: PlaceBuilding("bin", StreetModels.Bin, StreetModels.FurnitureLook, "Scenery / bin", position, yaw); break;
-                    case SceneryKind.Cone: PlaceVoxel("cone", VoxelProps.Cone, "Scenery / voxel cone", transform, position, yaw); break;
-                    case SceneryKind.Bollard: PlaceVoxel("bollard", VoxelProps.Bollard, "Scenery / voxel bollard", transform, position, yaw); break;
+                    case SceneryKind.Cone: PlaceBuilding("cone", StreetModels.Cone, StreetModels.FurnitureLook, "Scenery / cone", position, yaw); break;
+                    case SceneryKind.Bollard: PlaceBuilding("bollard", StreetModels.Bollard, StreetModels.FurnitureLook, "Scenery / bollard", position, yaw); break;
                     case SceneryKind.Planter: PlaceBuilding("planter/" + seed % 3, () => StreetModels.Planter(seed % 3), StreetModels.ShrubLook, "Scenery / planter", position, yaw); break;
                     case SceneryKind.PlazaBench: PlaceBuilding("plaza bench", () => StreetModels.Bench(3, false), StreetModels.FurnitureLook, "Scenery / plaza bench", position, yaw); break;
                     case SceneryKind.Bench: PlaceBuilding("bench", () => StreetModels.Bench(2.4f, true), StreetModels.FurnitureLook, "Scenery / bench", position, yaw); break;
-                    case SceneryKind.Dumpster: PlaceVoxel("dumpster", VoxelProps.Dumpster, "Scenery / voxel refuse container", transform, position, yaw); break;
-                    case SceneryKind.WorksBarrier: PlaceVoxel("construction barrier", VoxelProps.ConstructionBarrier, "Scenery / voxel service works", transform, position, yaw); break;
+                    case SceneryKind.Dumpster: PlaceBuilding("dumpster", StreetModels.Dumpster, StreetModels.FurnitureLook, "Scenery / refuse container", position, yaw); break;
+                    case SceneryKind.WorksBarrier: PlaceBuilding("works barrier", StreetModels.WorksBarrier, StreetModels.FurnitureLook, "Scenery / service works", position, yaw); break;
                     case SceneryKind.FlowerBed: BuildFlowerBed(item, concrete, grass); continue;
                     case SceneryKind.Hedge:
                         // The plan stores the footprint after the yaw; the hedge model runs along its own X.
@@ -123,12 +123,13 @@ namespace Broker.Runtime.Office
         private void BuildCityStand(float x, float z, OfficeStation station, string title, string action, string label, StandStyle style)
         {
             float ground = CityBlockPlan.GroundY;
-            // The box stays as the interactable collider; the voxel board carries the look.
+            // The box over the panel stays as the interactable collider; the low-poly stand carries the look and the label
+            // hangs over the plain band of its panel.
             var stand = Box("District / " + title, new Vector3(x, ground + 1.5f, z), new Vector3(2.1f, 1.4f, 0.16f), navy);
             stand.GetComponent<Renderer>().enabled = false;
             Interactable(stand, station, title, action);
-            PlaceVoxel("stand/" + style, () => VoxelProps.InfoStand(style), "District / voxel board", transform, new Vector3(x, ground, z));
-            Text("District / stand title", label, new Vector3(x, ground + 1.65f, z - 0.15f), 48, 0.026f, Color.white);
+            PlaceBuilding("stand/" + style, () => StreetModels.InfoStand(style), StreetModels.FurnitureLook, "District / information stand", new Vector3(x, ground, z));
+            Text("District / stand title", label, new Vector3(x, ground + StreetModels.StandLabelY, z + StreetModels.StandLabelZ), 48, 0.026f, Color.white);
         }
     }
 }

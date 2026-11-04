@@ -38,6 +38,7 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "sunset-west", Local = new Vector3(-12, CityBlockPlan.GroundY + 1.7f, 21), Yaw = -96, Pitch = -2, City = true, Target = "Прогулка · лифт ведёт в офис" },
             new Shot { Name = "square-west", Local = new Vector3(-18.5f, CityBlockPlan.GroundY + 1.7f, 14f), Yaw = -40, Pitch = -6, City = true, Target = "Прогулка · лифт ведёт в офис" },
             new Shot { Name = "east-street", Local = new Vector3(31, CityBlockPlan.GroundY + 1.7f, 13), Yaw = 200, Pitch = 2, City = true, Target = "Прогулка · лифт ведёт в офис" },
+            new Shot { Name = "street-works", Local = new Vector3(41.2f, CityBlockPlan.GroundY + 3.6f, -13.9f), Yaw = 3, Pitch = 36, City = true, Target = "Прогулка · лифт ведёт в офис" },
             new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 1.8 },
             new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 21, Crossing = true },
             new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },

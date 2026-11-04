@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace Broker.Core
 {
@@ -7,9 +8,9 @@ namespace Broker.Core
     // models (VoxelProps.Bollard, Cone, ConstructionBarrier, Dumpster) with their pivots and bounds; fronts face −Z.
     public static partial class StreetModels
     {
-        public const float BollardHeight = 0.9f, ConeHeight = 0.7f, BarrierLampY = 1.0f, DumpsterLidY = 1.0f;
+        public const float BollardHeight = 0.9f, ConeHeight = 0.7f, ConeHollow = 0.05f, BarrierLampY = 1.0f, BarrierLampRadius = 0.05f, DumpsterLidY = 1.0f;
         // The barrier's two boards (bottom, top), their front and back faces and the width of its stripes along x + y.
-        public static readonly (float bottom, float top)[] BarrierBoards = { (0.4f, 0.6f), (0.7f, 0.9f) };
+        public static ReadOnlyCollection<(float bottom, float top)> BarrierBoards { get; } = Array.AsReadOnly(new[] { (0.4f, 0.6f), (0.7f, 0.9f) });
         public const float BoardFront = -0.07f, BoardBack = -0.03f, StripeWidth = 0.2f;
 
         // Bollard 0.9 m: a round dark post on a flared foot, a yellow band at 0.6–0.7 m and a pale domed cap.
@@ -25,7 +26,8 @@ namespace Broker.Core
             return b.Build(BuildingModels.PaletteUv);
         }
 
-        // Traffic cone 0.7 m: an orange cone with two white bands on a square black rubber foot, open at the tip.
+        // Traffic cone 0.7 m: an orange cone with two white bands on a square black rubber foot, open at the tip over a dark
+        // hollow.
         public static PolyMesh Cone()
         {
             var b = NewBuilder();
@@ -39,12 +41,13 @@ namespace Broker.Core
                 float y0 = bands[i].Item1, y1 = bands[i + 1].Item1;
                 PolyShapes.Lathe(b, 0, 0, new[] { (y0, R(y0)), (y1, R(y1)) }, 12, TrimPart, bands[i].Item2);
             }
-            PolyShapes.Lathe(b, 0, 0, new[] { (ConeHeight, r1), (ConeHeight, r1 - 0.012f), (ConeHeight - 0.05f, r1 - 0.02f) }, 12, TrimPart, VoxelPalette.Amber, 0.75f);
+            PolyShapes.Lathe(b, 0, 0, new[] { (ConeHeight, r1), (ConeHeight, r1 - 0.012f), (ConeHeight - ConeHollow, r1 - 0.02f) }, 12, TrimPart, VoxelPalette.Amber, 0.75f);
+            PolyShapes.Disc(b, 0, ConeHeight - ConeHollow, 0, r1 - 0.02f, 12, true, TrimPart, VoxelPalette.Ink);
             return b.Build(BuildingModels.PaletteUv);
         }
 
         // Works barrier 2.2 m along X: two boards with diagonal red and white stripes in front of square posts on tapered
-        // feet, an amber warning lamp (glowing) on the left post.
+        // feet, an amber warning lamp (glowing) on the left post, closed underneath by a dark cap.
         public static PolyMesh WorksBarrier()
         {
             var b = NewBuilder();
@@ -55,7 +58,9 @@ namespace Broker.Core
             }
             foreach (var (bottom, top) in BarrierBoards) Board(b, -1.1f, 1.1f, bottom, top);
             b.Box(new V3(-0.945f, BarrierLampY, -0.045f), new V3(-0.855f, BarrierLampY + 0.025f, 0.045f), 0.006f, TrimPart, VoxelPalette.Ink);
-            PolyShapes.Lathe(b, -0.9f, 0, new[] { (BarrierLampY + 0.025f, 0.05f), (1.085f, 0.05f), (1.1f, 0.03f), (1.1f, 0) }, 10, GlowPart, VoxelPalette.SignalAmber);
+            const float lampFoot = BarrierLampY + 0.025f, r = BarrierLampRadius;
+            PolyShapes.Lathe(b, -0.9f, 0, new[] { (lampFoot, r), (1.085f, r), (1.1f, 0.03f), (1.1f, 0) }, 10, GlowPart, VoxelPalette.SignalAmber);
+            PolyShapes.Disc(b, -0.9f, lampFoot, 0, r, 10, false, TrimPart, VoxelPalette.Ink);
             b.Box(new V3(0.865f, BarrierLampY, -0.035f), new V3(0.935f, BarrierLampY + 0.02f, 0.035f), 0.006f, TrimPart, VoxelPalette.MetalDark);
             return b.Build(BuildingModels.PaletteUv);
         }
@@ -122,8 +127,8 @@ namespace Broker.Core
                 {
                     float ya = 0.27f, yb = 0.9f, xa = SideX(ya), xb = SideX(yb);
                     PolyShapes.Block(b,
-                        new[] { new V3(s * (xa - 0.01f), ya, z - 0.025f), new V3(s * (xa + 0.022f), ya, z - 0.025f), new V3(s * (xa + 0.022f), ya, z + 0.025f), new V3(s * (xa - 0.01f), ya, z + 0.025f) },
-                        new[] { new V3(s * (xb - 0.01f), yb, z - 0.025f), new V3(s * (xb + 0.022f), yb, z - 0.025f), new V3(s * (xb + 0.022f), yb, z + 0.025f), new V3(s * (xb - 0.01f), yb, z + 0.025f) },
+                        new[] { new V3(s * (xa - 0.01f), ya, z - 0.025f), new V3(s * (xa + 0.018f), ya, z - 0.025f), new V3(s * (xa + 0.018f), ya, z + 0.025f), new V3(s * (xa - 0.01f), ya, z + 0.025f) },
+                        new[] { new V3(s * (xb - 0.01f), yb, z - 0.025f), new V3(s * (xb + 0.018f), yb, z - 0.025f), new V3(s * (xb + 0.018f), yb, z + 0.025f), new V3(s * (xb - 0.01f), yb, z + 0.025f) },
                         TrimPart, VoxelPalette.CarGreen, 0.86f);
                 }
             b.Box(new V3(-0.6f, 0.94f, -0.77f), new V3(0.6f, DumpsterLidY, 0.77f), 0.012f, TrimPart, VoxelPalette.CarGreen, 0.94f);

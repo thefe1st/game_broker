@@ -4,7 +4,9 @@ namespace Broker.Core
 {
     // Street greenery and furniture as smooth low-poly meshes in the manner of Schedule I, in place of the voxel models and
     // on the building parts and materials (BuildingModels): the clipped hedge here; trees, conifers, shrubs, planters and
-    // lawns in StreetModels.Green.cs; lamps, benches and bins in StreetModels.Furniture.cs.
+    // lawns in StreetModels.Green.cs; lamps, benches and bins in StreetModels.Furniture.cs; the crossing's signals and push
+    // button in StreetModels.Crossing.cs; bollards, cones, the works barrier and the refuse container in
+    // StreetModels.Works.cs; the plaza's information stands in StreetModels.Stands.cs.
     public static partial class StreetModels
     {
         public static readonly WallLook HedgeLook = new WallLook("leaves", 0xFFFFFF);

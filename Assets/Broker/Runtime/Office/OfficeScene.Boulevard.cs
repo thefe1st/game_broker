@@ -98,20 +98,23 @@ namespace Broker.Runtime.Office
         private void BuildSignals()
         {
             const float g = CityBlockPlan.GroundY;
+            // The heads and the button turn their backs to the post, their brackets ending at its clamps.
+            const float car = StreetModels.SignalClamp + StreetModels.CarSignalBack, walk = StreetModels.SignalClamp + StreetModels.WalkSignalBack,
+                push = StreetModels.SignalClamp + StreetModels.ButtonBack;
             carLamps = new GameObject[2][]; walkLamps = new GameObject[2][]; buttonLamps = new GameObject[2][]; walkCountdowns = new TextMesh[2];
             for (int i = 0; i < 2; i++)
             {
                 bool south = i == 0;
                 float x = south ? -2.7f : 2.7f, z = south ? CityDistrictPlan.SouthKerbZ : CityDistrictPlan.NorthKerbZ;
                 float y = g + (south ? 0 : CityDistrictPlan.NorthFloorY), across = south ? 1 : -1;
-                PlaceVoxel("signal post", VoxelProps.SignalPost, "Crossing / signal post", transform, new Vector3(x, y, z));
-                carLamps[i] = SignalVariants("car signal", 4, VoxelProps.CarSignalHead, new Vector3(x - across * 0.3f, y + 2.4f, z), south ? 90 : -90);
-                walkLamps[i] = SignalVariants("walk signal", 3, VoxelProps.PedSignalHead, new Vector3(x, y + 1.3f, z + across * 0.25f), south ? 180 : 0);
-                var button = new Vector3(x, y + 0.85f, z - across * 0.175f);
+                PlaceBuilding("signal post", StreetModels.SignalPost, StreetModels.FurnitureLook, "Crossing / signal post", new Vector3(x, y, z));
+                carLamps[i] = SignalVariants("car signal", 4, StreetModels.CarSignal, new Vector3(x - across * car, y + StreetModels.CarSignalY, z), south ? 90 : -90);
+                walkLamps[i] = SignalVariants("walk signal", 3, StreetModels.WalkSignal, new Vector3(x, y + StreetModels.WalkSignalY, z + across * walk), south ? 180 : 0);
+                var button = new Vector3(x, y + StreetModels.ButtonY, z - across * push);
                 buttonLamps[i] = new[]
                 {
-                    PlaceVoxel("crossing button/idle", () => VoxelProps.CrosswalkButton(false), "Crossing / button", transform, button, south ? 0 : 180),
-                    PlaceVoxel("crossing button/waiting", () => VoxelProps.CrosswalkButton(true), "Crossing / button lit", transform, button, south ? 0 : 180),
+                    PlaceBuilding("crossing button/idle", () => StreetModels.CrossingButton(false), StreetModels.FurnitureLook, "Crossing / button", button, south ? 0 : 180),
+                    PlaceBuilding("crossing button/waiting", () => StreetModels.CrossingButton(true), StreetModels.FurnitureLook, "Crossing / button lit", button, south ? 0 : 180),
                 };
                 var press = Blocker("Crossing / push button", new Vector3(x, y + 1.05f, z - across * 0.25f), new Vector3(0.4f, 0.5f, 0.3f));
                 Interactable(press, OfficeStation.CrosswalkButton, "Кнопка перехода", "Попросить зелёный для пешеходов");
@@ -120,13 +123,13 @@ namespace Broker.Runtime.Office
             }
         }
         // One model per lit state (−1 dark, then the lamps in order); the scene shows one of them.
-        private GameObject[] SignalVariants(string key, int count, Func<int, VoxelModel> build, Vector3 position, float yaw)
+        private GameObject[] SignalVariants(string key, int count, Func<int, PolyMesh> build, Vector3 position, float yaw)
         {
             var variants = new GameObject[count];
             for (int n = 0; n < count; n++)
             {
                 int lit = n - 1;
-                variants[n] = PlaceVoxel(key + "/" + lit, () => build(lit), "Crossing / " + key, transform, position, yaw);
+                variants[n] = PlaceBuilding(key + "/" + lit, () => build(lit), StreetModels.FurnitureLook, "Crossing / " + key, position, yaw);
             }
             return variants;
         }

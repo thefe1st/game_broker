@@ -6,9 +6,10 @@ using NUnit.Framework;
 
 namespace Broker.Tests
 {
-    // The low-poly trees, conifers, shrubs, planters, lawns, street lamps, benches and bins that replace the voxel models:
-    // sound meshes inside the voxel models' boxes, crowns over the walkers' heads, seats, kerbs, soil and the lamp glass at
-    // the heights the scene expects, and the whole street cheaper than the voxels it replaces.
+    // The low-poly trees, conifers, shrubs, planters, lawns, street lamps, benches, bins, signals, bollards, cones, works,
+    // refuse containers and information stands that replace the voxel models: sound meshes inside the voxel models' boxes,
+    // crowns over the walkers' heads, seats, kerbs, soil, the lamp glass, the signals' clamps and lit lenses and the stands'
+    // label band where the scene expects them, and the whole street cheaper than the voxels it replaces.
     public sealed class StreetModelTests
     {
         private const int Wall = (int)BuildingPart.Wall, Trim = (int)BuildingPart.Trim, Glass = (int)BuildingPart.Glass, Night = (int)BuildingPart.Night,
@@ -18,6 +19,14 @@ namespace Broker.Tests
         private static readonly int[] ParkSeeds = { 21, 22 };
         private static readonly byte[] FlowerColours = { VoxelPalette.FlowerPink, VoxelPalette.FlowerYellow, VoxelPalette.FlowerWhite, VoxelPalette.CarRed };
         private static readonly (float length, bool back)[] Benches = { (2.4f, true), (3, false), (1.2f, true), (5, false) };
+        // The models with a glowing part: the lamp glass, the lit lenses, the «wait» lamp, the works lamp and the marker.
+        private static readonly string[] Lit = { "street lamp", "car signal 0", "car signal 1", "car signal 2", "walk signal 0", "walk signal 1",
+            "waiting button", "works barrier", "map stand" };
+        // The car head's lenses from the top, lit and dark; the walk head's figures, standing over walking.
+        private static readonly byte[] LensLit = { VoxelPalette.SignalRed, VoxelPalette.SignalAmber, VoxelPalette.SignalGreen };
+        private static readonly byte[] LensDark = { VoxelPalette.BrickDark, VoxelPalette.WoodDark, VoxelPalette.PineDark };
+        private static readonly byte[] FigureLit = { VoxelPalette.SignalRed, VoxelPalette.SignalGreen }, FigureDark = { VoxelPalette.BrickDark, VoxelPalette.PineDark };
+        private static readonly StandStyle[] Stands = { StandStyle.Map, StandStyle.Companies };
 
         private static IEnumerable<(string name, PolyMesh mesh, bool furniture)> Models()
         {
@@ -31,7 +40,17 @@ namespace Broker.Tests
             yield return ("street lamp", StreetModels.StreetLamp(), true);
             foreach (var (length, back) in Benches) yield return ((back ? "bench " : "plaza bench ") + length, StreetModels.Bench(length, back), true);
             yield return ("bin", StreetModels.Bin(), true);
+            yield return ("signal post", StreetModels.SignalPost(), true);
+            for (int lit = -1; lit <= 2; lit++) yield return ("car signal " + lit, StreetModels.CarSignal(lit), true);
+            for (int lit = -1; lit <= 1; lit++) yield return ("walk signal " + lit, StreetModels.WalkSignal(lit), true);
+            foreach (bool waiting in new[] { false, true }) yield return ((waiting ? "waiting" : "idle") + " button", StreetModels.CrossingButton(waiting), true);
+            yield return ("bollard", StreetModels.Bollard(), true);
+            yield return ("cone", StreetModels.Cone(), true);
+            yield return ("works barrier", StreetModels.WorksBarrier(), true);
+            yield return ("refuse container", StreetModels.Dumpster(), true);
+            foreach (var style in Stands) yield return (StandName(style), StreetModels.InfoStand(style), true);
         }
+        private static string StandName(StandStyle style) => style == StandStyle.Map ? "map stand" : "company stand";
 
         private struct Tri { public V3 A, B, C; public int Part, Vertex; }
         private static List<Tri> Tris(PolyMesh mesh, params int[] parts)
@@ -90,6 +109,15 @@ namespace Broker.Tests
             return hit;
         }
         private static float Down(List<Tri> tris, float x, float z, string name) { Hit(tris, new V3(x, 50, z), new V3(0, -1, 0), out float d, name); return 50 - d; }
+        // The colour of the first surface a ray meets.
+        private static bool Sees(PolyMesh mesh, List<Tri> tris, V3 origin, V3 dir, byte colour, string name) => IsColour(mesh, Hit(tris, origin, dir, out _, name).Vertex, colour);
+        // Distance from the vertical axis of the first surface met by a ray from 2 m out along dir (a hair off the axis line).
+        private static float Reach(List<Tri> tris, float y, V3 dir, string name)
+        {
+            var side = new V3(dir.Z, 0, -dir.X) * 0.004f;
+            Hit(tris, dir * 2 + side + new V3(0, y, 0), dir * -1, out float d, name);
+            return 2 - d;
+        }
         private static void AssertSame(PolyMesh a, PolyMesh b, string name)
         {
             Assert.That(a.Positions, Is.EqualTo(b.Positions), name); Assert.That(a.Normals, Is.EqualTo(b.Normals), name);
@@ -133,7 +161,8 @@ namespace Broker.Tests
                 if (furniture) Assert.That(mesh.Triangles[Wall], Is.Empty, name + ": no wall material");
                 else Assert.That(mesh.Triangles[Wall].Length, Is.GreaterThan(0), name + " shows its leaves or grass");
                 Assert.That(mesh.Triangles[Glass].Length + mesh.Triangles[Night].Length + mesh.Triangles[Metal].Length, Is.Zero, name + ": no glass, night windows or brass");
-                if (name != "street lamp") Assert.That(mesh.Triangles[Glow], Is.Empty, name + ": nothing glows but the lamp");
+                if (Lit.Contains(name)) Assert.That(mesh.Triangles[Glow].Length, Is.GreaterThan(0), name + " glows");
+                else Assert.That(mesh.Triangles[Glow], Is.Empty, name + ": nothing glows");
                 AssertSame(mesh, again[index++].mesh, name + " is deterministic");
             }
         }
@@ -338,6 +367,245 @@ namespace Broker.Tests
             Assert.That(IsColour(bin, Hit(tris, new V3(-2, 0.2f, 0), new V3(1, 0, 0), out _, name).Vertex, VoxelPalette.MetalDark), "a dark drum");
         }
 
+        [Test] public void SignalHeadsHangOnTheClampsOfTheirPost()
+        {
+            var post = StreetModels.SignalPost(); var pole = Tris(post); const string name = "signal post";
+            AssertInside(post, new V3(-0.3f, 0, -0.3f), new V3(0.3f, StreetModels.SignalHeight, 0.3f), name);
+            Assert.That(Bounds(post).max.Y, Is.EqualTo(StreetModels.SignalHeight).Within(1e-3f), "the cap");
+            float band = (StreetModels.SignalBandBottom + StreetModels.SignalBandTop) / 2;
+            Assert.That(Sees(post, pole, new V3(-2, band, 0.004f), new V3(1, 0, 0), VoxelPalette.CarYellow, name), "a yellow band at the walkers' eyes");
+            Assert.That(Sees(post, pole, new V3(-2, StreetModels.SignalBandBottom - 0.2f, 0.004f), new V3(1, 0, 0), VoxelPalette.MetalDark, name), "a dark pole");
+            // BuildSignals hangs the heads and the button SignalClamp + their depth from the pole's axis, on either side
+            // along X or Z: their backs end there, and every bracket's end meets a clamp reaching SignalClamp out.
+            var sides = new[] { new V3(1, 0, 0), new V3(-1, 0, 0), new V3(0, 0, 1), new V3(0, 0, -1) };
+            var held = new List<(float bottom, float top)>();
+            foreach (var (head, mesh, pivot, back) in new[]
+            {
+                ("car signal", StreetModels.CarSignal(-1), StreetModels.CarSignalY, StreetModels.CarSignalBack),
+                ("walk signal", StreetModels.WalkSignal(-1), StreetModels.WalkSignalY, StreetModels.WalkSignalBack),
+                ("button", StreetModels.CrossingButton(false), StreetModels.ButtonY, StreetModels.ButtonBack),
+            })
+            {
+                Assert.That(Bounds(mesh).max.Z, Is.EqualTo(back).Within(1e-4f), head + ": its back");
+                var ends = Tris(mesh).Where(t => Math.Abs(t.A.Z - back) + Math.Abs(t.B.Z - back) + Math.Abs(t.C.Z - back) < 1e-4f).ToList();
+                Assert.That(ends, Is.Not.Empty, head + " touches the post");
+                foreach (var end in ends)
+                {
+                    float bottom = pivot + Math.Min(end.A.Y, Math.Min(end.B.Y, end.C.Y)), top = pivot + Math.Max(end.A.Y, Math.Max(end.B.Y, end.C.Y));
+                    held.Add((bottom, top));
+                    bool clamped = false;
+                    for (float y = bottom + 0.0025f; y < top && !clamped; y += 0.005f)
+                        clamped = sides.All(dir => Reach(pole, y, dir, name) >= StreetModels.SignalClamp - 0.003f);
+                    Assert.That(clamped, head + ": a clamp behind its end at " + bottom + "–" + top);
+                }
+            }
+            // And no clamp holds nothing.
+            for (float y = 0.4025f; y < StreetModels.SignalHeight - 0.15f; y += 0.005f)
+                if (Reach(pole, y, sides[1], name) > 0.085f)
+                    Assert.That(held.Any(h => y >= h.bottom - 1e-3f && y <= h.top + 1e-3f), "a clamp at " + y + " behind a head or the button");
+        }
+
+        [Test] public void EachSignalLightsOneLampAndKeepsTheOthersDark()
+        {
+            var ahead = new V3(0, 0, 1);
+            for (int lit = -1; lit <= 2; lit++)
+            {
+                var head = StreetModels.CarSignal(lit); var tris = Tris(head); string name = "car signal " + lit;
+                AssertInside(head, new V3(-0.2f, 0, -0.2f), new V3(0.2f, 1.2f, StreetModels.CarSignalBack), name);
+                for (int i = 0; i < 3; i++)
+                {
+                    float y = StreetModels.CarLensTop - StreetModels.CarLensStep * i;
+                    var lens = Hit(tris, new V3(0.01f, y + 0.01f, -5), ahead, out _, name);
+                    Assert.That(lens.Part, Is.EqualTo(lit == i ? Glow : Trim), name + ": lens " + i);
+                    Assert.That(IsColour(head, lens.Vertex, lit == i ? LensLit[i] : LensDark[i]), name + ": the colour of lens " + i);
+                    // Looking down in front of the lens, its dark hood.
+                    var hood = Hit(tris, new V3(0, y + 0.2f, -0.15f), new V3(0, -1, 0), out float d, name);
+                    Assert.That(IsColour(head, hood.Vertex, VoxelPalette.Ink) && d < 0.1f, name + ": a hood over lens " + i);
+                }
+                var glow = Tris(head, Glow);
+                if (lit < 0) { Assert.That(glow, Is.Empty, name + ": all dark"); continue; }
+                var (min, max) = Bounds(glow); float cy = StreetModels.CarLensTop - StreetModels.CarLensStep * lit, r = StreetModels.CarLensRadius + 1e-3f;
+                Assert.That(min.X >= -r && max.X <= r && min.Y >= cy - r && max.Y <= cy + r, name + ": only the lit lens glows");
+            }
+            for (int lit = -1; lit <= 1; lit++)
+            {
+                var head = StreetModels.WalkSignal(lit); var tris = Tris(head); string name = "walk signal " + lit;
+                AssertInside(head, new V3(-0.25f, 0, -0.15f), new V3(0.25f, 1.1f, StreetModels.WalkSignalBack), name);
+                for (int i = 0; i < 2; i++)
+                {
+                    float y = i == 0 ? StreetModels.WalkStandY : StreetModels.WalkGoY;
+                    var figure = Hit(tris, new V3(0.005f, y + 0.02f, -5), ahead, out _, name);
+                    Assert.That(figure.Part, Is.EqualTo(lit == i ? Glow : Trim), name + ": figure " + i);
+                    Assert.That(IsColour(head, figure.Vertex, lit == i ? FigureLit[i] : FigureDark[i]), name + ": the colour of figure " + i);
+                    Assert.That(Sees(head, tris, new V3(0.13f, y - 0.15f, -5), ahead, VoxelPalette.CarBlack, name), name + ": a dark window round figure " + i);
+                    var visor = Hit(tris, new V3(0, y + 0.28f, -0.1f), new V3(0, -1, 0), out float d, name);
+                    Assert.That(IsColour(head, visor.Vertex, VoxelPalette.Ink) && d < 0.06f, name + ": a visor over window " + i);
+                }
+                var glow = Tris(head, Glow);
+                if (lit < 0) { Assert.That(glow, Is.Empty, name + ": all dark"); continue; }
+                float wy = lit == 0 ? StreetModels.WalkStandY : StreetModels.WalkGoY;
+                var (min, max) = Bounds(glow);
+                Assert.That(min.Y >= wy - 0.21f && max.Y <= wy + 0.21f, name + ": only the lit figure glows");
+            }
+            foreach (bool waiting in new[] { false, true })
+            {
+                var button = StreetModels.CrossingButton(waiting); var tris = Tris(button); string name = (waiting ? "waiting" : "idle") + " button";
+                AssertInside(button, new V3(-0.125f, 0, -0.075f), new V3(0.125f, 0.4f, StreetModels.ButtonBack), name);
+                Assert.That(Sees(button, tris, new V3(0.08f, 0.05f, -5), ahead, VoxelPalette.CarYellow, name), name + ": a yellow box");
+                Assert.That(Sees(button, tris, new V3(0.005f, 0.145f, -5), ahead, VoxelPalette.MetalLight, name), name + ": a pale button");
+                var lamp = Hit(tris, new V3(0.005f, StreetModels.ButtonLampY + 0.005f, -5), ahead, out _, name);
+                Assert.That(lamp.Part, Is.EqualTo(waiting ? Glow : Trim), name + ": the «wait» lamp");
+                Assert.That(IsColour(button, lamp.Vertex, waiting ? VoxelPalette.SignalAmber : VoxelPalette.WoodDark), name + ": its colour");
+            }
+            foreach (int bad in new[] { -2, 3 }) Assert.Throws<ArgumentOutOfRangeException>(() => StreetModels.CarSignal(bad), "car " + bad);
+            foreach (int bad in new[] { -2, 2 }) Assert.Throws<ArgumentOutOfRangeException>(() => StreetModels.WalkSignal(bad), "walk " + bad);
+        }
+
+        [Test] public void BollardsAndConesKeepTheirBandsAndTheConeItsDarkHollow()
+        {
+            var across = new V3(1, 0, 0); var left = new V3(-1, 0, 0);
+            var bollard = StreetModels.Bollard(); var tris = Tris(bollard); const string post = "bollard";
+            AssertInside(bollard, new V3(-0.15f, 0, -0.15f), new V3(0.15f, StreetModels.BollardHeight, 0.15f), post);
+            Assert.That(Down(tris, 0.01f, 0.01f, post), Is.EqualTo(StreetModels.BollardHeight).Within(0.01f), "the top of the cap");
+            Assert.That(Sees(bollard, tris, new V3(0.01f, 50, 0.01f), new V3(0, -1, 0), VoxelPalette.Metal, post), "a pale cap");
+            foreach (var (y, colour) in new[] { (0.3f, VoxelPalette.MetalDark), (0.65f, VoxelPalette.CarYellow), (0.74f, VoxelPalette.MetalDark) })
+                Assert.That(Sees(bollard, tris, new V3(-2, y, 0.004f), across, colour, post), post + " at " + y);
+            Assert.That(Reach(tris, 0.015f, left, post), Is.GreaterThan(Reach(tris, 0.3f, left, post) + 0.015f), "a flared foot");
+
+            var cone = StreetModels.Cone(); tris = Tris(cone); const string name = "cone";
+            AssertInside(cone, new V3(-0.25f, 0, -0.25f), new V3(0.25f, 0.8f, 0.25f), name);
+            Assert.That(Bounds(cone).max.Y, Is.EqualTo(StreetModels.ConeHeight).Within(1e-3f), "the tip");
+            foreach (var (y, colour) in new[] { (0.15f, VoxelPalette.Amber), (0.27f, VoxelPalette.CarWhite), (0.38f, VoxelPalette.Amber), (0.48f, VoxelPalette.CarWhite),
+                (0.6f, VoxelPalette.Amber) })
+                Assert.That(Sees(cone, tris, new V3(-2, y, 0.004f), across, colour, name), name + " at " + y);
+            Assert.That(Reach(tris, 0.6f, left, name), Is.LessThan(Reach(tris, 0.15f, left, name) - 0.05f), "narrowing upward");
+            Assert.That(Sees(cone, tris, new V3(0.2f, 50, 0.2f), new V3(0, -1, 0), VoxelPalette.Tire, name), "a black rubber foot");
+            Assert.That(Down(tris, 0.2f, 0.2f, name), Is.LessThan(0.05f), "a low foot");
+            // Looking into the open tip: its dark floor, not the inside of the cone.
+            var hollow = Hit(tris, new V3(0.004f, 50, 0.004f), new V3(0, -1, 0), out float d, name);
+            Assert.That(50 - d, Is.EqualTo(StreetModels.ConeHeight - StreetModels.ConeHollow).Within(1e-3f), "the floor of the hollow");
+            Assert.That(IsColour(cone, hollow.Vertex, VoxelPalette.Ink), "dark inside the tip");
+        }
+
+        [Test] public void TheWorksBarrierStripesBothFacesOfItsBoardsAndCapsItsLamp()
+        {
+            var barrier = StreetModels.WorksBarrier(); var tris = Tris(barrier); const string name = "works barrier";
+            AssertInside(barrier, new V3(-1.1f, 0, -0.2f), new V3(1.1f, 1.1f, 0.2f), name);
+            Assert.That(StreetModels.BarrierBoards.Count, Is.EqualTo(2), "two boards");
+            float w = StreetModels.StripeWidth; int behind = 0;
+            foreach (var (bottom, top) in StreetModels.BarrierBoards)
+            {
+                // The middle of every stripe across the board, k = ⌊(x + y) / StripeWidth⌋: red when even, white when odd.
+                float y = (bottom + top) / 2;
+                for (int k = (int)Math.Ceiling((y - 1.05f) / w - 0.5f); (k + 0.5f) * w - y < 1.05f; k++)
+                {
+                    float x = (k + 0.5f) * w - y; string at = name + " at " + x + ", " + y;
+                    byte colour = (k % 2 + 2) % 2 == 0 ? VoxelPalette.CarRed : VoxelPalette.CarWhite;
+                    var front = Hit(tris, new V3(x, y, -5), new V3(0, 0, 1), out float d, at);
+                    Assert.That(d, Is.EqualTo(5 + StreetModels.BoardFront).Within(1e-3f), at + ": the board in front");
+                    Assert.That(IsColour(barrier, front.Vertex, colour), at + ": the stripe in front");
+                    // From behind, beside the posts, the same stripe on the back of the board.
+                    if (Math.Abs(Math.Abs(x) - 0.9f) < 0.05f) continue;
+                    var back = Hit(tris, new V3(x, y, 5), new V3(0, 0, -1), out d, at);
+                    Assert.That(d, Is.EqualTo(5 - StreetModels.BoardBack).Within(1e-3f), at + ": the board from behind");
+                    Assert.That(IsColour(barrier, back.Vertex, colour), at + ": the stripe behind");
+                    behind++;
+                }
+            }
+            Assert.That(behind, Is.GreaterThan(12));
+            // The amber lamp on the left post, closed underneath: from below beside the post, its dark cap.
+            var glow = Tris(barrier, Glow); var (lo, hi) = Bounds(glow);
+            Assert.That(glow.All(t => IsColour(barrier, t.Vertex, VoxelPalette.SignalAmber)), "an amber lamp");
+            Assert.That(lo.Y, Is.GreaterThanOrEqualTo(StreetModels.BarrierLampY), "over the post"); Assert.That((lo.X + hi.X) / 2, Is.EqualTo(-0.9f).Within(1e-3f), "the left post");
+            float from = StreetModels.BarrierLampY - 0.05f;
+            var cap = Hit(tris, new V3(-0.9f, from, StreetModels.BarrierLampRadius * 0.92f), new V3(0, 1, 0), out float up, name);
+            Assert.That(cap.Part, Is.EqualTo(Trim), "the lamp's glass stays out of sight from below");
+            Assert.That(IsColour(barrier, cap.Vertex, VoxelPalette.Ink), "a dark cap");
+            Assert.That(from + up, Is.InRange(StreetModels.BarrierLampY, StreetModels.BarrierLampY + 0.03f), "under the lamp");
+        }
+
+        [Test] public void TheRefuseContainerStandsOnCastorsUnderTwoLids()
+        {
+            var bin = StreetModels.Dumpster(); var tris = Tris(bin); const string name = "refuse container";
+            AssertInside(bin, new V3(-0.6f, 0, -0.8f), new V3(0.6f, 1.2f, 0.8f), name);
+            foreach (float x in new[] { -0.4f, 0.4f })
+                foreach (float z in new[] { -0.6f, 0.6f })
+                {
+                    var wheel = Hit(tris, new V3(x, -1, z + 0.004f), new V3(0, 1, 0), out float d, name);
+                    Assert.That(d - 1, Is.LessThan(0.01f), name + ": a castor on the pavement at " + x + ", " + z);
+                    Assert.That(IsColour(bin, wheel.Vertex, VoxelPalette.Tire), name + ": rubber castors");
+                }
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Assert.That(Sees(bin, tris, new V3(2 * s, 0.6f, 0.3f), new V3(-s, 0, 0), VoxelPalette.CarGreen, name), "a green body");
+                var lid = Hit(tris, new V3(0, 50, 0.4f * s), new V3(0, -1, 0), out float d, name);
+                Assert.That(50 - d, Is.InRange(StreetModels.DumpsterLidY + 0.05f, 1.11f), "a raised lid"); Assert.That(IsColour(bin, lid.Vertex, VoxelPalette.MetalDark), "dark lids");
+            }
+            Assert.That(Down(tris, 0, 0, name), Is.EqualTo(StreetModels.DumpsterLidY).Within(1e-3f), "the lids meet over the rim");
+            var handle = Hit(tris, new V3(0, 0.8f, -5), new V3(0, 0, 1), out float far, name);
+            Assert.That(IsColour(bin, handle.Vertex, VoxelPalette.Metal), "a handle at the front"); Assert.That(5 - far, Is.GreaterThan(0.76f), "in front of the body");
+        }
+
+        [Test] public void StandsKeepAPlainBandForTheLabelOverTheirContent()
+        {
+            float hw = StreetModels.StandHalfWidth, face = StreetModels.StandFace; var ahead = new V3(0, 0, 1);
+            byte[] content = { VoxelPalette.StoneLight, VoxelPalette.Stone, VoxelPalette.GrassMid, VoxelPalette.GlassSky, VoxelPalette.CarWhite, VoxelPalette.SignalRed,
+                VoxelPalette.GrassLight, VoxelPalette.CarRed };
+            Assert.That(StreetModels.StandLabelY, Is.InRange(StreetModels.StandLabelBottom + 0.15f, StreetModels.StandLabelTop - 0.15f), "the label inside its band");
+            Assert.That(StreetModels.StandLabelZ, Is.LessThan(StreetModels.StandFrameFront), "the label in front of the frame");
+            foreach (var style in Stands)
+            {
+                var stand = StreetModels.InfoStand(style); var tris = Tris(stand); string name = StandName(style);
+                AssertInside(stand, new V3(-hw, 0, -StreetModels.StandHalfDepth), new V3(hw, StreetModels.StandHeight, StreetModels.StandHalfDepth), name);
+                // The label band: the plain navy face from side to side, nothing in front of it.
+                foreach (float x in new[] { -0.95f, -0.5f, 0, 0.5f, 0.95f })
+                    foreach (float y in new[] { StreetModels.StandLabelBottom, StreetModels.StandLabelY, StreetModels.StandLabelTop })
+                    {
+                        var panel = Hit(tris, new V3(x, y, -5), ahead, out float d, name);
+                        Assert.That(d, Is.EqualTo(5 + face).Within(1e-3f), name + ": nothing over the label band at " + x + ", " + y);
+                        Assert.That(IsColour(stand, panel.Vertex, VoxelPalette.Navy), name + ": a navy panel at " + x + ", " + y);
+                    }
+                // The content on the face inside the frame, within its band.
+                var drawn = tris.Where(t => content.Any(c => IsColour(stand, t.Vertex, c))).ToList();
+                Assert.That(drawn, Is.Not.Empty, name + " shows its content");
+                var (lo, hi) = Bounds(drawn);
+                Assert.That(lo.Y >= StreetModels.StandContentBottom - 1e-3f && hi.Y <= StreetModels.StandContentTop + 1e-3f, name + ": the content within its band");
+                Assert.That(lo.X >= -0.9f - 1e-3f && hi.X <= 0.9f + 1e-3f && hi.Z <= face + 1e-4f, name + ": on the face inside the frame");
+                // A dark wooden frame in front of the face, the brass strip over the panel, a roof, stone feet, a closed back.
+                Assert.That(Sees(stand, tris, new V3(hw - 0.05f, StreetModels.StandLabelY, -5), ahead, VoxelPalette.WoodDark, name), name + ": the frame");
+                Assert.That(Sees(stand, tris, new V3(0.3f, (StreetModels.StandBrassBottom + StreetModels.StandPanelTop) / 2, -5), ahead, VoxelPalette.Brass, name), name + ": brass");
+                Assert.That(Sees(stand, tris, new V3(0.3f, 50, 0), new V3(0, -1, 0), VoxelPalette.RoofDark, name), name + ": a roof");
+                Assert.That(Down(tris, 0.3f, 0, name), Is.EqualTo(StreetModels.StandHeight).Within(0.03f), name + ": the ridge");
+                foreach (float s in new[] { -1f, 1f })
+                    Assert.That(Sees(stand, tris, new V3(2 * s, 0.05f, 0.08f), new V3(-s, 0, 0), VoxelPalette.StoneDark, name), name + ": stone feet");
+                Assert.That(Sees(stand, tris, new V3(0.3f, StreetModels.StandLabelY, 5), new V3(0, 0, -1), VoxelPalette.Navy, name), name + ": a closed back");
+            }
+            // The map: the plan covers its band; the glowing marker in a white ring on the plaza's green square, water in a corner.
+            var map = StreetModels.InfoStand(StandStyle.Map); var plan = Tris(map);
+            for (float x = -0.85f; x < 0.86f; x += 0.17f)
+                for (float y = StreetModels.StandContentBottom + 0.02f; y < StreetModels.StandContentTop; y += 0.1f)
+                    Assert.That(IsColour(map, Hit(plan, new V3(x, y, -5), ahead, out _, "map").Vertex, VoxelPalette.Navy), Is.False, "the plan at " + x + ", " + y);
+            float mx = StreetModels.StandMarkerX, my = StreetModels.StandMarkerY, mr = StreetModels.StandMarkerRadius;
+            var marker = Hit(plan, new V3(mx + 0.005f, my + 0.005f, -5), ahead, out _, "map");
+            Assert.That(marker.Part, Is.EqualTo(Glow), "the marker glows"); Assert.That(IsColour(map, marker.Vertex, VoxelPalette.SignalRed), "a red marker");
+            var (gl, gh) = Bounds(map, Glow);
+            Assert.That(gl.X >= mx - mr - 1e-3f && gh.X <= mx + mr + 1e-3f && gl.Y >= my - mr - 1e-3f && gh.Y <= my + mr + 1e-3f, "only the marker glows");
+            Assert.That(Sees(map, plan, new V3(mx + mr + 0.008f, my, -5), ahead, VoxelPalette.CarWhite, "map"), "a white ring");
+            Assert.That(Sees(map, plan, new V3(mx + 0.12f, my, -5), ahead, VoxelPalette.GrassMid, "map"), "the green square round it");
+            Assert.That(Sees(map, plan, new V3(0.6f, StreetModels.StandContentBottom + 0.1f, -5), ahead, VoxelPalette.GlassSky, "map"), "water");
+            // The chart: eight bars over the base line, two of them red, the panel between them.
+            var chart = StreetModels.InfoStand(StandStyle.Companies); var bars = Tris(chart);
+            var runs = new List<byte>(); byte last = VoxelPalette.Navy;
+            for (float x = -0.86f; x < 0.9f; x += 0.01f)
+            {
+                var t = Hit(bars, new V3(x, StreetModels.StandContentBottom + 0.1f, -5), ahead, out _, "chart");
+                byte c = IsColour(chart, t.Vertex, VoxelPalette.CarRed) ? VoxelPalette.CarRed : IsColour(chart, t.Vertex, VoxelPalette.GrassLight) ? VoxelPalette.GrassLight : VoxelPalette.Navy;
+                if (c != last && c != VoxelPalette.Navy) runs.Add(c);
+                last = c;
+            }
+            Assert.That(runs.Count, Is.EqualTo(8), "eight bars"); Assert.That(runs.Count(c => c == VoxelPalette.CarRed), Is.EqualTo(2), "two of them falling");
+        }
+
         [Test] public void LooksUseKnownSurfacesAndTheStreetCostsLessThanItsVoxels()
         {
             var looks = Enumerable.Range(0, StreetModels.TreeKinds).Select(StreetModels.TreeLook)
@@ -346,9 +614,14 @@ namespace Broker.Tests
             foreach (var (name, mesh, budget) in new[] { ("tree", StreetModels.Tree(1), 1000), ("conifer", StreetModels.Conifer(0), 600),
                 ("shrub", StreetModels.Shrub(2, 1, 1.25f, 21, true), 1000), ("planter", StreetModels.Planter(0), 1300), ("lawn", StreetModels.Lawn(1), 3600),
                 ("street lamp", StreetModels.StreetLamp(), 400), ("bench", StreetModels.Bench(2.4f, true), 500), ("plaza bench", StreetModels.Bench(3, false), 500),
-                ("bin", StreetModels.Bin(), 400) })
+                ("bin", StreetModels.Bin(), 400), ("signal post", StreetModels.SignalPost(), 500), ("car signal", StreetModels.CarSignal(0), 450),
+                ("walk signal", StreetModels.WalkSignal(1), 450), ("button", StreetModels.CrossingButton(true), 200), ("bollard", StreetModels.Bollard(), 250),
+                ("cone", StreetModels.Cone(), 300), ("works barrier", StreetModels.WorksBarrier(), 600), ("refuse container", StreetModels.Dumpster(), 650),
+                ("map stand", StreetModels.InfoStand(StandStyle.Map), 600), ("company stand", StreetModels.InfoStand(StandStyle.Companies), 650) })
                 Assert.That(mesh.TriangleCount, Is.LessThan(budget), name);
-            // Every tree, lamp, bench, bin, planter and lawn the district places, against the voxel models they replace.
+            // Every tree, lamp, bench, bin, planter, lawn, bollard, cone, works barrier and refuse container the district places,
+            // both signal posts with the heads and the button they show and the plaza's stands, against the voxel models they
+            // replace.
             long poly = 0, voxel = 0; int placed = 0;
             void Add(PolyMesh mesh, VoxelModel model) { poly += mesh.TriangleCount; voxel += VoxelTriangles(model); placed++; }
             foreach (var item in CityScenery.Props)
@@ -362,10 +635,20 @@ namespace Broker.Tests
                     case SceneryKind.PlazaBench: Add(StreetModels.Bench(3, false), VoxelProps.Bench(30, false)); break;
                     case SceneryKind.Bench: Add(StreetModels.Bench(2.4f, true), VoxelProps.Bench(24, true)); break;
                     case SceneryKind.Lawn: Add(StreetModels.Lawn(item.Seed % 2), VoxelProps.Lawn(item.Seed % 2)); break;
+                    case SceneryKind.Bollard: Add(StreetModels.Bollard(), VoxelProps.Bollard()); break;
+                    case SceneryKind.Cone: Add(StreetModels.Cone(), VoxelProps.Cone()); break;
+                    case SceneryKind.WorksBarrier: Add(StreetModels.WorksBarrier(), VoxelProps.ConstructionBarrier()); break;
+                    case SceneryKind.Dumpster: Add(StreetModels.Dumpster(), VoxelProps.Dumpster()); break;
                 }
             foreach (var _ in CityRoads.Lamps) Add(StreetModels.StreetLamp(), VoxelProps.StreetLamp());
+            for (int post = 0; post < 2; post++)
+            {
+                Add(StreetModels.SignalPost(), VoxelProps.SignalPost()); Add(StreetModels.CarSignal(0), VoxelProps.CarSignalHead(0));
+                Add(StreetModels.WalkSignal(0), VoxelProps.PedSignalHead(0)); Add(StreetModels.CrossingButton(false), VoxelProps.CrosswalkButton(false));
+            }
+            foreach (var style in Stands) Add(StreetModels.InfoStand(style), VoxelProps.InfoStand(style));
             Assert.That(placed, Is.GreaterThan(40));
-            Assert.That(poly, Is.LessThan(voxel * 0.8), "the low-poly street is cheaper than the voxel one");
+            Assert.That(poly, Is.LessThan(voxel * 0.8), "the low-poly street is cheaper than the voxel one: " + poly + " against " + voxel);
         }
     }
 }
