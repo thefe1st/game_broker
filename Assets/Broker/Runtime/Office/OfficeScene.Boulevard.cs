@@ -140,7 +140,7 @@ namespace Broker.Runtime.Office
             foreach (float side in new[] { -1f, 1f })
             {
                 float bank = side * (portalX + CityScenery.EmbankmentEndX) / 2, tube = side * (portalX + endX) / 2;
-                PlaceVoxel("tunnel portal", VoxelProps.TunnelPortal, "Boulevard / tunnel portal", transform,
+                PlaceBuilding("tunnel portal", BuildingModels.TunnelPortal, BuildingModels.PortalConcrete, "Boulevard / tunnel portal",
                     new Vector3(side * portalX, g, (CityDistrictPlan.SouthKerbZ + CityDistrictPlan.NorthKerbZ) / 2), side > 0 ? 90 : -90);
                 Box("Boulevard / embankment south", new Vector3(bank, g - 0.1f + CityScenery.EmbankmentHeight / 2, (CityScenery.EmbankmentMinZ + minZ) / 2),
                     new Vector3(bankLength, CityScenery.EmbankmentHeight, minZ - CityScenery.EmbankmentMinZ), grass, false);

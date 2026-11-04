@@ -22,6 +22,7 @@ shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' 
 | `crosswalk` | the zebra on the pedestrians' green, cars at the stop lines, walkers crossing; the crossing HUD lines |
 | `cars`, `cars-rear` | close-ups of the low-poly cars waiting at the red light: from the front off the zebra, from behind with the brake lamps on; no HUD |
 | `exchange`, `exchange-hall` | the Exchange square and steps; the hall with the quote board of a work day, aimed at it (E and its title) |
+| `exchange-square` | the west side of the Exchange square: the rostral column, the press kiosk and the bull on its cheek |
 | `cafe` | the café «Бык и медведь»: counter, barista, tables, aimed at the counter |
 | `tunnel` | the eastern tunnel portal at the end of the boulevard |
 | `parking` | the red test sedan in its lay-by by the square, aimed at (E «Сесть за руль») |

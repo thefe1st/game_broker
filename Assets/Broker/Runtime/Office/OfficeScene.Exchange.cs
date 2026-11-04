@@ -4,9 +4,10 @@ using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    // The Exchange north of the boulevard: the podium with its steps and the bull and bear on the cheeks, the hall with
-    // the quote board, the roof with «БИРЖА» on the frieze (the colonnade comes from CityScenery) and the colliders of
-    // the podium edge and the hall walls. The board shows ExchangeBoard for the current day and changes nothing.
+    // The Exchange north of the boulevard as low-poly models (BuildingModels.Exchange*): the granite podium with its steps,
+    // paving and the hall's parquet, the bull and bear on the cheeks, the hall with the quote board, the roof with «БИРЖА»
+    // on the frieze (the colonnade comes from CityScenery) and the colliders of the podium edge and the hall walls. The
+    // board shows ExchangeBoard for the current day and changes nothing.
     public sealed partial class OfficeScene
     {
         private TextMesh boardTitle, boardTape;
@@ -22,13 +23,16 @@ namespace Broker.Runtime.Office
             const float g = CityBlockPlan.GroundY, floor = g + CityDistrictPlan.PodiumFloorY;
             const float stepsZ = CityDistrictPlan.StepsMinZ, podiumZ = CityDistrictPlan.PodiumMinZ, backZ = CityDistrictPlan.PodiumMaxZ;
             const float podiumHalf = CityDistrictPlan.PodiumHalfWidth, stepsHalf = CityDistrictPlan.StepsHalfWidth;
-            PlaceVoxel("exchange podium", VoxelProps.ExchangePodium, "Exchange / voxel podium", transform, new Vector3(0, CityBlockPlan.TerrainTopY, stepsZ));
-            PlaceVoxel("exchange hall", VoxelProps.ExchangeHall, "Exchange / voxel hall", transform, new Vector3(0, floor, 60));
-            PlaceVoxel("exchange roof", VoxelProps.ExchangeRoof, "Exchange / voxel roof", transform, new Vector3(0, floor + 7, CityScenery.ExchangeRoofZ));
+            var foot = new Vector3(0, CityBlockPlan.TerrainTopY, stepsZ);
+            PlaceBuilding("exchange podium", BuildingModels.ExchangePodium, BuildingModels.ExchangeGranite, "Exchange / podium", foot);
+            PlaceBuilding("exchange terrace", BuildingModels.ExchangeTerrace, BuildingModels.ExchangePaving, "Exchange / terrace", foot);
+            PlaceBuilding("exchange hall floor", BuildingModels.ExchangeHallFloor, BuildingModels.ExchangeParquet, "Exchange / hall floor", foot);
+            PlaceBuilding("exchange hall", BuildingModels.ExchangeHall, BuildingModels.ExchangeWalls, "Exchange / hall", new Vector3(0, floor, BuildingModels.HallFrontZ));
+            PlaceBuilding("exchange roof", BuildingModels.ExchangeRoof, BuildingModels.ExchangeWalls, "Exchange / roof", new Vector3(0, floor + 7, CityScenery.ExchangeRoofZ));
             Text("Exchange / frieze", "Б И Р Ж А", new Vector3(0, floor + 7.75f, CityScenery.ExchangeRoofZ + 0.2f), 64, 0.08f, new Color(0.15f, 0.23f, 0.34f));
             // Bull and bear face each other across the steps.
-            PlaceVoxel("exchange statue/bull", () => VoxelProps.ExchangeStatue(true), "Exchange / bull", transform, new Vector3(-10.8f, floor, 55.8f), -90);
-            PlaceVoxel("exchange statue/bear", () => VoxelProps.ExchangeStatue(false), "Exchange / bear", transform, new Vector3(10.8f, floor, 55.8f), 90);
+            PlaceBuilding("exchange statue/bull", () => BuildingModels.ExchangeStatue(true), BuildingModels.ExchangeDarkGranite, "Exchange / bull", new Vector3(-10.8f, floor, 55.8f), -90);
+            PlaceBuilding("exchange statue/bear", () => BuildingModels.ExchangeStatue(false), BuildingModels.ExchangeDarkGranite, "Exchange / bear", new Vector3(10.8f, floor, 55.8f), 90);
             // Podium top, then the steps as one smooth ramp for the controller: from the square (+0.12 m) to +1.1 m over 2 m.
             Blocker("Exchange / podium floor", new Vector3(0, floor - 0.25f, (podiumZ + backZ) / 2), new Vector3(2 * podiumHalf, 0.5f, backZ - podiumZ));
             const float rise = CityDistrictPlan.PodiumFloorY - CityDistrictPlan.NorthFloorY, run = podiumZ - stepsZ;
@@ -57,7 +61,7 @@ namespace Broker.Runtime.Office
         {
             float bottom = floor + 1.6f;
             const float face = 71.27f;
-            PlaceVoxel("quote board", VoxelProps.QuoteBoard, "Exchange / voxel quote board", transform, new Vector3(0, bottom, 71.4f));
+            PlaceBuilding("quote board", BuildingModels.QuoteBoard, BuildingModels.ExchangeWalls, "Exchange / quote board model", new Vector3(0, bottom, 71.4f));
             var board = Blocker("Exchange / quote board", new Vector3(0, floor + 2.75f, 71.3f), new Vector3(8.4f, 4.5f, 0.4f));
             Interactable(board, OfficeStation.CityExchange, "Табло котировок", "Посмотреть цены дня");
             boardTitle = Text("Exchange / board title", ExchangeBoard.ClosedTitle, new Vector3(0, bottom + 3.0f, face), 48, 0.055f, BoardGold);

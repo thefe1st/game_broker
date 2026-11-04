@@ -1,6 +1,5 @@
 using Broker.Core;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
@@ -120,8 +119,8 @@ namespace Broker.Runtime.Office
             const float ground = CityBlockPlan.GroundY;
             Blocker("District / boundary", new Vector3(x, ground + 0.7f, z), new Vector3(0.7f, 1.4f, length));
             Box("District / boundary kerb", new Vector3(x, ground + 0.06f, z), new Vector3(0.7f, 0.12f, length), concrete, false);
-            PlaceVoxel("hedge/" + Mathf.RoundToInt(length * 4) + "/" + seed, () => VoxelProps.Hedge(length, seed), "District / boundary hedge",
-                transform, new Vector3(x, ground + 0.12f, z), 90);
+            PlaceBuilding("hedge/" + Mathf.RoundToInt(length * 4) + "/" + seed, () => StreetModels.Hedge(length, seed), StreetModels.HedgeLook, "District / boundary hedge",
+                new Vector3(x, ground + 0.12f, z), 90);
         }
         // Invisible collider for walls the voxel models already show, or for limits that need no wall.
         private GameObject Blocker(string name, Vector3 position, Vector3 size)
@@ -135,16 +134,15 @@ namespace Broker.Runtime.Office
             var obj = new GameObject(name); obj.transform.SetParent(transform, false); obj.transform.localPosition = position;
             var point = obj.AddComponent<Light>(); point.type = LightType.Point; point.range = range; point.intensity = intensity; point.color = color;
         }
-        // Hazy boxy skyline beyond the playable block: cheap textured boxes that the fog dissolves.
+        // Hazy skyline beyond the playable block: one cheap low-poly mesh per shade (BuildingModels.Skyline) that the fog
+        // dissolves; it casts no shadows.
         private void BuildSkyline()
         {
-            var shades = new[] { Surface("windows", "#8C8076", VoxelSurfaces.TileMetres("windows"), 0.05f),
-                Surface("windows", "#7E8084", VoxelSurfaces.TileMetres("windows"), 0.05f), Surface("windows", "#927A66", VoxelSurfaces.TileMetres("windows"), 0.05f) };
-            foreach (var block in CityScenery.Skyline)
+            for (int shade = 0; shade < BuildingModels.SkylineLooks.Length; shade++)
             {
-                var box = Box("City / distant block", new Vector3(block.X, CityBlockPlan.GroundY - 0.2f + block.Height / 2, block.Z),
-                    new Vector3(block.Width, block.Height, block.Depth), shades[block.Shade], false);
-                box.GetComponent<Renderer>().shadowCastingMode = ShadowCastingMode.Off;
+                int k = shade;
+                PlaceBuilding("skyline/" + k, () => BuildingModels.Skyline(k), BuildingModels.SkylineLooks[k], "City / distant blocks",
+                    new Vector3(0, CityBlockPlan.GroundY - 0.2f, 0), 0, false);
             }
         }
         public void VisitCity(bool outside)
