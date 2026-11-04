@@ -71,25 +71,11 @@ namespace Broker.Runtime.Office
             material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             return material;
         }
-        // Unity mesh with the given parts of a PolyMesh as its submeshes; the vertex colour carries the corner shade.
         private static Mesh CarMesh(PolyMesh data, string name, params CarPart[] parts)
         {
-            int count = data.VertexCount;
-            var vertices = new Vector3[count]; var normals = new Vector3[count]; var uv = new Vector2[count]; var shades = new Color32[count];
-            for (int i = 0; i < count; i++)
-            {
-                vertices[i] = new Vector3(data.Positions[i * 3], data.Positions[i * 3 + 1], data.Positions[i * 3 + 2]);
-                normals[i] = new Vector3(data.Normals[i * 3], data.Normals[i * 3 + 1], data.Normals[i * 3 + 2]);
-                uv[i] = new Vector2(data.Uvs[i * 2], data.Uvs[i * 2 + 1]);
-                byte shade = data.Shades[i]; shades[i] = new Color32(shade, shade, shade, 255);
-            }
-            var mesh = new Mesh { name = name };
-            if (count > 65000) mesh.indexFormat = IndexFormat.UInt32;
-            mesh.vertices = vertices; mesh.normals = normals; mesh.uv = uv; mesh.colors32 = shades;
-            mesh.subMeshCount = parts.Length;
-            for (int k = 0; k < parts.Length; k++) mesh.SetTriangles(data.Triangles[(int)parts[k]], k);
-            mesh.RecalculateBounds();
-            return mesh;
+            var indices = new int[parts.Length];
+            for (int k = 0; k < parts.Length; k++) indices[k] = (int)parts[k];
+            return PolyToMesh(data, name, indices);
         }
         // A car rig: the root on the road under the centre of the car (front +X), the body and four wheel joints.
         private CarRig PlaceCar(CarStyle style, int paint, string name, Transform parent)

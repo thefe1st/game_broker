@@ -81,15 +81,15 @@ namespace Broker.Runtime.Office
                 Blocker("North / square back", new Vector3(x, ground + 0.75f, 54.95f), new Vector3(3.4f, 1.5f, 0.3f));
             // The office reads as the top floor of a building instead of floating above the plaza; its back has windows
             // too, for the south street of the ring.
-            PlaceVoxel("office block", () => VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true),
-                "City / office building", transform, new Vector3(0, ground, -2.35f), 180);
+            PlaceBuilding("office block", () => BuildingModels.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true),
+                BuildingModels.OfficeWall, "City / office building", new Vector3(0, ground, -2.35f), 180);
             var plan = new CityBlockPlan();
             int number = 0;
             foreach (var b in plan.Buildings)
             {
                 var building = b; int seed = number;
-                PlaceVoxel("tower/" + number, () => VoxelProps.Tower(building.Width, building.Depth, building.Height, (TowerStyle)building.Style, seed),
-                    "City / voxel tower " + number, transform, new Vector3(b.X, CityBlockPlan.TerrainTopY, b.Z));
+                PlaceBuilding("tower/" + number, () => BuildingModels.Tower(building.Width, building.Depth, building.Height, (TowerStyle)building.Style, seed),
+                    BuildingModels.Wall((TowerStyle)b.Style, seed), "City / tower " + number, new Vector3(b.X, CityBlockPlan.TerrainTopY, b.Z));
                 number++;
             }
             BuildDistrict(facades);

@@ -73,8 +73,8 @@ namespace Broker.Runtime.Office
             for (int i = 0; i < frontage.Count; i++)
             {
                 var b = frontage[i]; int seed = 40 + i;
-                PlaceVoxel("ring tower/" + i, () => VoxelProps.Tower(b.Front, b.Depth, b.Height, (TowerStyle)b.Style, seed),
-                    "Ring / voxel tower " + i, transform, new Vector3(b.X, low, b.Z), b.Yaw);
+                PlaceBuilding("ring tower/" + i, () => BuildingModels.Tower(b.Front, b.Depth, b.Height, (TowerStyle)b.Style, seed),
+                    BuildingModels.Wall((TowerStyle)b.Style, seed), "Ring / tower " + i, new Vector3(b.X, low, b.Z), b.Yaw);
             }
         }
         // Asphalt from the terrain up to the road surface.
