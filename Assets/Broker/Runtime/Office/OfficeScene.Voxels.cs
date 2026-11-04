@@ -49,8 +49,9 @@ namespace Broker.Runtime.Office
         }
         private static void UseTexture(Material material, Texture texture, float smoothness)
         {
-            if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
-            if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+            // Without a texture the shader's default (white) stays: the colour alone.
+            if (texture != null && material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+            if (texture != null && material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);

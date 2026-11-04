@@ -9,7 +9,7 @@ namespace Broker.Runtime.Office
     // gaps follow CityLife.GatesOpen; walls along the zebra keep the player off the carriageway.
     public sealed partial class OfficeScene
     {
-        private Transform[] cityCars = new Transform[0];
+        private CarRig[] cityCars = new CarRig[0];
         private Collider[] crossingGates = new Collider[0];
         private GameObject[][] carLamps = new GameObject[0][], walkLamps = new GameObject[0][], buttonLamps = new GameObject[0][];
         private TextMesh[] walkCountdowns = new TextMesh[0];
@@ -69,15 +69,10 @@ namespace Broker.Runtime.Office
                         PlaceTree(t % 2 == 1, seed, new Vector3(side * treeX[t], CityBlockPlan.TerrainTopY, z), seed * 37);
                     }
             }
-            // Cars: the root rides 0.48 m above the road; the voxel body's wheels touch the asphalt.
+            // Cars: low-poly rigs (OfficeScene.Cars) standing on the asphalt, posed by ShowTraffic.
             var cars = Life.Traffic.Cars;
-            cityCars = new Transform[cars.Count];
-            for (int i = 0; i < cars.Count; i++)
-            {
-                var car = new GameObject("Boulevard / car " + i); car.transform.SetParent(transform, false); cityCars[i] = car.transform;
-                var style = cars[i].Style; int seed = cars[i].Seed;
-                PlaceVoxel("car/" + style + "/" + seed, () => VoxelProps.Car(style, seed), "Car / voxel body", car.transform, new Vector3(0, -0.45f, 0));
-            }
+            cityCars = new CarRig[cars.Count];
+            for (int i = 0; i < cars.Count; i++) cityCars[i] = PlaceCar(cars[i].Style, cars[i].Paint, "Boulevard / car " + i, transform);
         }
         // South-west and north-east posts: a car head facing the oncoming lanes, a walk head facing the far kerb, the
         // button on the side of the waiting walkers and a countdown under the walk head.
@@ -147,8 +142,10 @@ namespace Broker.Runtime.Office
             var cars = Life.Traffic.Cars;
             for (int i = 0; i < cityCars.Length && i < cars.Count; i++)
             {
-                cityCars[i].localPosition = new Vector3(cars[i].X, CityBlockPlan.GroundY + 0.48f, cars[i].Z);
-                cityCars[i].localRotation = Quaternion.Euler(0, cars[i].Yaw, 0);
+                var car = cars[i]; var rig = cityCars[i];
+                rig.Root.localPosition = new Vector3(car.X, CityBlockPlan.GroundY + RoadTop, car.Z);
+                rig.Root.localRotation = Quaternion.Euler(0, car.Yaw, 0);
+                PoseCar(rig, car.S, car.Braking);
             }
         }
         // Lamps, the button's «waiting» light, the countdown and the gates; models and text change only with the state.

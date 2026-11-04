@@ -103,6 +103,14 @@ namespace Broker.Tests
                 Assert.That(car.Cruise, Is.InRange(CityTraffic.MinCruise, CityTraffic.MaxCruise));
             }
             Assert.That(styles.Count, Is.GreaterThan(1));
+            var paints = new HashSet<int>();
+            foreach (var car in traffic.Cars)
+            {
+                paints.Add(car.Paint); Assert.That(car.Paint == CarModels.TaxiPaint, Is.EqualTo(car.Style == CarStyle.Taxi));
+                Assert.That(car.Braking, Is.False, "nobody brakes before the first step");
+            }
+            Assert.That(paints.Count, Is.GreaterThanOrEqualTo(4), "a street of different colours");
+            Assert.That(CityTraffic.CarLength, Is.GreaterThanOrEqualTo(CarModels.Sedan.Length), "the model fits the spacing");
             Assert.That(CityTraffic.RoadHalf, Is.InRange(CityScenery.TunnelPortalX + 4, CityScenery.TunnelEndX - 2), "cars wrap inside the tunnels");
         }
 
@@ -131,7 +139,7 @@ namespace Broker.Tests
                         if (gap < CityTraffic.RingLength / 2) Assert.That(gap, Is.GreaterThanOrEqualTo(CityTraffic.CarLength + CityTraffic.BumperGap - 1e-3), "no overlap in lane " + car.Lane);
                     }
                     if (life.Signal.PedestrianGreen) Assert.That(Overlap(car), Is.LessThanOrEqualTo(0), "car " + i + " on the zebra during the walk");
-                    if (life.Signal.Phase == CrosswalkPhase.Walk && car.Speed < 0.01f && Math.Abs(CityTraffic.Eastbound(car.Lane) ? car.X + 4.2f + 1.8f : car.X - 4.2f - 1.8f) < 0.05f) queued++;
+                    if (life.Signal.Phase == CrosswalkPhase.Walk && car.Speed < 0.01f && Math.Abs(CityTraffic.Eastbound(car.Lane) ? car.X + 4.2f + CityTraffic.CarLength / 2 : car.X - 4.2f - CityTraffic.CarLength / 2) < 0.05f) queued++;
                 }
                 if (life.Signal.PedestrianGreen) walkFrames++;
                 if (life.Signal.PedestrianGreen && !wasGreen) crossings++;
@@ -141,6 +149,33 @@ namespace Broker.Tests
             Assert.That(crossings, Is.GreaterThanOrEqualTo(15));
             Assert.That(queued, Is.GreaterThan(1000), "cars wait at the stop lines on red");
             foreach (double distance in travelled) Assert.That(distance, Is.GreaterThan(1500), "no car is stuck");
+        }
+        [Test] public void BrakeLampsLightWhileCarsSlowDownOrStand()
+        {
+            var life = new CityLife();
+            life.Advance(0.5, false, 0, 0);
+            int cruising = 0;
+            foreach (var car in life.Traffic.Cars)
+                if (Math.Abs(car.Speed - car.Cruise) < 1e-4f) { cruising++; Assert.That(car.Braking, Is.False, "a cruising car shows no brake lamps"); }
+            Assert.That(cruising, Is.GreaterThan(4));
+            Assert.That(life.Signal.RequestWalk(), Is.True);
+            int slowing = 0;
+            for (int i = 0; i < 600 && life.Signal.Phase != CrosswalkPhase.Walk; i++)
+            {
+                var before = new float[12]; for (int c = 0; c < 12; c++) before[c] = life.Traffic.Cars[c].Speed;
+                life.Advance(0.05, false, 0, 0);
+                for (int c = 0; c < 12; c++)
+                {
+                    var car = life.Traffic.Cars[c];
+                    if (car.Speed < before[c] - 0.1f) { slowing++; Assert.That(car.Braking, Is.True, "car " + c + " slows down"); }
+                }
+            }
+            Assert.That(slowing, Is.GreaterThan(0), "cars brake for the red light");
+            life.Advance(6, false, 0, 0);
+            int standing = 0;
+            foreach (var car in life.Traffic.Cars)
+                if (car.Speed < CityTraffic.StandingSpeed) { standing++; Assert.That(car.Braking, Is.True, "a car waiting at the line holds the brake"); }
+            Assert.That(standing, Is.GreaterThanOrEqualTo(2));
         }
         [Test] public void TrafficAndSignalAreDeterministic()
         {
