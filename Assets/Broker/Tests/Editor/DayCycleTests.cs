@@ -24,23 +24,30 @@ namespace Broker.Tests
         }
         private static float[] Hours(float step) => Enumerable.Range(0, (int)Math.Round(24 / step)).Select(i => i * step).ToArray();
 
-        [Test] public void TheWorkDayRunsFromNineToNineOnTheCityClock()
+        [Test] public void TheWorkDayRunsFromNineToMidnightOnTheCityClock()
         {
             Assert.That(DayCycle.HourAt(0, BrokerDay.DurationSeconds), Is.EqualTo(9));
-            Assert.That(DayCycle.HourAt(BrokerDay.DurationSeconds / 2, BrokerDay.DurationSeconds), Is.EqualTo(15));
-            Assert.That(DayCycle.HourAt(BrokerDay.DurationSeconds, BrokerDay.DurationSeconds), Is.EqualTo(21));
-            Assert.That(DayCycle.HourAt(50, 600), Is.EqualTo(10).Within(1e-5f), "fifty seconds an hour");
-            Assert.That(DayCycle.HourAt(-5, 600), Is.EqualTo(9)); Assert.That(DayCycle.HourAt(900, 600), Is.EqualTo(21));
+            Assert.That(DayCycle.HourAt(BrokerDay.DurationSeconds / 2, BrokerDay.DurationSeconds), Is.EqualTo(16.5f));
+            Assert.That(DayCycle.HourAt(BrokerDay.DurationSeconds, BrokerDay.DurationSeconds), Is.EqualTo(24));
+            Assert.That(DayCycle.HourAt(40, 600), Is.EqualTo(10).Within(1e-5f), "forty seconds an hour");
+            Assert.That(DayCycle.HourAt(-5, 600), Is.EqualTo(9)); Assert.That(DayCycle.HourAt(900, 600), Is.EqualTo(24));
             Assert.That(DayCycle.HourAt(10, 0), Is.EqualTo(9)); Assert.That(DayCycle.HourAt(float.NaN, 600), Is.EqualTo(9));
-            var day = new BrokerDay(); day.AdvanceTime(BrokerDay.DurationSeconds * 0.75f);
-            Assert.That(DayCycle.HourAt(BrokerDay.DurationSeconds - day.RemainingSeconds, BrokerDay.DurationSeconds), Is.EqualTo(18).Within(1e-3f));
+            var day = new BrokerDay(); Assert.That(DayCycle.HourOf(day), Is.EqualTo(9)); Assert.That(DayCycle.HourOf(null), Is.EqualTo(9));
+            day.AdvanceTime(BrokerDay.DurationSeconds * 0.75f);
+            Assert.That(DayCycle.HourOf(day), Is.EqualTo(DayCycle.NightHour).Within(1e-3f), "night from 20:15: the last quarter of the day");
+            // In real seconds: four minutes of the bright day, two and a half of night.
+            float Seconds(float from, float to) => (to - from) / (DayCycle.EndHour - DayCycle.StartHour) * BrokerDay.DurationSeconds;
+            Assert.That(Seconds(DayCycle.StartHour, DayCycle.DayHour), Is.EqualTo(240).Within(1e-3f));
+            Assert.That(Seconds(DayCycle.NightHour, DayCycle.EndHour), Is.EqualTo(150).Within(1e-3f));
         }
 
         [Test] public void TheClockReadsHoursAndMinutes()
         {
             Assert.That(DayCycle.Clock(9), Is.EqualTo("09:00")); Assert.That(DayCycle.Clock(18.5f), Is.EqualTo("18:30"));
-            Assert.That(DayCycle.Clock(20.25f), Is.EqualTo("20:15")); Assert.That(DayCycle.Clock(24), Is.EqualTo("00:00"));
-            Assert.That(DayCycle.Clock(-1), Is.EqualTo("23:00")); Assert.That(DayCycle.Clock(DayCycle.EndHour), Is.EqualTo("21:00"));
+            Assert.That(DayCycle.Clock(20.25f), Is.EqualTo("20:15")); Assert.That(DayCycle.Clock(23.99f), Is.EqualTo("23:59"));
+            Assert.That(DayCycle.Clock(24), Is.EqualTo("00:00")); Assert.That(DayCycle.Clock(-1), Is.EqualTo("23:00"));
+            Assert.That(DayCycle.Clock(DayCycle.EndHour), Is.EqualTo("00:00"), "the day ends at midnight");
+            Assert.That(DayCycle.Clock(DayCycle.HourOf(new BrokerDay())), Is.EqualTo("09:00"), "a fresh day starts at nine");
         }
 
         [Test] public void TheBrightDayIsTheApprovedOne()
@@ -92,7 +99,7 @@ namespace Broker.Tests
             Assert.That(DayCycle.At(DayCycle.DuskHour).Lights, Is.EqualTo(1), "every light on at dusk");
             Assert.That(DayCycle.At(DayCycle.SunsetHour).Lights, Is.InRange(0.1f, 0.6f), "the lamps come on at sunset");
             Assert.That(DayCycle.At(DayCycle.SunsetHour).Elevation, Is.InRange(-1f, 3f), "the sun on the horizon");
-            foreach (float h in new[] { 20.5f, 22f, 1f, 3.5f })
+            foreach (float h in new[] { 20.5f, 22f, 23.5f, 1f, 3.5f })
             {
                 var l = DayCycle.At(h);
                 Assert.That(l.Lights, Is.EqualTo(1), h + ""); Assert.That(l.Moon, Is.True, h + "");
@@ -122,7 +129,7 @@ namespace Broker.Tests
 
         [Test] public void NothingJumpsFromMinuteToMinute()
         {
-            // A minute of the city clock is 0.83 s of the work day; frame to frame the change is far smaller still.
+            // A minute of the city clock is 0.67 s of the work day; frame to frame the change is far smaller still.
             foreach (float h in Hours(Minute))
             {
                 DayLight a = DayCycle.At(h), b = DayCycle.At(h + Minute); string at = DayCycle.Clock(h);

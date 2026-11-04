@@ -35,8 +35,8 @@ has its own hour, and all but the evening ones below are the approved bright day
 | `drive-parked` | the sedan back in the lay-by: E «Выйти из машины» |
 | `office`, `office-employee` | the office as the owner and as the hired broker |
 | `aerial` | both quarters from above, no HUD |
-| `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4 prototype): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
-| `night-plaza`, `night-boulevard`, `night-office`, `night-aerial` | night, 20:30 (the aerial at 21:00, the end of the day): lit windows and shop fronts, street lamps and their pools of light, the light over the office door, headlights; the office with its lamps and the night city in the windows; no HUD |
+| `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
+| `night-plaza`, `night-boulevard`, `night-office`, `night-aerial` | night, 20:30 (the aerial at midnight, the end of the day): lit windows and shop fronts, street lamps and their pools of light, the light over the office door, headlights; the office with its lamps and the night city in the windows; no HUD |
 
 Street shots with a HUD enter the city like the elevator does (`VisitCity`) and put the player at the
 camera, so walkers stop for it and the signal counts it on the zebra. Driving shots seat the player in
@@ -45,7 +45,7 @@ and steering for its last `DriveSeconds` in 1/30 s frames through the real `Play
 camera, and render from that camera. Every shot starts the boulevard clock
 afresh and advances signal, cars and walkers to its time, so a shot always shows the same moment. The
 HUD repeats `DrawWorldHUD`: warm white text with a 2 px drop shadow and no panels — name and place top
-left, the clock in the middle, money and the gold meter top right, the controls hint of a fresh day at
+left, the city clock in the middle (the hour of the shot's light), money and the gold meter top right, the controls hint of a fresh day at
 the bottom; on the street also the landmark (name, straight-line distance, direction) and, near the
 crossing, «ПЕРЕХОД / СВЕТОФОР» with the signal state; behind the wheel the speedometer with the gear
 bottom right, the exit line (E «Выйти из машины» in the lay-by, «Выйти можно только на парковке»

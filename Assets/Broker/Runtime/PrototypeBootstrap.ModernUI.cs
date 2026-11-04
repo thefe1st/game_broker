@@ -19,8 +19,9 @@ namespace Broker.Runtime
             Label(x + 24, y + 42, width - 48, 48, value, theme.Metric);
             if (!string.IsNullOrEmpty(detail)) Label(x + 24, y + 90, width - 48, 22, detail, theme.Small);
         }
-        private string ClockText()
-        { int seconds = Mathf.CeilToInt(day.RemainingSeconds); return $"{seconds / 60:00}:{seconds % 60:00}"; }
+        // The city clock (Core/DayCycle) rather than a countdown: 09:00 at the start of the work day, 00:00 when it is over;
+        // it stands while the day's time does.
+        private string ClockText() => DayCycle.Clock(DayCycle.HourOf(day));
         private void DrawModernDesk()
         {
             Paint(new Rect(0, 0, 1440, 960), new Color(0.035f, 0.055f, 0.09f, 0.74f));

@@ -221,8 +221,8 @@ namespace Broker.Tools.ScenePreview
             bool employee = shot.Employee;
             Text(40, 30, 360, "МОЙКА КАПИТАЛ", 22, ink, true);
             Text(40, 60, 360, shot.City ? "Деловой квартал" : (employee ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, 16, muted, false);
-            int seconds = (int)Math.Ceiling(day.RemainingSeconds);
-            Text(620, 26, 200, $"{seconds / 60:00}:{seconds % 60:00}", 32, ink, true, TextAnchor.UpperCenter);
+            // The city clock, as in the game: the hour of the shot's light.
+            Text(620, 26, 200, DayCycle.Clock(scene.Hour), 32, ink, true, TextAnchor.UpperCenter);
             Text(1040, 30, 360, employee ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, 22, ink, true, TextAnchor.UpperRight);
             float meter = employee ? day.DealsCount / (float)Math.Max(1, day.SalesTarget) : day.Cash / (float)Math.Max(1, day.TotalExpenses);
             Rect(1146, 70, 256, 4, shadow); Rect(1144, 68, 256, 4, track); if (meter > 0) Rect(1144, 68, 256 * Math.Clamp(meter, 0, 1), 4, Rgba(gold, 1));

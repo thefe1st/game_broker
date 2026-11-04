@@ -4,8 +4,8 @@ using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    // Time of day (stage 4 prototype, Core/DayCycle). Refresh follows the work day: 9:00 at its start, 21:00 when its time is
-    // up. SetHour applies the light of an hour: the sun or the moon with its colour, intensity, shadow strength and
+    // Time of day (stage 4, Core/DayCycle). Refresh follows the work day: 9:00 at its start, midnight when its time is up.
+    // SetHour applies the light of an hour: the sun or the moon with its colour, intensity, shadow strength and
     // direction, the ambient, the haze and the sky's palette and disk; after dusk the buildings' night glass glows, the street
     // lamps light their glass and a point light under it, a light comes on over the office door, car lamps and the rooms'
     // lamps burn brighter. The environment (reflections in glass)
@@ -23,18 +23,20 @@ namespace Broker.Runtime.Office
         private readonly List<NightLamp> roomLights = new List<NightLamp>();
         private Material lampGlass;
         private float environmentHour = -100;
-        // The environment is re-rendered when the clock has moved this far (hours): three minutes, 2.5 s of the work day.
+        // The environment is re-rendered when the clock has moved this far (hours): three minutes, 2 s of the work day.
         public const float EnvironmentStep = 0.05f;
 
         public void FollowDay(BrokerDay day)
         {
             if (day == null) return;
-            SetHour(HourOverride >= 0 ? HourOverride : DayCycle.HourAt(BrokerDay.DurationSeconds - day.RemainingSeconds, BrokerDay.DurationSeconds));
+            SetHour(HourOverride >= 0 ? HourOverride : DayCycle.HourOf(day));
         }
+        // Any hour; Hour keeps it on the 24-hour circle (midnight, the end of the work day, is 0).
         public void SetHour(float hour)
         {
-            if (CurrentLight != null && Mathf.Abs(hour - Hour) < 1e-4f) return;
-            Hour = hour; ApplyDayLight(DayCycle.At(hour));
+            float h = hour % 24; if (h < 0) h += 24;
+            if (CurrentLight != null && Mathf.Abs(h - Hour) < 1e-4f) return;
+            ApplyDayLight(DayCycle.At(h));
         }
         private void ApplyDayLight(DayLight light)
         {

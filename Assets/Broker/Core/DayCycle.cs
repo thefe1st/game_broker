@@ -2,16 +2,17 @@ using System;
 
 namespace Broker.Core
 {
-    // Time of day over the work day — the stage 4 prototype (draft PR #17; tying the clock to the work day is the AI's
-    // proposal and waits for the author). The ten real minutes of BrokerDay run from 9:00 to 21:00 on the city clock, 50 s
-    // an hour: the approved bright day (PR #12) until mid-afternoon with the sun going round from the east, the golden hour
-    // of PR #8 at 18:00, sunset at 19:00, blue dusk and night in the last minute, when lit windows, shop fronts, street
-    // lamps and headlights make the picture. At(hour) gives the light of any hour of the 24 from moods at key hours, eased
-    // (smoothstep) between neighbours. The light is the sun by day and the moon at night; it changes over only at a key
-    // where the light before it is out, so nothing jumps.
+    // Time of day over the work day (stage 4, PR #17; the author chose a night till midnight, the sun going round and the
+    // city clock in the HUD). The ten real minutes of BrokerDay run from 9:00 to midnight on the city clock, 40 s an hour:
+    // the approved bright day (PR #12) until mid-afternoon with the sun going round from the east, the golden hour of PR #8
+    // at 18:00, sunset at 19:00, the blue hour at 19:45 and night from 20:15 — the last two and a half minutes —, when lit
+    // windows, shop fronts, street lamps and headlights make the picture. At(hour) gives the light of any hour of the 24
+    // from moods at key hours, eased (smoothstep) between neighbours. The light is the sun by day and the moon at night; it
+    // changes over only at a key where the light before it is out, so nothing jumps.
     public static class DayCycle
     {
-        public const float StartHour = 9f, EndHour = 21f;
+        // The work day on the city clock: 9:00 to midnight (24, 00:00 on the clock).
+        public const float StartHour = 9f, EndHour = 24f;
         // Key hours: the approved bright day (the preview's default), the golden hour of PR #8, sunset, twilight (the sun out),
         // dusk with every light on, and night.
         public const float DayHour = 15f, GoldenHour = 18f, SunsetHour = 19f, TwilightHour = 19f + 20f / 60, DuskHour = 19.75f, NightHour = 20.25f;
@@ -141,14 +142,17 @@ namespace Broker.Core
             };
         }
 
-        // The work day's clock: StartHour at the start, EndHour when its time is up.
+        // The work day's clock: StartHour at the start, EndHour (midnight) when its time is up.
         public static float HourAt(float elapsedSeconds, float durationSeconds)
         {
             if (!(durationSeconds > 0) || float.IsNaN(elapsedSeconds)) return StartHour;
             float t = Math.Min(1, Math.Max(0, elapsedSeconds / durationSeconds));
             return StartHour + (EndHour - StartHour) * t;
         }
-        // "hh:mm" on the 24-hour clock.
+        // The city clock of a work day, as the HUD shows it and the scene's light follows it: it stands while the day's time
+        // does (pause, journal, screens that stop the day).
+        public static float HourOf(BrokerDay day) => day == null ? StartHour : HourAt(BrokerDay.DurationSeconds - day.RemainingSeconds, BrokerDay.DurationSeconds);
+        // "hh:mm" on the 24-hour clock; midnight is 00:00.
         public static string Clock(float hour)
         {
             int minutes = (int)Math.Floor(Wrap(hour) * 60 + 1e-3) % (24 * 60);
