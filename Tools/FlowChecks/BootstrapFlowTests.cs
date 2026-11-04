@@ -71,6 +71,15 @@ namespace Broker.FlowChecks
             Click("Начать рабочий день"); Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(599));
             Interact(OfficeStation.Desk); Frame(); Assert.That(Day.RemainingSeconds, Is.EqualTo(598));
         }
+        [Test] public void HudShowsTheCityClockRatherThanACountdown()
+        {
+            Begin(); GUI.Labels.Clear(); Call("OnGUI");
+            Assert.That(GUI.Labels, Does.Contain("09:00")); Assert.That(GUI.Labels, Does.Not.Contain("10:00"));
+            GUI.Labels.Clear(); Frame(); Assert.That(GUI.Labels, Does.Contain("09:01"), "40 s an hour: a second is a minute and a half");
+            Interact(OfficeStation.Desk); GUI.Labels.Clear(); Frame(); Assert.That(GUI.Labels, Does.Contain("09:03"), "the desk shows the same clock");
+            Day.AdvanceTime(Day.RemainingSeconds - 150); GUI.Labels.Clear(); Call("OnGUI");
+            Assert.That(GUI.Labels, Does.Contain("20:15"), "night for the last two and a half minutes");
+        }
         [TestCase(OfficeStation.Supervisor)] [TestCase(OfficeStation.Employee)] [TestCase(OfficeStation.Coffee)] [TestCase(OfficeStation.Exit)]
         public void StationPanelsPauseWithoutEndingDayOrChargingPlayer(OfficeStation station)
         {

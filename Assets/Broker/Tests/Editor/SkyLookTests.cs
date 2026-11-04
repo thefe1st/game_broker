@@ -7,7 +7,7 @@ namespace Broker.Tests
     public sealed class SkyLookTests
     {
         private static readonly SkyLook.Palette Sky = SkyLook.Palette.Default(true);
-        // Toward the daytime sun of the city scene, about 40° high (the light shines along OfficeScene.SunDirection, its opposite).
+        // Toward the daytime sun of the city scene, about 40° high (the light shines along DayCycle.DayTravel, its opposite).
         private static readonly float Sx, Sy, Sz;
         static SkyLookTests() { float l = (float)Math.Sqrt(0.722 * 0.722 + 0.643 * 0.643 + 0.254 * 0.254); Sx = -0.722f / l; Sy = 0.643f / l; Sz = -0.254f / l; }
 

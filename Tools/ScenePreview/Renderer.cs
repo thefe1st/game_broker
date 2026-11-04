@@ -721,6 +721,14 @@ namespace Broker.Tools.ScenePreview
             for (int i = 0; i < source.Length; i++) Rgb[i] = ColorPipe.Linear ? ScreenLook.LinearToSrgb(source[i]) : source[i];
         }
 
+        // The sky's glow as CameraPost reads it: the Broker/Sky material's (it follows the time of day), SkyLook's otherwise.
+        private static Color SkyGlow()
+        {
+            var sky = RenderSettings.skybox;
+            if (sky != null && sky.shader != null && sky.shader.name == "Broker/Sky" && sky.Colors.TryGetValue("_Glow", out var c)) return c;
+            return new Color(SkyLook.Glow.R, SkyLook.Glow.G, SkyLook.Glow.B);
+        }
+
         // ---------- Screen pass (mirrors BrokerPost.shader) ----------
         private sealed class Image
         {
@@ -785,7 +793,7 @@ namespace Broker.Tools.ScenePreview
             // Sun glow in the haze (HazeGlow in fragComposite): the sun and world up in view space, the sky's glow colour (linear).
             var toSun = -sunDir; var sunView = new Vector3(Vector3.Dot(toSun, cam.Right), Vector3.Dot(toSun, cam.Up), Vector3.Dot(toSun, cam.Forward));
             var upView = new Vector3(cam.Right.y, cam.Up.y, cam.Forward.y);
-            bool hazeGlow = fog && hasSun; var glow = ColorPipe.In(new Color(SkyLook.Glow.R, SkyLook.Glow.G, SkyLook.Glow.B));
+            bool hazeGlow = fog && hasSun; var glow = ColorPipe.In(SkyGlow());
             Parallel.For(0, Height, y =>
             {
                 for (int x = 0; x < Width; x++)

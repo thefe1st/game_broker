@@ -12,7 +12,7 @@ OfficeScene, player controls and BrokerTheme. `GUI.Click` consumes one enabled
 button label; labels are recorded, not rendered. Lifecycle methods are invoked
 explicitly. JSON is serialized through System.Text.Json, NOT Unity JsonUtility.
 
-Tests exercise menu/intro/panel clock gates, confirmation/cancellation, next-client
+Tests exercise menu/intro/panel clock gates, the city clock in the HUD and on the desk, confirmation/cancellation, next-client
 selection, exactly-once day settlement, savings carry, mode reset isolation,
 completed-intro reload, hidden-city routing and failed-save retry. Default flow
 must not send provider requests.

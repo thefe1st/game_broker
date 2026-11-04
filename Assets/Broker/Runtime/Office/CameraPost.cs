@@ -50,8 +50,8 @@ namespace Broker.Runtime.Office
         private bool UsesOcclusion => Occlusion && view != null && !view.orthographic;
 
         // Sun glow in the haze (ScreenLook.HazeGlowAt) needs the depth texture, linear fog and a sun: the fog range, the
-        // directions toward the sun and world up in the camera's space (+z forward, as ViewPosition in the shader) and the linear
-        // glow colour of the sky. Strength 0 switches it off.
+        // directions toward the sun (or the moon) and world up in the camera's space (+z forward, as ViewPosition in the shader)
+        // and the linear glow colour of the sky. Strength 0 switches it off.
         private void SetHaze(bool depth)
         {
             var sun = RenderSettings.sun;
@@ -62,8 +62,15 @@ namespace Broker.Runtime.Office
             Vector3 toSun = view.transform.InverseTransformDirection(-sun.transform.forward), up = view.transform.InverseTransformDirection(Vector3.up);
             material.SetVector(HazeSunId, new Vector4(toSun.x, toSun.y, toSun.z, 0));
             material.SetVector(HazeUpId, new Vector4(up.x, up.y, up.z, SkyLook.HorizonFalloff));
-            var glow = new Color(SkyLook.Glow.R, SkyLook.Glow.G, SkyLook.Glow.B).linear;
+            var glow = SkyGlow().linear;
             material.SetVector(HazeGlowId, new Vector4(glow.r, glow.g, glow.b, 0));
+        }
+        // The glow of the sky as it is now (the Broker/Sky material follows the time of day), SkyLook's daytime glow otherwise.
+        private static Color SkyGlow()
+        {
+            var sky = RenderSettings.skybox;
+            if (sky != null && sky.shader != null && sky.shader.name == OfficeScene.SkyShader) return sky.GetColor("_Glow");
+            return new Color(SkyLook.Glow.R, SkyLook.Glow.G, SkyLook.Glow.B);
         }
 
         private void OnRenderImage(RenderTexture source, RenderTexture destination)

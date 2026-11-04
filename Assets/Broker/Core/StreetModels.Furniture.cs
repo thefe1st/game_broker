@@ -7,7 +7,8 @@ namespace Broker.Core
     // bounds as the voxel models they replace (VoxelProps.StreetLamp, Bench, Bin); fronts face −Z.
     public static partial class StreetModels
     {
-        public const float LampHeight = 5.25f, LampReach = 1.5f, LampGlassY = 4.775f;
+        // The lamp's glass faces down at LampGlassY, its middle LampGlassZ out along the arm (the night light hangs under it).
+        public const float LampHeight = 5.25f, LampReach = 1.5f, LampGlassY = 4.775f, LampGlassZ = 1.15f;
         public const float SeatHeight = 0.455f, BinHeight = 0.875f, BinRadius = 0.25f;
         // These models have no wall part; PlaceBuilding still takes a look.
         public static readonly WallLook FurnitureLook = new WallLook("stucco", 0xFFFFFF);

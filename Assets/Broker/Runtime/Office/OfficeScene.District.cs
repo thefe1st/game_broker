@@ -50,7 +50,7 @@ namespace Broker.Runtime.Office
                 {
                     case SceneryKind.RoundTree: PlaceTree(false, seed, position, yaw); break;
                     case SceneryKind.Conifer: PlaceTree(true, seed, position, yaw); break;
-                    case SceneryKind.StreetLamp: PlaceBuilding("street lamp", StreetModels.StreetLamp, StreetModels.FurnitureLook, "Scenery / street lamp", position, yaw); break;
+                    case SceneryKind.StreetLamp: PlaceStreetLamp("Scenery / street lamp", position, yaw); break;
                     case SceneryKind.Bin: PlaceBuilding("bin", StreetModels.Bin, StreetModels.FurnitureLook, "Scenery / bin", position, yaw); break;
                     case SceneryKind.Cone: PlaceBuilding("cone", StreetModels.Cone, StreetModels.FurnitureLook, "Scenery / cone", position, yaw); break;
                     case SceneryKind.Bollard: PlaceBuilding("bollard", StreetModels.Bollard, StreetModels.FurnitureLook, "Scenery / bollard", position, yaw); break;

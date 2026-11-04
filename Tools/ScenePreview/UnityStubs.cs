@@ -284,6 +284,7 @@ namespace UnityEngine
     public enum CameraClearFlags { Skybox = 1, Color = 2, SolidColor = 2, Depth = 3, Nothing = 4 }
     public enum LightType { Spot, Directional, Point, Area, Rectangle = 3, Disc }
     public enum LightShadows { None, Hard, Soft }
+    public enum LightRenderMode { Auto, ForcePixel, ForceVertex }
     public enum FogMode { Linear = 1, Exponential, ExponentialSquared }
     public enum TextAnchor { UpperLeft, UpperCenter, UpperRight, MiddleLeft, MiddleCenter, MiddleRight, LowerLeft, LowerCenter, LowerRight }
     [Flags] public enum MaterialGlobalIlluminationFlags { None = 0, RealtimeEmissive = 1, BakedEmissive = 2, AnyEmissive = 3, EmissiveIsBlack = 4 }
@@ -455,7 +456,7 @@ namespace UnityEngine
     public class Light : Behaviour
     {
         public LightType type { get; set; } = LightType.Point; public Color color { get; set; } = Color.white; public float intensity { get; set; } = 1;
-        public float range { get; set; } = 10; public LightShadows shadows { get; set; }
+        public float range { get; set; } = 10; public LightShadows shadows { get; set; } public LightRenderMode renderMode { get; set; }
         public float shadowStrength { get; set; } = 1; public float shadowBias { get; set; } = 0.05f; public float shadowNormalBias { get; set; } = 0.4f;
     }
     public class AudioListener : Behaviour { }

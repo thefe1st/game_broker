@@ -1,5 +1,5 @@
 // Renders still previews of the procedural office and city without the Unity editor:
-//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud] [--at=SECONDS]
+//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud] [--at=SECONDS] [--hour=H]
 //   dotnet run --project Tools/ScenePreview -c Release -- --check      (CI smoke check, no image files)
 // The real OfficeScene builders run against UnityStubs.cs; Renderer.cs approximates the built-in forward renderer.
 using System;
@@ -27,6 +27,8 @@ namespace Broker.Tools.ScenePreview
         // CarSpeed m/s, holding the keys for the last DriveSeconds of the boulevard clock; the view is the game's chase
         // camera and the HUD the driving one.
         public bool Drive; public float CarX, CarZ, CarHeading, CarSpeed, Throttle, Steer; public double DriveSeconds;
+        // Hour of the city clock (Core/DayCycle); without one the approved bright day, DayCycle.DayHour.
+        public float? Hour;
     }
 
     public static class Program
@@ -60,6 +62,14 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Target = "Телефон — звонки" },
             new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true, Target = "Телефон — звонки" },
             new Shot { Name = "aerial", Local = new Vector3(0, 60, -32), Yaw = 0, Pitch = 42, Fov = 60, City = true, Hud = false },
+            // Stage 4: the end of the work day on the city clock (Core/DayCycle); every shot above is the approved bright day.
+            new Shot { Name = "golden-boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Hud = false, Traffic = 1.8, Hour = DayCycle.GoldenHour },
+            new Shot { Name = "sunset-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Crossing = true, Hour = DayCycle.SunsetHour },
+            new Shot { Name = "dusk-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Crossing = true, Hour = DayCycle.DuskHour },
+            new Shot { Name = "night-plaza", Local = new Vector3(3.2f, CityBlockPlan.GroundY + 1.7f, 22.6f), Yaw = 192, Pitch = -9, City = true, Hud = false, Traffic = 14, Hour = 20.5f },
+            new Shot { Name = "night-boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Hud = false, Traffic = 1.8, Hour = 20.5f },
+            new Shot { Name = "night-office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Hud = false, Hour = 20.5f },
+            new Shot { Name = "night-aerial", Local = new Vector3(0, 60, -32), Yaw = 0, Pitch = 42, Fov = 60, City = true, Hud = false, Hour = DayCycle.EndHour },
         };
 
         public static int Main(string[] args)
@@ -72,6 +82,9 @@ namespace Broker.Tools.ScenePreview
             // --at=SECONDS re-times the selected shots on the boulevard clock (to pick a moment for a new shot).
             var at = args.FirstOrDefault(a => a.StartsWith("--at="));
             double? retime = at == null ? null : double.Parse(at.Substring(5), CultureInfo.InvariantCulture);
+            // --hour=H shows the selected shots at that hour of the city clock (18.5 = 18:30) instead of their own.
+            var hourArg = args.FirstOrDefault(a => a.StartsWith("--hour="));
+            hourOverride = hourArg == null ? null : float.Parse(hourArg.Substring(7), CultureInfo.InvariantCulture);
             var positional = args.Where(a => !a.StartsWith("--")).ToList();
             string output = check ? null : positional.Count > 0 ? positional[0] : "preview";
             var wanted = new HashSet<string>(positional.Skip(check ? 0 : 1));
@@ -113,6 +126,8 @@ namespace Broker.Tools.ScenePreview
             return failures == 0 ? 0 : 1;
         }
 
+        private static float? hourOverride;
+
         private static ViewCamera Prepare(OfficeScene scene, GameObject root, Shot shot, BrokerDay day, double traffic)
         {
             scene.Present(false, 1, Vector2.zero);
@@ -136,6 +151,8 @@ namespace Broker.Tools.ScenePreview
             }
             else SetTraffic(scene, traffic);
             scene.Refresh(day);
+            // Refresh follows the work day (9:00 on a fresh one); the shot shows its own hour.
+            scene.SetHour(hourOverride ?? shot.Hour ?? DayCycle.DayHour);
             var camera = ViewCamera.From(scene.Player.Eye);
             var rotation = shot.Drive ? scene.Player.Eye.transform.rotation : Quaternion.Euler(shot.Pitch, shot.Yaw, 0);
             if (!shot.Drive)
@@ -204,8 +221,8 @@ namespace Broker.Tools.ScenePreview
             bool employee = shot.Employee;
             Text(40, 30, 360, "МОЙКА КАПИТАЛ", 22, ink, true);
             Text(40, 60, 360, shot.City ? "Деловой квартал" : (employee ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, 16, muted, false);
-            int seconds = (int)Math.Ceiling(day.RemainingSeconds);
-            Text(620, 26, 200, $"{seconds / 60:00}:{seconds % 60:00}", 32, ink, true, TextAnchor.UpperCenter);
+            // The city clock, as in the game: the hour of the shot's light.
+            Text(620, 26, 200, DayCycle.Clock(scene.Hour), 32, ink, true, TextAnchor.UpperCenter);
             Text(1040, 30, 360, employee ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, 22, ink, true, TextAnchor.UpperRight);
             float meter = employee ? day.DealsCount / (float)Math.Max(1, day.SalesTarget) : day.Cash / (float)Math.Max(1, day.TotalExpenses);
             Rect(1146, 70, 256, 4, shadow); Rect(1144, 68, 256, 4, track); if (meter > 0) Rect(1144, 68, 256 * Math.Clamp(meter, 0, 1), 4, Rgba(gold, 1));

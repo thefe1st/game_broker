@@ -8,7 +8,7 @@ namespace Broker.Runtime.Office
 {
     // Low-poly buildings from BuildingModels on the Broker/Voxel shader (Standard without it): walls on a tinted surface
     // texture box-mapped in metres, details on the voxel palette, dark glossy glass that mirrors the sky. Night glass has
-    // a material of its own, the same as the glass by day, so the day–night stage can light those windows after dark.
+    // a material of its own, the same as the glass by day, which glows with window light after dusk (OfficeScene.DayNight).
     // Lamps and flames glow with the voxel props' emissive palette, brass and bronze take a half-metallic palette material.
     // Each model is meshed once; the buildings own no colliders (blockers and the plan's footprints stay as they were).
     public sealed partial class OfficeScene
@@ -53,9 +53,10 @@ namespace Broker.Runtime.Office
             buildingWalls.Add(look, material); return material;
         }
         // Places a building with its footprint centre at a local position; the front (−Z) turns with yaw. Far scenery that
-        // the fog dissolves casts no shadows.
+        // the fog dissolves casts no shadows. The glow part takes the voxel glow unless another material is given (street
+        // lamps: their glass lights only after dusk).
         private GameObject PlaceBuilding(string key, Func<PolyMesh> build, WallLook look, string name, Vector3 position, float yaw = 0,
-            bool castShadows = true)
+            bool castShadows = true, Material glow = null)
         {
             EnsureBuildingMaterials();
             if (!buildingAssets.TryGetValue(key, out var asset))
@@ -72,7 +73,7 @@ namespace Broker.Runtime.Office
                     case BuildingPart.Wall: materials[k] = BuildingWall(look); break;
                     case BuildingPart.Glass: materials[k] = buildingGlass; break;
                     case BuildingPart.Night: materials[k] = buildingNight; break;
-                    case BuildingPart.Glow: materials[k] = voxelGlow; break;
+                    case BuildingPart.Glow: materials[k] = glow != null ? glow : voxelGlow; break;
                     case BuildingPart.Metal: materials[k] = buildingMetal; break;
                     default: materials[k] = buildingTrim; break;
                 }
