@@ -102,7 +102,7 @@ namespace Broker.Tests
                 Assert.That(CityTraffic.Eastbound(car.Lane), Is.EqualTo(car.Z < 35), "eastbound lanes are the near ones");
                 Assert.That(car.Cruise, Is.InRange(CityTraffic.MinCruise, CityTraffic.MaxCruise));
             }
-            Assert.That(styles.Count, Is.GreaterThan(1));
+            Assert.That(styles.Count, Is.EqualTo(5), "every body drives the boulevard");
             var paints = new HashSet<int>();
             foreach (var car in traffic.Cars)
             {
@@ -110,11 +110,19 @@ namespace Broker.Tests
                 Assert.That(car.Braking, Is.False, "nobody brakes before the first step");
             }
             Assert.That(paints.Count, Is.GreaterThanOrEqualTo(4), "a street of different colours");
-            Assert.That(CityTraffic.CarLength, Is.GreaterThanOrEqualTo(CarModels.Sedan.Length), "the model fits the spacing");
+            foreach (var car in traffic.Cars)
+            {
+                var shape = CarModels.Shape(car.Style);
+                Assert.That(car.Length, Is.EqualTo(shape.Length)); Assert.That(car.Width, Is.EqualTo(shape.Width));
+                var footprint = car.Footprint;
+                Assert.That(footprint.HalfLength, Is.EqualTo(shape.Length / 2)); Assert.That(footprint.HalfWidth, Is.EqualTo(shape.Width / 2));
+                Assert.That(footprint.X, Is.EqualTo(car.X)); Assert.That(footprint.Z, Is.EqualTo(car.Z));
+                Assert.That(footprint.Heading, Is.EqualTo(car.Yaw * (float)Math.PI / 180).Within(1e-5f), "the footprint faces the way the car drives");
+            }
             Assert.That(CityTraffic.RoadHalf, Is.InRange(CityScenery.TunnelPortalX + 4, CityScenery.TunnelEndX - 2), "cars wrap inside the tunnels");
         }
 
-        private static double Overlap(CityCar car) => Math.Min(car.X + CityTraffic.CarLength / 2, CityCrosswalk.HalfWidth) - Math.Max(car.X - CityTraffic.CarLength / 2, -CityCrosswalk.HalfWidth);
+        private static double Overlap(CityCar car) => Math.Min(car.X + car.Length / 2, CityCrosswalk.HalfWidth) - Math.Max(car.X - car.Length / 2, -CityCrosswalk.HalfWidth);
         [Test] public void TrafficKeepsGapsAndNeverDrivesOverTheZebraOnTheWalk()
         {
             var life = new CityLife(); var travelled = new double[12]; var last = new float[12];
@@ -136,10 +144,10 @@ namespace Broker.Tests
                     {
                         if (j == i || cars[j].Lane != car.Lane) continue;
                         float gap = cars[j].S - car.S; if (gap < 0) gap += CityTraffic.RingLength;
-                        if (gap < CityTraffic.RingLength / 2) Assert.That(gap, Is.GreaterThanOrEqualTo(CityTraffic.CarLength + CityTraffic.BumperGap - 1e-3), "no overlap in lane " + car.Lane);
+                        if (gap < CityTraffic.RingLength / 2) Assert.That(gap, Is.GreaterThanOrEqualTo((car.Length + cars[j].Length) / 2 + CityTraffic.BumperGap - 1e-3), "no overlap in lane " + car.Lane);
                     }
                     if (life.Signal.PedestrianGreen) Assert.That(Overlap(car), Is.LessThanOrEqualTo(0), "car " + i + " on the zebra during the walk");
-                    if (life.Signal.Phase == CrosswalkPhase.Walk && car.Speed < 0.01f && Math.Abs(CityTraffic.Eastbound(car.Lane) ? car.X + 4.2f + CityTraffic.CarLength / 2 : car.X - 4.2f - CityTraffic.CarLength / 2) < 0.05f) queued++;
+                    if (life.Signal.Phase == CrosswalkPhase.Walk && car.Speed < 0.01f && Math.Abs(CityTraffic.Eastbound(car.Lane) ? car.X + 4.2f + car.Length / 2 : car.X - 4.2f - car.Length / 2) < 0.05f) queued++;
                 }
                 if (life.Signal.PedestrianGreen) walkFrames++;
                 if (life.Signal.PedestrianGreen && !wasGreen) crossings++;

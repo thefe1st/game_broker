@@ -7,21 +7,22 @@ namespace Broker.Runtime.Office
 {
     // Low-poly cars from CarModels on the Broker/Voxel shader (Standard without it): one body submesh per CarPart — paint
     // tinted per car over the grain texture, details and lamps on the voxel palette, dark glossy glass and red brake lamps
-    // that brighten while the car brakes — and four wheels that roll with the distance travelled. Meshes are built once
-    // per style, paint materials once per colour; the boulevard cars have no colliders (the kerb barriers keep the player off
-    // the road), the player's car one box for the aim (OfficeScene.Driving).
+    // that brighten while the car brakes — and four wheels that roll with the distance travelled. Body meshes are built
+    // once per style, wheel meshes once per CarShape (the taxi shares the sedan's), paint materials once per colour; the
+    // boulevard cars have no colliders (the kerb barriers keep the player off the road), the player's car one box for the
+    // aim (OfficeScene.Driving).
     public sealed partial class OfficeScene
     {
         private sealed class CarRig
         {
-            public Transform Root; public Transform[] Wheels; public MeshRenderer Body;
+            public Transform Root; public Transform[] Wheels; public MeshRenderer Body; public float WheelRadius;
             // Brake lamps as shown: −1 before the first pose, then 0 or 1 (reading Renderer.sharedMaterials would allocate).
             public Material[] Cruising, Braking; public int ShownBrake = -1;
         }
         private static readonly CarPart[] BodyParts = { CarPart.Paint, CarPart.Detail, CarPart.Glass, CarPart.Lamp, CarPart.Brake };
         private static readonly string[] WheelNames = { "Car / wheel front left", "Car / wheel front right", "Car / wheel rear left", "Car / wheel rear right" };
         private readonly Dictionary<CarStyle, Mesh> carBodies = new Dictionary<CarStyle, Mesh>();
-        private Mesh carWheel;
+        private readonly Dictionary<CarShape, Mesh> carWheels = new Dictionary<CarShape, Mesh>();
         private Texture2D carGrain;
         private Material[] carPaints = new Material[0];
         private Material carDetail, carGlass, carLamp, carBrakeOff, carBrakeOn;
@@ -95,11 +96,12 @@ namespace Broker.Runtime.Office
         {
             EnsureCarMaterials();
             if (!carBodies.TryGetValue(style, out var body)) carBodies.Add(style, body = CarMesh(CarModels.Body(style), "Broker car / " + style, BodyParts));
-            if (carWheel == null) carWheel = CarMesh(CarModels.Wheel(), "Broker car / wheel", CarPart.Detail);
+            var shape = CarModels.Shape(style);
+            if (!carWheels.TryGetValue(shape, out var tyre)) carWheels.Add(shape, tyre = CarMesh(CarModels.Wheel(style), "Broker car / wheel / " + style, CarPart.Detail));
             var root = new GameObject(name); root.transform.SetParent(parent, false);
             var shell = new GameObject("Car / body"); shell.transform.SetParent(root.transform, false);
             shell.AddComponent<MeshFilter>().sharedMesh = body;
-            var rig = new CarRig { Root = root.transform, Body = shell.AddComponent<MeshRenderer>(), Wheels = new Transform[CarShape.WheelCount] };
+            var rig = new CarRig { Root = root.transform, Body = shell.AddComponent<MeshRenderer>(), Wheels = new Transform[CarShape.WheelCount], WheelRadius = shape.WheelRadius };
             var colour = carPaints[Mathf.Clamp(paint, 0, carPaints.Length - 1)];
             rig.Cruising = new[] { colour, carDetail, carGlass, carLamp, carBrakeOff };
             rig.Braking = new[] { colour, carDetail, carGlass, carLamp, carBrakeOn };
@@ -107,9 +109,9 @@ namespace Broker.Runtime.Office
             for (int w = 0; w < CarShape.WheelCount; w++)
             {
                 var wheel = new GameObject(WheelNames[w]); wheel.transform.SetParent(root.transform, false);
-                var centre = CarModels.Sedan.Wheel(w);
+                var centre = shape.Wheel(w);
                 wheel.transform.localPosition = new Vector3(centre.X, centre.Y, centre.Z);
-                wheel.AddComponent<MeshFilter>().sharedMesh = carWheel;
+                wheel.AddComponent<MeshFilter>().sharedMesh = tyre;
                 wheel.AddComponent<MeshRenderer>().sharedMaterials = wheelMaterials;
                 rig.Wheels[w] = wheel.transform;
             }
@@ -121,7 +123,7 @@ namespace Broker.Runtime.Office
         // degrees of Unity yaw. Brake lamps swap one material array.
         private static void PoseCar(CarRig rig, float rolled, bool braking, float steer = 0)
         {
-            float turn = rolled / CarModels.Sedan.WheelRadius * Mathf.Rad2Deg % 360f;
+            float turn = rolled / rig.WheelRadius * Mathf.Rad2Deg % 360f;
             var steering = Quaternion.Euler(0, steer, 0);
             for (int w = 0; w < rig.Wheels.Length; w++)
             {
@@ -136,7 +138,8 @@ namespace Broker.Runtime.Office
         {
             foreach (var mesh in carBodies.Values) if (mesh != null) Destroy(mesh);
             carBodies.Clear();
-            if (carWheel != null) Destroy(carWheel);
+            foreach (var mesh in carWheels.Values) if (mesh != null) Destroy(mesh);
+            carWheels.Clear();
             if (carGrain != null) Destroy(carGrain);
         }
     }

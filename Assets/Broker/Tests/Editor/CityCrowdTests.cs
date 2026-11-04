@@ -76,7 +76,7 @@ namespace Broker.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => a.Advance(double.NaN, signal, false, 0, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => a.Advance(-1, signal, false, 0, 0));
         }
-        private static double Overlap(CityCar car) => Math.Min(car.X + CityTraffic.CarLength / 2, CityCrosswalk.HalfWidth) - Math.Max(car.X - CityTraffic.CarLength / 2, -CityCrosswalk.HalfWidth);
+        private static double Overlap(CityCar car) => Math.Min(car.X + car.Length / 2, CityCrosswalk.HalfWidth) - Math.Max(car.X - car.Length / 2, -CityCrosswalk.HalfWidth);
         [Test] public void WalkersCrossOnlyOnTheGreenWhileTheCarsWait()
         {
             var life = new CityLife(); var walkers = life.Crowd.Walkers; var wasOn = new bool[walkers.Count];
