@@ -18,6 +18,7 @@ shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' 
 |---|---|
 | `plaza-north`, `plaza-office` | the plaza with the stands, looking north to the boulevard and south to the office |
 | `sunset-west`, `east-street` | the western square against the sun, the business street |
+| `square-west` | the western square close up: a raised bed with its tree and shrubs, a street lamp, conifers and benches |
 | `boulevard` | traffic along the railing, the Exchange quarter beyond |
 | `crosswalk` | the zebra on the pedestrians' green, cars at the stop lines, walkers crossing; the crossing HUD lines |
 | `cars`, `cars-rear` | close-ups of the low-poly cars waiting at the red light: from the front off the zebra, from behind with the brake lamps on; no HUD |

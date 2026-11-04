@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace Broker.Core
 {
     // Round and free-form pieces for the low-poly builders: lathed profiles (column bases, shafts, bowls, flames), discs,
-    // ellipsoid blobs and tapered limbs (the statues) and six-sided blocks from their corners (ship prows, roof slabs).
+    // ellipsoid blobs and tapered limbs (the statues), lumpy clumps (tree crowns, shrubs), tubes bent along a path (lamp
+    // arms) and six-sided blocks from their corners (ship prows, roof slabs, bench frames).
     // Every face gets its outward hint from the shape, so PolyBuilder turns it the right way round.
     internal static class PolyShapes
     {
@@ -55,6 +56,62 @@ namespace Broker.Core
                     V3 p00 = P(i, k), p01 = P(i, k + 1), p11 = P(i + 1, k + 1), p10 = P(i + 1, k);
                     b.Quad(p00, p01, p11, p10, (p00 + p01 + p11 + p10) * 0.25f - c, part, color, shade);
                 }
+            b.Group = group;
+        }
+        // A lumpy ellipsoid round c: Blob with every point pushed out or in by up to `bumps` of the radii, from the seed
+        // (clumps of leaves). The poles and the seam stay closed. A dome keeps the upper half (`rings` even) on an open flat
+        // base at c.Y — a shrub on its soil.
+        public static void Lump(PolyBuilder b, V3 c, float rx, float ry, float rz, int sides, int rings, float bumps, int seed, int part, byte color,
+            float shade = 1, bool dome = false)
+        {
+            int group = b.Group; b.Group = b.NextGroup();
+            int first = dome ? rings / 2 : 0;
+            V3 P(int i, int k)
+            {
+                k %= sides; if (i == 0 || i == rings) k = 0;
+                double polar = Math.PI * i / rings, a = 2 * Math.PI * k / sides;
+                float s = (float)Math.Sin(polar), f = 1 + bumps * (2 * VoxelNoise.Value(i, k, 9, seed) - 1);
+                float y = dome && i == first ? 0 : -ry * (float)Math.Cos(polar) * f;
+                return new V3(c.X + rx * s * f * (float)Math.Cos(a), c.Y + y, c.Z + rz * s * f * (float)Math.Sin(a));
+            }
+            for (int i = first; i < rings; i++)
+                for (int k = 0; k < sides; k++)
+                {
+                    V3 p00 = P(i, k), p01 = P(i, k + 1), p11 = P(i + 1, k + 1), p10 = P(i + 1, k);
+                    b.Quad(p00, p01, p11, p10, (p00 + p01 + p11 + p10) * 0.25f - c, part, color, shade);
+                }
+            b.Group = group;
+        }
+        // Tube along a path with its rings square to it; `side` lies across the path (the normal of its plane for a flat
+        // bend) and starts every ring, so a ring at a vertical stretch matches a Lathe of the same sides. The radius runs
+        // from r0 to r1; the ends stay open. One smoothing group: a bend reads as one curve.
+        public static void Sweep(PolyBuilder b, IList<V3> path, float r0, float r1, int sides, V3 side, int part, byte color, float shade = 1)
+        {
+            int n = path.Count;
+            var along = new float[n];
+            for (int i = 1; i < n; i++) along[i] = along[i - 1] + (path[i] - path[i - 1]).Length;
+            var rings = new V3[n, sides];
+            for (int i = 0; i < n; i++)
+            {
+                var t = (path[Math.Min(n - 1, i + 1)] - path[Math.Max(0, i - 1)]).Normalized;
+                var u = (side - t * V3.Dot(side, t)).Normalized; var w = V3.Cross(u, t);
+                float r = r0 + (r1 - r0) * along[i] / along[n - 1];
+                for (int k = 0; k < sides; k++)
+                {
+                    double a = 2 * Math.PI * k / sides;
+                    rings[i, k] = path[i] + u * (r * (float)Math.Cos(a)) + w * (r * (float)Math.Sin(a));
+                }
+            }
+            int group = b.Group; b.Group = b.NextGroup();
+            for (int i = 0; i + 1 < n; i++)
+            {
+                var axis = (path[i] + path[i + 1]) * 0.5f;
+                for (int k = 0; k < sides; k++)
+                {
+                    V3 a0 = rings[i, k], a1 = rings[i, (k + 1) % sides], b1 = rings[i + 1, (k + 1) % sides], b0 = rings[i + 1, k];
+                    b.Quad(a0, a1, b1, b0, (a0 + a1 + b1 + b0) * 0.25f - axis, part, color, shade);
+                }
+            }
             b.Group = group;
         }
         // Tapered tube from p0 (radius r0) to p1 (radius r1), `sides` round, capped at both ends unless told otherwise;

@@ -2,9 +2,10 @@ using System;
 
 namespace Broker.Core
 {
-    // Street greenery as smooth low-poly meshes in the manner of Schedule I, in place of the voxel models and on the
-    // building parts and materials (BuildingModels): for now the clipped hedge; trees, shrubs and lawns come next.
-    public static class StreetModels
+    // Street greenery and furniture as smooth low-poly meshes in the manner of Schedule I, in place of the voxel models and
+    // on the building parts and materials (BuildingModels): the clipped hedge here; trees, conifers, shrubs, planters and
+    // lawns in StreetModels.Green.cs; lamps, benches and bins in StreetModels.Furniture.cs.
+    public static partial class StreetModels
     {
         public static readonly WallLook HedgeLook = new WallLook("leaves", 0xFFFFFF);
         // The domed ends take HedgeEnd of the length at each end.
