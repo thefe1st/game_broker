@@ -6,7 +6,8 @@ using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
-    // Voxel props share one point-filtered 8×8 palette and two materials (plain and glowing).
+    // Voxel props share one point-filtered 8×8 palette and two materials (plain and glowing) on the Broker/Voxel shader,
+    // which darkens corners with the mesher's per-vertex shade; without it (or under a render pipeline) Standard is used.
     // Each distinct model is meshed once per scene; gameplay colliders stay on the original boxes.
     public sealed partial class OfficeScene
     {
@@ -25,15 +26,26 @@ namespace Broker.Runtime.Office
             voxelPalette.name = "Broker / voxel palette";
             voxelPalette.filterMode = FilterMode.Point; voxelPalette.wrapMode = TextureWrapMode.Clamp;
             voxelPalette.SetPixels32(pixels); voxelPalette.Apply(false, true);
-            voxelSolid = Mat("#FFFFFF"); voxelSolid.name = "Broker / voxel";
+            var shader = GraphicsSettings.currentRenderPipeline == null ? Shader.Find(VoxelShader) : null;
+            if (shader != null && !shader.isSupported) shader = null;
+            voxelSolid = VoxelMat(shader, "#FFFFFF"); voxelSolid.name = "Broker / voxel";
             UseTexture(voxelSolid, voxelPalette, 0.08f);
             // Glowing cells are mostly emission: a dim albedo keeps lit windows amber in direct sun instead of washing out to white.
-            voxelGlow = Mat("#7A7A7A"); voxelGlow.name = "Broker / voxel glow";
+            // The emission is HDR, so lamps, lit windows and headlights reach the bloom threshold of the screen pass.
+            voxelGlow = VoxelMat(shader, "#7A7A7A"); voxelGlow.name = "Broker / voxel glow";
             UseTexture(voxelGlow, voxelPalette, 0.25f);
             voxelGlow.EnableKeyword("_EMISSION");
-            if (voxelGlow.HasProperty("_EmissionMap")) voxelGlow.SetTexture("_EmissionMap", voxelPalette);
-            voxelGlow.SetColor("_EmissionColor", new Color(0.72f, 0.72f, 0.72f));
+            voxelGlow.SetTexture("_EmissionMap", voxelPalette);
+            voxelGlow.SetColor("_EmissionColor", new Color(GlowEmission, GlowEmission, GlowEmission));
             voxelGlow.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+        }
+        public const string VoxelShader = "Broker/Voxel";
+        public const float GlowEmission = 1.35f;
+        private Material VoxelMat(Shader shader, string hex)
+        {
+            if (shader == null) return Mat(hex);
+            var material = new Material(shader); ColorUtility.TryParseHtmlString(hex, out var color); material.color = color;
+            materials.Add(material); return material;
         }
         private static void UseTexture(Material material, Texture texture, float smoothness)
         {
@@ -49,16 +61,17 @@ namespace Broker.Runtime.Office
             EnsureVoxelMaterials();
             var data = VoxelMesher.Build(build());
             int count = data.VertexCount;
-            var vertices = new Vector3[count]; var normals = new Vector3[count]; var uv = new Vector2[count];
+            var vertices = new Vector3[count]; var normals = new Vector3[count]; var uv = new Vector2[count]; var shades = new Color32[count];
             for (int i = 0; i < count; i++)
             {
                 vertices[i] = new Vector3(data.Positions[i * 3], data.Positions[i * 3 + 1], data.Positions[i * 3 + 2]);
                 normals[i] = new Vector3(data.Normals[i * 3], data.Normals[i * 3 + 1], data.Normals[i * 3 + 2]);
                 uv[i] = new Vector2(data.Uvs[i * 2], data.Uvs[i * 2 + 1]);
+                byte shade = data.Shades[i]; shades[i] = new Color32(shade, shade, shade, 255);
             }
             var mesh = new Mesh { name = "Broker voxel / " + key };
             if (count > 65000) mesh.indexFormat = IndexFormat.UInt32;
-            mesh.vertices = vertices; mesh.normals = normals; mesh.uv = uv;
+            mesh.vertices = vertices; mesh.normals = normals; mesh.uv = uv; mesh.colors32 = shades;
             bool solid = data.Triangles.Length > 0, glow = data.GlowTriangles.Length > 0;
             mesh.subMeshCount = solid && glow ? 2 : 1;
             if (solid) mesh.SetTriangles(data.Triangles, 0);

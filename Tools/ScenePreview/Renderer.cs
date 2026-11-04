@@ -1,15 +1,30 @@
-// Software still renderer that approximates Unity's built-in forward path in gamma colour space:
+// Software still renderer that approximates Unity's built-in forward path in gamma or linear colour space:
 // Standard BRDF (Disney diffuse + GGX), trilight ambient, sky reflections, cascaded soft sun shadows,
-// up to three point lights, linear fog and the "Skybox/Procedural" shader. It is a composition and palette check, not a lookdev tool.
+// up to three point lights, linear fog, the "Skybox/Procedural" shader, the corner shade of "Broker/Voxel" and,
+// for cameras with CameraPost, the screen pass of BrokerPost.shader (SSAO, bloom, ACES grade, vignette).
+// It is a composition and palette check, not a lookdev tool.
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Broker.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace Broker.Tools.ScenePreview
 {
+    // Colour space of the emulated project: in linear space sRGB colours and textures are decoded before lighting,
+    // light colour × intensity goes through Unity's gamma-to-linear (lightsUseLinearIntensity off), the result is encoded at the end.
+    public static class ColorPipe
+    {
+        public static bool Linear;
+        public static float In(float c) => Linear ? ScreenLook.GammaToLinear(c) : c;
+        public static Vector3 In(Color c) => new Vector3(In(c.r), In(c.g), In(c.b));
+        public static Vector3 Light(Color c, float intensity) => Linear
+            ? new Vector3(ScreenLook.GammaToLinear(c.r * intensity), ScreenLook.GammaToLinear(c.g * intensity), ScreenLook.GammaToLinear(c.b * intensity))
+            : new Vector3(c.r, c.g, c.b) * intensity;
+    }
+
     public struct Affine
     {
         public Vector3 X, Y, Z, T;
@@ -42,7 +57,8 @@ namespace Broker.Tools.ScenePreview
             var lw = new List<int> { t.width }; var lh = new List<int> { t.height };
             var levels = new List<float[]>();
             var top = new float[t.width * t.height * 3];
-            for (int i = 0; i < t.width * t.height; i++) { var c = t.Pixels[i]; top[i * 3] = c.r / 255f; top[i * 3 + 1] = c.g / 255f; top[i * 3 + 2] = c.b / 255f; }
+            for (int i = 0; i < t.width * t.height; i++)
+            { var c = t.Pixels[i]; top[i * 3] = ColorPipe.In(c.r / 255f); top[i * 3 + 1] = ColorPipe.In(c.g / 255f); top[i * 3 + 2] = ColorPipe.In(c.b / 255f); }
             levels.Add(top);
             while (t.MipChain && (lw[lw.Count - 1] > 1 || lh[lh.Count - 1] > 1))
             {
@@ -88,17 +104,22 @@ namespace Broker.Tools.ScenePreview
     {
         public string Name; public Vector3 Albedo; public Tex Main; public bool Unlit;
         public bool Emissive; public Vector3 Emission; public Tex EmissionMap; public float Smoothness, Metallic;
+        // Broker/Voxel: the vertex colour is the corner shade; it scales ambient fully and direct light by CornerShade.
+        public bool VertexShade; public float CornerShade;
         public static MaterialInfo From(Material m)
         {
             string shader = m?.shader?.name ?? "Standard";
             var c = m == null ? Color.white : m.color;
-            var info = new MaterialInfo { Name = m?.name ?? "(none)", Albedo = new Vector3(c.r, c.g, c.b), Unlit = shader.StartsWith("Unlit") };
+            var info = new MaterialInfo { Name = m?.name ?? "(none)", Albedo = ColorPipe.In(c), Unlit = shader.StartsWith("Unlit") };
             if (m == null) return info;
             info.Main = Tex.From(m.GetTexture("_MainTex"));
             info.Smoothness = m.Floats.TryGetValue("_Glossiness", out var s) ? s : 0.5f;
             info.Metallic = m.Floats.TryGetValue("_Metallic", out var mm) ? mm : 0;
-            info.Emissive = m.IsKeywordEnabled("_EMISSION");
-            var e = m.GetColor("_EmissionColor"); info.Emission = new Vector3(e.r, e.g, e.b);
+            info.VertexShade = shader == "Broker/Voxel";
+            info.CornerShade = m.Floats.TryGetValue("_CornerShade", out var cs) ? cs : 0.6f;
+            // The voxel shader always adds its emission; Standard only with the keyword.
+            info.Emissive = m.IsKeywordEnabled("_EMISSION") || info.VertexShade;
+            var e = m.GetColor("_EmissionColor"); info.Emission = ColorPipe.In(e);
             info.EmissionMap = Tex.From(m.GetTexture("_EmissionMap"));
             return info;
         }
@@ -107,7 +128,7 @@ namespace Broker.Tools.ScenePreview
     // All renderers flattened into world-space triangle soup.
     public sealed class SceneSoup
     {
-        public float[] P, N, UV; public int[] Tri, TriMat; public byte[] Flags; public int Triangles, Vertices;
+        public float[] P, N, UV, S; public int[] Tri, TriMat; public byte[] Flags; public int Triangles, Vertices;
         public readonly List<MaterialInfo> Materials = new List<MaterialInfo>();
         public const byte Visible = 1, Casts = 2, Receives = 4;
         public Vector3 CasterMin = new Vector3(1e9f, 1e9f, 1e9f), CasterMax = new Vector3(-1e9f, -1e9f, -1e9f);
@@ -116,7 +137,7 @@ namespace Broker.Tools.ScenePreview
         {
             var soup = new SceneSoup(); var worlds = new Dictionary<Transform, Affine>();
             var materialIndex = new Dictionary<Material, int>();
-            var pos = new List<float>(); var nrm = new List<float>(); var uvs = new List<float>();
+            var pos = new List<float>(); var nrm = new List<float>(); var uvs = new List<float>(); var shades = new List<float>();
             var tris = new List<int>(); var mats = new List<int>(); var flags = new List<byte>();
             Affine World(Transform t)
             {
@@ -132,12 +153,13 @@ namespace Broker.Tools.ScenePreview
                 var mesh = filter.sharedMesh; var world = World(go.transform);
                 bool visible = renderer.shadowCastingMode != ShadowCastingMode.ShadowsOnly, casts = renderer.shadowCastingMode != ShadowCastingMode.Off;
                 byte flag = (byte)((visible ? Visible : 0) | (casts ? Casts : 0) | (renderer.receiveShadows ? Receives : 0));
-                int baseVertex = pos.Count / 3; var v = mesh.vertices; var n = mesh.normals; var uv = mesh.uv;
+                int baseVertex = pos.Count / 3; var v = mesh.vertices; var n = mesh.normals; var uv = mesh.uv; var colors = mesh.colors32;
                 for (int i = 0; i < v.Length; i++)
                 {
                     var p = world.Point(v[i]); pos.Add(p.x); pos.Add(p.y); pos.Add(p.z);
                     var q = i < n.Length ? world.Normal(n[i]) : Vector3.up; nrm.Add(q.x); nrm.Add(q.y); nrm.Add(q.z);
                     if (i < uv.Length) { uvs.Add(uv[i].x); uvs.Add(uv[i].y); } else { uvs.Add(0); uvs.Add(0); }
+                    shades.Add(i < colors.Length ? colors[i].r / 255f : 1);
                     if (casts)
                     {
                         soup.CasterMin = new Vector3(Math.Min(soup.CasterMin.x, p.x), Math.Min(soup.CasterMin.y, p.y), Math.Min(soup.CasterMin.z, p.z));
@@ -157,7 +179,7 @@ namespace Broker.Tools.ScenePreview
                     { tris.Add(baseVertex + t[i]); tris.Add(baseVertex + t[i + 1]); tris.Add(baseVertex + t[i + 2]); mats.Add(index); flags.Add(flag); }
                 }
             }
-            soup.P = pos.ToArray(); soup.N = nrm.ToArray(); soup.UV = uvs.ToArray(); soup.Tri = tris.ToArray(); soup.TriMat = mats.ToArray(); soup.Flags = flags.ToArray();
+            soup.P = pos.ToArray(); soup.N = nrm.ToArray(); soup.UV = uvs.ToArray(); soup.S = shades.ToArray(); soup.Tri = tris.ToArray(); soup.TriMat = mats.ToArray(); soup.Flags = flags.ToArray();
             soup.Triangles = mats.Count; soup.Vertices = pos.Count / 3; return soup;
         }
         public Vector3 Pos(int v) => new Vector3(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
@@ -165,6 +187,27 @@ namespace Broker.Tools.ScenePreview
     }
 
     // Unity built-in "Skybox/Procedural", high-quality sun disk, evaluated in gamma colour space.
+    // "Broker/Sky": Core/SkyLook with the material's colours (linearised like Unity does in linear colour space), clouds at time 0.
+    public static class BrokerSky
+    {
+        public static Func<Vector3, Vector3> From(Material sky)
+        {
+            if (sky == null || sky.shader == null || sky.shader.name != "Broker/Sky") return null;
+            SkyLook.Rgb C(string p, SkyLook.Rgb d)
+            {
+                if (!sky.Colors.TryGetValue(p, out var c)) c = new Color(d.R, d.G, d.B);
+                var v = ColorPipe.In(c); return new SkyLook.Rgb(v.x, v.y, v.z);
+            }
+            var palette = new SkyLook.Palette { Zenith = C("_Zenith", SkyLook.Zenith), Horizon = C("_Horizon", SkyLook.Horizon), Ground = C("_Ground", SkyLook.Ground),
+                Glow = C("_Glow", SkyLook.Glow), CloudLit = C("_CloudLit", SkyLook.CloudLit), CloudShade = C("_CloudShade", SkyLook.CloudShade) };
+            var s = sky.NamedVectors.TryGetValue("_SunDirection", out var v4) ? new Vector3(v4.x, v4.y, v4.z).normalized : new Vector3(0, 1, 0);
+            return d =>
+            {
+                d = d.normalized; var c = SkyLook.Evaluate(d.x, d.y, d.z, s.x, s.y, s.z, palette);
+                return new Vector3(c.R, c.G, c.B);
+            };
+        }
+    }
     public sealed class ProceduralSky
     {
         private const float OuterRadius = 1.025f, OuterRadius2 = OuterRadius * OuterRadius, InnerRadius = 1, InnerRadius2 = 1, CameraHeight = 0.0001f;
@@ -180,7 +223,7 @@ namespace Broker.Tools.ScenePreview
             Color C(string p, Color d) => sky != null && sky.Colors.TryGetValue(p, out var v) ? v : d;
             float thickness = F("_AtmosphereThickness", 1); exposure = F("_Exposure", 1.3f); sunSize = F("_SunSize", 0.04f); convergence = F("_SunSizeConvergence", 5);
             var tint = C("_SkyTint", new Color(0.5f, 0.5f, 0.5f)); var g = C("_GroundColor", new Color(0.369f, 0.349f, 0.341f));
-            ground = new Vector3(g.r * g.r, g.g * g.g, g.b * g.b);
+            ground = ColorPipe.Linear ? ColorPipe.In(g) : new Vector3(g.r * g.r, g.g * g.g, g.b * g.b);
             float rayleigh = 0.0025f * MathF.Pow(thickness, 2.5f);
             kr4PI = rayleigh * 4 * MathF.PI; krESun = rayleigh * SunBrightness;
             Vector3 wl = new Vector3(0.65f - 0.15f + 0.3f * (1 - tint.r), 0.57f - 0.15f + 0.3f * (1 - tint.g), 0.475f - 0.15f + 0.3f * (1 - tint.b));
@@ -188,7 +231,7 @@ namespace Broker.Tools.ScenePreview
             if (sun != null)
             {
                 lightPos = -(sun.transform.rotation * Vector3.forward).normalized;
-                lightColor = new Vector3(sun.color.r, sun.color.g, sun.color.b) * sun.intensity;
+                lightColor = ColorPipe.Light(sun.color, sun.intensity);
             }
             else { lightPos = new Vector3(0, 1, 0); lightColor = Vector3.zero; }
         }
@@ -246,6 +289,8 @@ namespace Broker.Tools.ScenePreview
                 float mie = 1.5f * ((1 - MieG2) / (2 + MieG2)) * (1 + ec2) / temp;
                 col += sunColor * mie;
             }
+            // The shader outputs linear colour in a linear project and its square root in a gamma one.
+            if (ColorPipe.Linear) return new Vector3(MathF.Max(0, col.x), MathF.Max(0, col.y), MathF.Max(0, col.z));
             return new Vector3(MathF.Sqrt(MathF.Max(0, col.x)), MathF.Sqrt(MathF.Max(0, col.y)), MathF.Sqrt(MathF.Max(0, col.z)));
         }
     }
@@ -311,6 +356,8 @@ namespace Broker.Tools.ScenePreview
     public sealed class ViewCamera
     {
         public Vector3 Position, Right, Up, Forward; public float Fov = 60, Near = 0.3f, Far = 1000; public bool Skybox = true; public Color Background;
+        // The camera carries an active CameraPost: the image gets the screen pass of BrokerPost.shader.
+        public bool Post;
         public bool Orthographic; public float OrthoSize = 5;
         public static ViewCamera FromYawPitch(Vector3 position, float yaw, float pitch, float fov, float near, float far)
         {
@@ -324,7 +371,8 @@ namespace Broker.Tools.ScenePreview
             {
                 Position = camera.transform.position, Right = r * Vector3.right, Up = r * Vector3.up, Forward = r * Vector3.forward, Fov = camera.fieldOfView,
                 Near = camera.nearClipPlane, Far = camera.farClipPlane, Skybox = camera.clearFlags == CameraClearFlags.Skybox, Background = camera.backgroundColor,
-                Orthographic = camera.orthographic, OrthoSize = camera.orthographicSize
+                Orthographic = camera.orthographic, OrthoSize = camera.orthographicSize,
+                Post = camera.GetComponent<Broker.Runtime.Office.CameraPost>()?.Active == true
             };
         }
     }
@@ -341,7 +389,7 @@ namespace Broker.Tools.ScenePreview
     {
         public int Width = 1440, Height = 960, Supersample = 2;
         public float[] Rgb; public float[] Depth; public int[] Id; public int W, H;
-        private SceneSoup soup; private ViewCamera cam; private ProceduralSky sky; private Environment env;
+        private SceneSoup soup; private ViewCamera cam; private Func<Vector3, Vector3> sky; private Environment env;
         private Vector3 sunDir, sunColor; private bool hasSun; private float shadowStrength = 1;
         private readonly List<ShadowCascade> cascades = new List<ShadowCascade>();
         private readonly List<PointLightInfo> points = new List<PointLightInfo>();
@@ -354,8 +402,9 @@ namespace Broker.Tools.ScenePreview
             soup = scene; cam = camera; W = Width * Supersample; H = Height * Supersample;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             SetupLights();
-            sky = new ProceduralSky(RenderSettings.skybox, RenderSettings.sun);
-            env = new Environment(d => sky.Valid ? sky.Eval(d) : new Vector3(0.5f, 0.5f, 0.5f));
+            sky = BrokerSky.From(RenderSettings.skybox);
+            if (sky == null) { var procedural = new ProceduralSky(RenderSettings.skybox, RenderSettings.sun); if (procedural.Valid) sky = procedural.Eval; }
+            env = new Environment(d => sky != null ? sky(d) : new Vector3(0.5f, 0.5f, 0.5f));
             float tEnv = clock.ElapsedMilliseconds;
             BuildShadows();
             float tShadow = clock.ElapsedMilliseconds;
@@ -372,13 +421,13 @@ namespace Broker.Tools.ScenePreview
             {
                 if (!go.activeInHierarchy) continue;
                 var light = go.GetComponent<Light>(); if (light == null || !light.enabled) continue;
-                var color = new Vector3(light.color.r, light.color.g, light.color.b) * light.intensity;
+                var color = ColorPipe.Light(light.color, light.intensity);
                 if (light.type == LightType.Directional && !hasSun)
                 { hasSun = true; sunDir = (go.transform.rotation * Vector3.forward).normalized; sunColor = color; shadowStrength = light.shadows == LightShadows.None ? 0 : light.shadowStrength; }
                 else if (light.type == LightType.Point) points.Add(new PointLightInfo { Position = go.transform.position, Color = color, Range = light.range });
             }
             var mode = RenderSettings.ambientMode;
-            Vector3 V(Color c) => new Vector3(c.r, c.g, c.b);
+            Vector3 V(Color c) => ColorPipe.In(c);
             ambientSky = V(RenderSettings.ambientSkyColor);
             ambientEquator = mode == AmbientMode.Trilight ? V(RenderSettings.ambientEquatorColor) : ambientSky;
             ambientGround = mode == AmbientMode.Trilight ? V(RenderSettings.ambientGroundColor) : ambientSky;
@@ -541,7 +590,7 @@ namespace Broker.Tools.ScenePreview
         }
 
         private static float Pow5(float x) { float x2 = x * x; return x2 * x2 * x; }
-        // Unity BRDF1 (Standard shader), gamma colour space.
+        // Unity BRDF1 (Standard shader); the gamma build takes the square root of the specular term and a cheaper surface reduction.
         private static Vector3 Brdf(Vector3 diffColor, Vector3 specColor, float oneMinusReflectivity, float smoothness, Vector3 n, Vector3 v,
             Vector3 l, Vector3 lightColor, Vector3 giDiffuse, Vector3 giSpecular)
         {
@@ -553,9 +602,9 @@ namespace Broker.Tools.ScenePreview
             float lambdaV = nl * (nv * (1 - roughness) + roughness), lambdaL = nv * (nl * (1 - roughness) + roughness);
             float vis = 0.5f / (lambdaV + lambdaL + 1e-5f);
             float a2 = roughness * roughness, dd = (nh * a2 - nh) * nh + 1, D = a2 / (MathF.PI * (dd * dd + 1e-7f));
-            float spec = MathF.Sqrt(MathF.Max(1e-4f, vis * D * MathF.PI));
+            float spec = ColorPipe.Linear ? vis * D * MathF.PI : MathF.Sqrt(MathF.Max(1e-4f, vis * D * MathF.PI));
             spec = MathF.Max(0, spec * nl);
-            float surfaceReduction = 1 - 0.28f * roughness * pr;
+            float surfaceReduction = ColorPipe.Linear ? 1 / (roughness * roughness + 1) : 1 - 0.28f * roughness * pr;
             float grazing = Math.Clamp(smoothness + (1 - oneMinusReflectivity), 0, 1);
             float f5 = Pow5(1 - lh), fv = Pow5(1 - nv);
             var fresnel = specColor + (Vector3.one - specColor) * f5;
@@ -570,14 +619,14 @@ namespace Broker.Tools.ScenePreview
             return y >= 0 ? Vector3.Lerp(ambientEquator, ambientSky, y) : Vector3.Lerp(ambientEquator, ambientGround, -y);
         }
 
-        private Vector3 Background(Vector3 dir) => cam.Skybox && sky.Valid ? sky.Eval(dir) : new Vector3(cam.Background.r, cam.Background.g, cam.Background.b);
+        private Vector3 Background(Vector3 dir) => cam.Skybox && sky != null ? sky(dir) : ColorPipe.In(cam.Background);
 
         private void Shade()
         {
             Rgb = new float[Width * Height * 3];
             var samples = new Vector3[W * H];
             float halfW = W * 0.5f, halfH = H * 0.5f; var o = cam.Position;
-            const float dielectric = 0.220916301f;
+            float dielectric = ColorPipe.Linear ? 0.04f : 0.220916301f;
             Parallel.For(0, H, y =>
             {
                 for (int x = 0; x < W; x++)
@@ -611,6 +660,13 @@ namespace Broker.Tools.ScenePreview
                         float fp = MathF.Max(fpx, fpy); lod = fp > 1e-6f && !float.IsNaN(fp) ? MathF.Log2(fp) : 0;
                     }
                     if (mat.Main != null) albedo = Vector3.Scale(albedo, mat.Main.Sample(u0, v0, lod));
+                    // Broker/Voxel: corner shade on the albedo (CornerShade share) and as occlusion of ambient light.
+                    float shade = 1;
+                    if (mat.VertexShade)
+                    {
+                        shade = Math.Clamp(soup.S[ia] * (1 - bu - bv) + soup.S[ib] * bu + soup.S[ic] * bv, 0, 1);
+                        albedo *= 1 + (shade - 1) * mat.CornerShade;
+                    }
                     var viewDir = (-dir).normalized; float viewZ = depth; float distance = (p - o).magnitude;
                     Vector3 color;
                     if (mat.Unlit) color = albedo;
@@ -619,14 +675,14 @@ namespace Broker.Tools.ScenePreview
                         var specColor = Vector3.Lerp(Vector3.one * dielectric, albedo, mat.Metallic);
                         float omr = (1 - dielectric) * (1 - mat.Metallic); var diff = albedo * omr;
                         var refl = dir.normalized - n * (2 * Vector3.Dot(dir.normalized, n));
-                        var giSpec = env.Sample(refl, 1 - mat.Smoothness);
+                        var giSpec = env.Sample(refl, 1 - mat.Smoothness) * shade;
                         Vector3 light = Vector3.zero, l = Vector3.up;
                         if (hasSun)
                         {
                             l = -sunDir; float shadow = Vector3.Dot(n, l) > 0 ? Shadow(p, n, viewZ, distance) : 1;
                             light = sunColor * shadow;
                         }
-                        color = Brdf(diff, specColor, omr, mat.Smoothness, n, viewDir, l, light, Ambient(n), giSpec);
+                        color = Brdf(diff, specColor, omr, mat.Smoothness, n, viewDir, l, light, Ambient(n) * shade, giSpec);
                         if (mat.Emissive)
                         {
                             var e = mat.Emission; if (mat.EmissionMap != null) e = Vector3.Scale(e, mat.EmissionMap.Sample(u0, v0, lod));
@@ -646,18 +702,171 @@ namespace Broker.Tools.ScenePreview
                     samples[i] = color;
                 }
             });
+            // HDR resolve of the supersamples (what MSAA resolve does), or the clamped gamma average without a screen pass.
+            bool post = cam.Post && ColorPipe.Linear;
+            var source = new float[Width * Height * 3];
             for (int y = 0; y < Height; y++) for (int x = 0; x < Width; x++)
             {
                 var sum = Vector3.zero;
                 for (int sy = 0; sy < Supersample; sy++) for (int sx = 0; sx < Supersample; sx++)
                 {
                     var s = samples[(y * Supersample + sy) * W + x * Supersample + sx];
-                    sum += new Vector3(Math.Clamp(s.x, 0, 1), Math.Clamp(s.y, 0, 1), Math.Clamp(s.z, 0, 1));
+                    sum += post ? new Vector3(Math.Clamp(s.x, 0, 64), Math.Clamp(s.y, 0, 64), Math.Clamp(s.z, 0, 64))
+                        : new Vector3(Math.Clamp(s.x, 0, 1), Math.Clamp(s.y, 0, 1), Math.Clamp(s.z, 0, 1));
                 }
                 sum /= Supersample * Supersample; int o3 = (y * Width + x) * 3;
-                Rgb[o3] = sum.x; Rgb[o3 + 1] = sum.y; Rgb[o3 + 2] = sum.z;
+                source[o3] = sum.x; source[o3 + 1] = sum.y; source[o3 + 2] = sum.z;
+            }
+            if (post) { ScreenPass(source); return; }
+            for (int i = 0; i < source.Length; i++) Rgb[i] = ColorPipe.Linear ? ScreenLook.LinearToSrgb(source[i]) : source[i];
+        }
+
+        // ---------- Screen pass (mirrors BrokerPost.shader) ----------
+        private sealed class Image
+        {
+            public readonly int W, H; public readonly float[] C;
+            public Image(int w, int h, float[] c = null) { W = w; H = h; C = c ?? new float[w * h * 3]; }
+            // Bilinear tap at uv (0..1, texel centres at (i + 0.5) / size) with clamped addressing.
+            public Vector3 Tap(float u, float v)
+            {
+                float fx = u * W - 0.5f, fy = v * H - 0.5f; int x0 = (int)MathF.Floor(fx), y0 = (int)MathF.Floor(fy);
+                float tx = fx - x0, ty = fy - y0; var r = Vector3.zero;
+                for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++)
+                {
+                    int x = Math.Clamp(x0 + dx, 0, W - 1), y = Math.Clamp(y0 + dy, 0, H - 1), i = (y * W + x) * 3;
+                    r += new Vector3(C[i], C[i + 1], C[i + 2]) * ((dx == 0 ? 1 - tx : tx) * (dy == 0 ? 1 - ty : ty));
+                }
+                return r;
+            }
+            public Vector3 Box4(float u, float v)
+            {
+                float tx = 1f / W, ty = 1f / H;
+                return (Tap(u - tx, v - ty) + Tap(u + tx, v - ty) + Tap(u - tx, v + ty) + Tap(u + tx, v + ty)) * 0.25f;
+            }
+            public Vector3 Tent9(float u, float v)
+            {
+                float tx = 1f / W, ty = 1f / H;
+                return (Tap(u - tx, v - ty) + Tap(u, v - ty) * 2 + Tap(u + tx, v - ty) + Tap(u - tx, v) * 2 + Tap(u, v) * 4 + Tap(u + tx, v) * 2
+                    + Tap(u - tx, v + ty) + Tap(u, v + ty) * 2 + Tap(u + tx, v + ty)) * (1f / 16);
+            }
+            public void Set(int x, int y, Vector3 c) { int i = (y * W + x) * 3; C[i] = c.x; C[i + 1] = c.y; C[i + 2] = c.z; }
+            public static Image Make(int w, int h, Func<float, float, Vector3> pixel)
+            {
+                var img = new Image(w, h);
+                Parallel.For(0, h, y => { for (int x = 0; x < w; x++) img.Set(x, y, pixel((x + 0.5f) / w, (y + 0.5f) / h)); });
+                return img;
             }
         }
+
+        private void ScreenPass(float[] sourcePixels)
+        {
+            var source = new Image(Width, Height, sourcePixels);
+            var occlusion = Occlusion(Math.Max(1, Width / 2), Math.Max(1, Height / 2));
+            // Bloom: prefiltered half resolution, then down, then up while adding each level.
+            var down = new List<Image>(); int w = Math.Max(1, Width / 2), h = Math.Max(1, Height / 2);
+            for (int level = 0; level < ScreenLook.BloomLevels && w >= 2 && h >= 2; level++, w /= 2, h /= 2)
+            {
+                var from = level == 0 ? source : down[level - 1];
+                down.Add(Image.Make(w, h, (u, v) =>
+                {
+                    var c = from.Box4(u, v);
+                    if (level > 0) return c;
+                    c = new Vector3(MathF.Min(c.x, 64), MathF.Min(c.y, 64), MathF.Min(c.z, 64));
+                    return c * ScreenLook.BloomShare(MathF.Max(c.x, MathF.Max(c.y, c.z)));
+                }));
+            }
+            var bloom = down[down.Count - 1];
+            for (int level = down.Count - 2; level >= 0; level--)
+            {
+                var small = bloom; var baseLevel = down[level];
+                bloom = Image.Make(baseLevel.W, baseLevel.H, (u, v) => baseLevel.Tap(u, v) + small.Tent9(u, v));
+            }
+            float aspect = Width / (float)Height;
+            Parallel.For(0, Height, y =>
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    float u = (x + 0.5f) / Width, v = (y + 0.5f) / Height; int i = (y * Width + x) * 3;
+                    float ao = occlusion.Tap(u, v).x;
+                    var b = bloom.Tent9(u, v) * ScreenLook.BloomIntensity;
+                    float r = source.C[i] * ao + b.x, g = source.C[i + 1] * ao + b.y, bl = source.C[i + 2] * ao + b.z;
+                    ScreenLook.Grade(ref r, ref g, ref bl);
+                    float vignette = ScreenLook.VignetteAt(u, v, aspect);
+                    Rgb[i] = ScreenLook.LinearToSrgb(r * vignette); Rgb[i + 1] = ScreenLook.LinearToSrgb(g * vignette); Rgb[i + 2] = ScreenLook.LinearToSrgb(bl * vignette);
+                }
+            });
+        }
+
+        // Half-resolution occlusion like fragOcclusion: hemisphere around the face normal, scene depth against sample depth,
+        // weighted down across wide depth gaps, faded with distance; then the separable depth-aware blur of fragBlur.
+        private Image Occlusion(int ow, int oh)
+        {
+            var ao = new float[ow * oh]; var depthOf = new float[ow * oh];
+            float halfW = W * 0.5f, halfH = H * 0.5f, far = cam.Far;
+            float SceneDepth(float sx, float sy)
+            {
+                int x = Math.Clamp((int)sx, 0, W - 1), y = Math.Clamp((int)sy, 0, H - 1); float iz = Depth[y * W + x];
+                return iz > 0 ? 1 / iz : far;
+            }
+            Parallel.For(0, oh, hy =>
+            {
+                for (int hx = 0; hx < ow; hx++)
+                {
+                    int o = hy * ow + hx;
+                    float sx = (hx + 0.5f) / ow * W, sy = (hy + 0.5f) / oh * H;
+                    int si = Math.Clamp((int)sy, 0, H - 1) * W + Math.Clamp((int)sx, 0, W - 1);
+                    if (Id[si] < 0) { ao[o] = 1; depthOf[o] = 1; continue; }
+                    float depth = 1 / Depth[si];
+                    var p = new Vector3((sx - halfW) / fx * depth, -(sy - halfH) / fy * depth, depth);
+                    int t = Id[si];
+                    var face = Vector3.Cross(soup.Pos(soup.Tri[t * 3 + 1]) - soup.Pos(soup.Tri[t * 3]), soup.Pos(soup.Tri[t * 3 + 2]) - soup.Pos(soup.Tri[t * 3])).normalized;
+                    var n = new Vector3(Vector3.Dot(face, cam.Right), Vector3.Dot(face, cam.Up), Vector3.Dot(face, cam.Forward));
+                    if (Vector3.Dot(n, p) > 0) n = -n;
+                    float noise = Frac(52.9829189f * Frac(hx * 0.06711056f + hy * 0.00583715f));
+                    float radius = ScreenLook.OcclusionRadius, occluded = 0; int count = ScreenLook.OcclusionSamples;
+                    for (int k = 0; k < count; k++)
+                    {
+                        float z = 1 - (k + 0.5f) * (2f / count), r = MathF.Sqrt(Math.Clamp(1 - z * z, 0, 1));
+                        float phi = k * 2.39996323f + noise * 6.28318531f;
+                        var d = new Vector3(r * MathF.Cos(phi), r * MathF.Sin(phi), z);
+                        if (Vector3.Dot(d, n) < 0) d = -d;
+                        float scale = Frac((k + 0.5f) / count + noise * 0.618034f); scale = 0.15f + 0.85f * scale * scale;
+                        var s = p + d * (radius * scale);
+                        if (s.z <= cam.Near) continue;
+                        float scene = SceneDepth(halfW + s.x / s.z * fx, halfH - s.y / s.z * fy);
+                        float range = Math.Clamp(radius / MathF.Max(MathF.Abs(depth - scene), 1e-4f), 0, 1);
+                        if (scene < s.z - 0.03f - depth * 0.002f) occluded += range;
+                    }
+                    float fade = Math.Clamp((depth - ScreenLook.OcclusionFadeStart) / (ScreenLook.OcclusionFadeEnd - ScreenLook.OcclusionFadeStart), 0, 1);
+                    ao[o] = 1 - ScreenLook.OcclusionStrength * (1 - fade) * occluded / count; depthOf[o] = depth / far;
+                }
+            });
+            float[] Blur(float[] input, int stepX, int stepY)
+            {
+                var output = new float[input.Length];
+                Parallel.For(0, oh, y =>
+                {
+                    for (int x = 0; x < ow; x++)
+                    {
+                        int c = y * ow + x; float sum = input[c], weights = 1, centre = depthOf[c], tolerance = centre * 0.05f + 1e-4f;
+                        for (int k = 1; k <= 3; k++)
+                            foreach (int sign in new[] { 1, -1 })
+                            {
+                                int nx = Math.Clamp(x + sign * k * stepX, 0, ow - 1), ny = Math.Clamp(y + sign * k * stepY, 0, oh - 1), j = ny * ow + nx;
+                                float wgt = MathF.Exp(-k * k / 4.5f) * Math.Clamp(1 - MathF.Abs(depthOf[j] - centre) / tolerance, 0, 1);
+                                sum += input[j] * wgt; weights += wgt;
+                            }
+                        output[c] = sum / weights;
+                    }
+                });
+                return output;
+            }
+            ao = Blur(Blur(ao, 1, 0), 0, 1);
+            var image = new Image(ow, oh);
+            for (int i = 0; i < ao.Length; i++) { image.C[i * 3] = ao[i]; image.C[i * 3 + 1] = ao[i]; image.C[i * 3 + 2] = ao[i]; }
+            return image;
+        }
+        private static float Frac(float x) => x - MathF.Floor(x);
 
         // Share of samples that hit geometry, and the 5th–95th percentile luminance range of the final image.
         public float Coverage() => Id.Count(i => i >= 0) / (float)Id.Length;

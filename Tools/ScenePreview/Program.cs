@@ -45,6 +45,9 @@ namespace Broker.Tools.ScenePreview
         public static int Main(string[] args)
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture; CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            // Same colour space as the Unity project (Player settings), so lighting is tuned for what the editor shows.
+            ColorPipe.Linear = ProjectIsLinear();
+            QualitySettings.activeColorSpace = ColorPipe.Linear ? ColorSpace.Linear : ColorSpace.Gamma;
             bool check = args.Contains("--check"), noHud = args.Contains("--no-hud"), fast = args.Contains("--fast");
             // --at=SECONDS re-times the selected shots on the boulevard clock (to pick a moment for a new shot).
             var at = args.FirstOrDefault(a => a.StartsWith("--at="));
@@ -191,6 +194,16 @@ namespace Broker.Tools.ScenePreview
             }
         }
         private static Color Hex(string value) { ColorUtility.TryParseHtmlString(value, out var c); return c; }
+        private static bool ProjectIsLinear()
+        {
+            for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir != null; dir = dir.Parent)
+            {
+                string path = Path.Combine(dir.FullName, "ProjectSettings", "ProjectSettings.asset");
+                if (File.Exists(path)) return File.ReadAllText(path).Contains("m_ActiveColorSpace: 1");
+            }
+            Console.WriteLine("warning: ProjectSettings not found, assuming linear colour space");
+            return true;
+        }
 
         private static void Run(string file, List<string> args)
         {
