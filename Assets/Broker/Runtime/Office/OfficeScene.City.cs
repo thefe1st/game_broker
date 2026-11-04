@@ -15,18 +15,27 @@ namespace Broker.Runtime.Office
         private float previousFogStart, previousFogEnd;
         public bool IsInCity { get; private set; }
         public bool WorldMotionEnabled { get; set; } = true;
-        public float MapX => Player == null ? CityBlockPlan.SpawnX : Player.transform.localPosition.x;
-        public float MapZ => Player == null ? CityBlockPlan.SpawnZ : Player.transform.localPosition.z;
+        // Where the player is on the plan: the car while driving, the walker otherwise.
+        public float MapX => Driving ? Life.Car.X : Player == null ? CityBlockPlan.SpawnX : Player.transform.localPosition.x;
+        public float MapZ => Driving ? Life.Car.Z : Player == null ? CityBlockPlan.SpawnZ : Player.transform.localPosition.z;
         // Signal, cars and passers-by of the boulevard. Decoration: nothing here touches the day, money or clients.
         public CityLife Life { get; private set; } = new CityLife();
-        // Signal state for the HUD while the player is near the crossing; null elsewhere and in the office.
-        public string CrossingHint => IsInCity && CityCrosswalk.Near(MapX, MapZ) ? Life.Hint : null;
+        // Signal state for the HUD while the player walks near the crossing; null elsewhere, in the car and in the office.
+        public string CrossingHint => IsInCity && !Driving && CityCrosswalk.Near(MapX, MapZ) ? Life.Hint : null;
         // The button on the signal post: true when the press shortens the cars' green.
         public bool RequestCrossing() { bool changed = Life.Signal.RequestWalk(); ShowCity(0); return changed; }
-        // A fresh boulevard clock: the cars' green just started, cars and passers-by at their starting places.
-        public void ResetCity() { Life = new CityLife(); ShowCity(1); }
+        // A fresh boulevard clock: the cars' green just started, cars and passers-by at their starting places, the test
+        // car parked (a driver steps out beside it).
+        public void ResetCity()
+        {
+            bool seated = Player != null && Player.Seated;
+            Life = new CityLife(); chaseSet = false;
+            if (seated) Player.Unseat(transform.TransformPoint(ExitPoint()), transform.rotation);
+            ShowCity(1);
+        }
         public void AdvanceCity(double seconds)
         {
+            Life.Input = Driving && Player != null && Player.Seated ? Player.Drive : DriveInput.None;
             Life.Advance(seconds, IsInCity, MapX, MapZ);
             ShowCity((float)seconds);
         }
@@ -70,8 +79,9 @@ namespace Broker.Runtime.Office
                 Blocker("North / square side", new Vector3(x, ground + 0.75f, 49.65f), new Vector3(0.3f, 1.5f, 10.3f));
             foreach (float x in new[] { -14.3f, 14.3f })
                 Blocker("North / square back", new Vector3(x, ground + 0.75f, 54.95f), new Vector3(3.4f, 1.5f, 0.3f));
-            // The office reads as the top floor of a building instead of floating above the plaza.
-            PlaceVoxel("office block", () => VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false),
+            // The office reads as the top floor of a building instead of floating above the plaza; its back has windows
+            // too, for the south street of the ring.
+            PlaceVoxel("office block", () => VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true),
                 "City / office building", transform, new Vector3(0, ground, -2.35f), 180);
             var plan = new CityBlockPlan();
             int number = 0;
@@ -84,6 +94,8 @@ namespace Broker.Runtime.Office
             }
             BuildDistrict(facades);
             BuildBoulevard(asphalt, concrete, grass, metal);
+            BuildRoads(asphalt, concrete, pavement, grass, metal);
+            BuildPlayerCar();
             BuildExchange();
             BuildCafe();
             BuildScenery(concrete, grass);
@@ -137,7 +149,7 @@ namespace Broker.Runtime.Office
         }
         public void VisitCity(bool outside)
         {
-            IsInCity = outside;
+            IsInCity = outside; ParkPlayerCar();
             Player.ResetAt(transform.TransformPoint(outside
                 ? new Vector3(CityBlockPlan.SpawnX, CityBlockPlan.SpawnY, CityBlockPlan.SpawnZ)
                 : new Vector3(4.5f, 0.05f, -0.2f)));
@@ -146,10 +158,11 @@ namespace Broker.Runtime.Office
         {
             if (WorldMotionEnabled) AdvanceCity(Mathf.Min(Time.unscaledDeltaTime, 0.1f));
         }
-        // Moves the cars and the passers-by to the state of CityLife and lights the signals; dt only smooths turning.
+        // Moves the cars, the passers-by and the test car to the state of CityLife and lights the signals; dt only smooths
+        // turning and the chase camera.
         private void ShowCity(float dt)
         {
-            ShowTraffic(); ShowSignals(); ShowCrowd(dt);
+            ShowTraffic(); ShowSignals(); ShowCrowd(dt); ShowPlayerCar(dt);
         }
         private void RestoreCityEnvironment()
         {

@@ -24,7 +24,8 @@ namespace Broker.Core
 
     // Visual boulevard traffic: 12 cars (CarModels.Sedan, a fifth of them taxis) in four lanes, right-hand, ring roads that wrap inside the end tunnels.
     // Gipps-style safe speed behind the leader and before the stop line, an amber rule for cars too close to stop
-    // and hard limits so a car never overlaps its leader or passes the line on red. Not a collision physics model:
+    // and hard limits so a car never overlaps its leader or passes the line on red. The player's car is one more leader
+    // for every lane it reaches into: the cars brake for it and never drive into it. Not a collision physics model:
     // cars never touch people, the signal keeps them apart.
     public sealed class CityTraffic
     {
@@ -35,6 +36,8 @@ namespace Broker.Core
         public const float Accel = 2, ComfortBrake = 3, MaxBrake = 6, MinCruise = 6.4f, MaxCruise = 7.5f, StopMargin = 0.2f;
         // Deceleration that lights the brake lamps, and the speed under which a car counts as standing on the brake.
         public const float BrakeLampDecel = 0.8f, StandingSpeed = 0.05f;
+        // Half-width of the band of a lane: a car body reaching into it holds that lane's cars.
+        public const float LaneBand = 1.2f;
         private const double Step = 0.05;
         private static readonly float[] laneZ = { 30.5f, 33.5f, 36.5f, 39.5f };
         private readonly CityCar[] cars;
@@ -74,14 +77,23 @@ namespace Broker.Core
                 return false;
             }
         }
-        public void Advance(double seconds, CrosswalkSignal signal)
+        public void Advance(double seconds, CrosswalkSignal signal) => Advance(seconds, signal, null, 0);
+        // The same with the player's car on the boulevard: its footprint and its velocity along +X.
+        public void Advance(double seconds, CrosswalkSignal signal, OrientedRect? obstacle, float obstacleVelocityX)
         {
             if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
+            if (float.IsNaN(obstacleVelocityX) || float.IsInfinity(obstacleVelocityX)) obstacleVelocityX = 0;
             while (seconds > 1e-9)
             {
                 double dt = Math.Min(Step, seconds); seconds -= dt;
-                StepAll((float)dt, signal);
+                StepAll((float)dt, signal, obstacle, obstacleVelocityX);
             }
+        }
+        // A footprint that reaches into the band of the lane.
+        public static bool InLane(OrientedRect footprint, int lane)
+        {
+            var bounds = footprint.Bounds; float z = LaneZ(lane);
+            return bounds.MaxZ > z - LaneBand && bounds.MinZ < z + LaneBand && Math.Abs(bounds.CenterX) < RoadHalf;
         }
         // Distance from the nose to the stopping point before the next stop line; negative once the nose is past it.
         private static float LineGap(CityCar car)
@@ -90,7 +102,7 @@ namespace Broker.Core
             if (d < -(CrossEndS - StopS + CarLength + 2)) d += RingLength;
             return d;
         }
-        private void StepAll(float dt, CrosswalkSignal signal)
+        private void StepAll(float dt, CrosswalkSignal signal, OrientedRect? obstacle, float obstacleVelocityX)
         {
             bool green = signal == null || signal.CarsGreen, amber = signal != null && signal.CarsAmber;
             bool walkPhases = signal != null && (signal.Phase >= CrosswalkPhase.Walk);
@@ -111,6 +123,21 @@ namespace Broker.Core
                     float gap = Mod(oldS[leader] - oldS[i]) - CarLength;
                     room = gap - BumperGap;
                     target = Math.Min(target, (float)Math.Sqrt(Math.Max(0, 2 * ComfortBrake * (gap - MinGap) + oldV[leader] * oldV[leader])));
+                }
+                if (obstacle.HasValue && InLane(obstacle.Value, car.Lane))
+                {
+                    // The player's car as a leader: the gap from this nose to its near end along the lane, 0 while they
+                    // overlap along the lane; a car it is behind ignores it.
+                    var bounds = obstacle.Value.Bounds;
+                    bool east = Eastbound(car.Lane);
+                    float near = east ? bounds.MinX + RoadHalf : RoadHalf - bounds.MaxX, length = bounds.Width;
+                    float ahead = Wrapped(near - oldS[i]);
+                    if (ahead + length > -CarLength / 2)
+                    {
+                        float gap = Math.Max(0, ahead - CarLength / 2), speed = Math.Max(0, east ? obstacleVelocityX : -obstacleVelocityX);
+                        room = Math.Min(room, gap - BumperGap);
+                        target = Math.Min(target, (float)Math.Sqrt(Math.Max(0, 2 * ComfortBrake * (gap - MinGap) + speed * speed)));
+                    }
                 }
                 if (mustStop) target = Math.Min(target, (float)Math.Sqrt(2 * ComfortBrake * Math.Max(0, lineGap)));
                 float v = oldV[i];
@@ -137,5 +164,7 @@ namespace Broker.Core
             return best;
         }
         private static float Mod(float s) { s %= RingLength; return s < 0 ? s + RingLength : s; }
+        // A distance along the ring folded into −RoadHalf…RoadHalf.
+        private static float Wrapped(float d) { d = Mod(d); return d >= RoadHalf ? d - RingLength : d; }
     }
 }

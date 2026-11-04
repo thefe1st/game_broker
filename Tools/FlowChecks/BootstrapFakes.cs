@@ -85,7 +85,7 @@ namespace Broker.Runtime.Office
             Button = new UnityEngine.GUIStyle(), Primary = new UnityEngine.GUIStyle(), PanelStyle = new UnityEngine.GUIStyle(),
             HudHeading = new UnityEngine.GUIStyle(), HudText = new UnityEngine.GUIStyle(), HudTag = new UnityEngine.GUIStyle(),
             HudClock = new UnityEngine.GUIStyle(), HudRight = new UnityEngine.GUIStyle(), HudCenter = new UnityEngine.GUIStyle(),
-            HudHint = new UnityEngine.GUIStyle(), HudKey = new UnityEngine.GUIStyle();
+            HudHint = new UnityEngine.GUIStyle(), HudKey = new UnityEngine.GUIStyle(), HudSpeed = new UnityEngine.GUIStyle();
         public static UnityEngine.Color Hex(string s) => new UnityEngine.Color();
         public void Dispose() { }
     }
@@ -96,7 +96,7 @@ namespace Broker.Runtime.Office
     }
     public sealed class FakePlayer
     {
-        public Action<OfficeInteractable> OnInteraction; public Action OnFocusLost;
+        public Action<OfficeInteractable> OnInteraction; public Action OnFocusLost, OnLeaveRequest;
         public bool ControlEnabled, Captured; public OfficeInteractable Target;
         public void SetControl(bool value) { ControlEnabled = value; if (!value) Captured = false; }
         public void Capture() { Captured = ControlEnabled; }
@@ -107,12 +107,19 @@ namespace Broker.Runtime.Office
         public bool IsInCity, WorldMotionEnabled;
         public float MapX = CityBlockPlan.SpawnX, MapZ = CityBlockPlan.SpawnZ;
         public CareerMode Mode;
-        public void VisitCity(bool outside) { IsInCity = outside; }
+        public void VisitCity(bool outside) { IsInCity = outside; Driving = false; }
         public void Present(bool atDesk, float scale, UnityEngine.Vector2 offset) { }
         public void Refresh(BrokerDay day) { }
         public bool FounderAssistant { get; private set; }
         public void ConfigureCareerMode(CareerMode mode, bool founderAssistant = false) { Mode = mode; FounderAssistant = founderAssistant; }
-        public void ResetPlayer() { IsInCity = false; }
+        public void ResetPlayer() { IsInCity = false; Driving = false; }
+        // The test car: in the city only; out only where the test says it is parked.
+        public bool Driving, Parked;
+        public bool CanLeaveCar => Driving && Parked;
+        public float CarSpeedKmh;
+        public string CarGear = "1";
+        public bool EnterCar() { if (!IsInCity || Driving) return false; Driving = true; return true; }
+        public bool TryLeaveCar() { if (!CanLeaveCar) return false; Driving = false; return true; }
         public string CrossingHint;
         public int CrossingRequests;
         public bool RequestCrossing() { CrossingRequests++; return true; }

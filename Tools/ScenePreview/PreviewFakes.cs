@@ -123,9 +123,21 @@ namespace Broker.Runtime.Office
             Eye.clearFlags = CameraClearFlags.SolidColor; Eye.backgroundColor = new Color(0.09f, 0.14f, 0.22f);
         }
         public void SetControl(bool enabled) { }
+        // The driver's seat as in the game: the shot sets the keys and the camera orbit.
+        public bool Seated { get; private set; }
+        public Broker.Core.DriveInput Drive { get; set; }
+        public float OrbitYaw { get; set; }
+        public float OrbitPitch { get; set; }
+        public void Seat() { Seated = true; Drive = Broker.Core.DriveInput.None; OrbitYaw = OrbitPitch = 0; }
+        public void Unseat(Vector3 position, Quaternion facing)
+        {
+            Seated = false; Drive = Broker.Core.DriveInput.None; OrbitYaw = OrbitPitch = 0;
+            transform.SetPositionAndRotation(position, facing);
+            Eye.transform.localPosition = new Vector3(0, 1.65f, 0); Eye.transform.localRotation = Quaternion.identity;
+        }
         public void ResetAt(Vector3 position)
         {
-            transform.SetPositionAndRotation(position, Quaternion.identity); Eye.transform.localRotation = Quaternion.identity;
+            Unseat(position, Quaternion.identity);
         }
     }
 }

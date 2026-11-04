@@ -530,6 +530,8 @@ namespace Broker.Core
             for (int x = 0; x < w; x++) for (int z = 0; z < d; z++)
                 if (x == 0 || x == w - 1 || z == 0 || z == d - 1) m.Set(x, h, z, VoxelPalette.Trim);
             m.Box(3, h, 4, 4, 2, 4, VoxelPalette.MetalDark);
+            // The back faces the ring road like the neighbours' backs; the room's inner wall stays behind its windows.
+            BackFacade(m, 0, 1, 5, VoxelPalette.Plaster, VoxelPalette.Trim);
             // Red and cream awning over the door and the window, stepping out 1.5 m.
             for (int step = 0; step < 3; step++)
                 for (int x = 1; x < w - 1; x++) for (int dz = 0; dz < 2; dz++)

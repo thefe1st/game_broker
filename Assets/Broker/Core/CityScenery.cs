@@ -90,7 +90,7 @@ namespace Broker.Core
             // Western square: a loose ring of trees around the benches and planted beds.
             Add(SceneryKind.RoundTree, -42.2f, 10.6f, 0, true); Add(SceneryKind.Conifer, -36f, 10.4f, 0, true);
             Add(SceneryKind.RoundTree, -26.5f, 10.8f, 90, true); Add(SceneryKind.Conifer, -42.4f, 26.4f, 0, true);
-            Add(SceneryKind.RoundTree, -31f, 26.6f, 180, true); Add(SceneryKind.Conifer, -21.5f, 26.4f, 0, true);
+            Add(SceneryKind.RoundTree, -35.5f, 26.6f, 180, true); Add(SceneryKind.Conifer, -15.9f, 26.2f, 0, true);
             Add(SceneryKind.FlowerBed, -40f, 19f, 0, true); Add(SceneryKind.FlowerBed, -23f, 19f, 0, true);
             foreach (float x in new[] { -37f, -25f, 27f, 37f }) Add(SceneryKind.Bench, x, 23f, 0, true);
             foreach (float x in new[] { -19f, 41f }) foreach (float z in new[] { 10f, 23f }) Add(SceneryKind.StreetLamp, x, z, -90, true);

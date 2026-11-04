@@ -186,7 +186,7 @@ namespace Broker.Runtime.Office
             if (atDesk) overview.rect = new Rect(0, 0, 1, 1);
             else Player.Eye.rect = new Rect(0, 0, 1, 1);
         }
-        public void ResetPlayer() { IsInCity = false; Player.ResetAt(transform.TransformPoint(new Vector3(0, 0.05f, -3.4f))); }
+        public void ResetPlayer() { IsInCity = false; ParkPlayerCar(); Player.ResetAt(transform.TransformPoint(new Vector3(0, 0.05f, -3.4f))); }
         public void Refresh(BrokerDay day)
         {
             if (day == null) return;

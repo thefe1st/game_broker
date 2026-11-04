@@ -44,6 +44,7 @@ namespace Broker.Runtime
             office = new GameObject("First-person broker office").AddComponent<OfficeScene>();
             office.Player.OnInteraction = OnWorldInteraction;
             office.Player.OnFocusLost = SuspendForApplication;
+            office.Player.OnLeaveRequest = OnLeaveCarRequest;
             voice = gameObject.AddComponent<VoiceSession>();
             voice.OnTranscript = text => { if (!day.DayEnded && day.Call == CallStatus.Active && !busy) message = text; };
             InitializeCareer();

@@ -272,6 +272,10 @@ namespace UnityEngine
         public static float Lerp(float a, float b, float t) => a + (b - a) * Clamp01(t);
         public static int CeilToInt(float f) => (int)MathF.Ceiling(f); public static int FloorToInt(float f) => (int)MathF.Floor(f);
         public static int RoundToInt(float f) => (int)MathF.Round(f);
+        public static float Atan2(float y, float x) => MathF.Atan2(y, x); public static float Exp(float f) => MathF.Exp(f);
+        public static float Repeat(float t, float length) => Clamp(t - MathF.Floor(t / length) * length, 0, length);
+        public static float DeltaAngle(float a, float b) { float d = Repeat(b - a, 360); return d > 180 ? d - 360 : d; }
+        public static float LerpAngle(float a, float b, float t) => a + DeltaAngle(a, b) * Clamp01(t);
     }
     public enum PrimitiveType { Sphere, Capsule, Cylinder, Cube, Plane, Quad }
     public enum TextureFormat { Alpha8 = 1, RGB24 = 3, RGBA32 = 4, ARGB32 = 5 }

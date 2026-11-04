@@ -7,9 +7,9 @@ namespace Broker.Tests
 {
     public sealed class CityDistrictTests
     {
-        [Test] public void EightDestinationsAreUniqueWalkableAndImmutable()
+        [Test] public void NineDestinationsAreUniqueWalkableAndImmutable()
         {
-            Assert.That(CityDistrictPlan.Destinations.Count, Is.EqualTo(8)); var ids = new HashSet<string>();
+            Assert.That(CityDistrictPlan.Destinations.Count, Is.EqualTo(9)); var ids = new HashSet<string>();
             foreach (var d in CityDistrictPlan.Destinations) { Assert.That(ids.Add(d.Id), Is.True); Assert.That(CityDistrictPlan.CanWalk(d.X, d.Z), Is.True); }
             Assert.That(CityDistrictPlan.Find("unknown"), Is.Null);
             Assert.Throws<NotSupportedException>(() => ((IList<CityDestination>)CityDistrictPlan.Destinations)[0] = null);
@@ -28,6 +28,8 @@ namespace Broker.Tests
         }
         [TestCase(10, 35)] [TestCase(3, 35)] [TestCase(0, 0)] [TestCase(-30, -6)] [TestCase(30, -6)] [TestCase(45, 16)] [TestCase(0, -13)]
         [TestCase(12, 56)] [TestCase(24, -9.8f)] [TestCase(5, 60.2f)] [TestCase(-20, 50)] [TestCase(0, 76.5f)]
+        [TestCase(-24.75f, 27.3f)] [TestCase(-29.9f, 26.2f)] [TestCase(-19.6f, 27.9f)] [TestCase(-31.6f, 27.9f)] [TestCase(-17.8f, 27.9f)]
+        [TestCase(-50, 0)] [TestCase(0, -20)]
         public void RoadOfficeVoidFacadesAndWallsAreNotWalkable(float x, float z)
         { Assert.That(CityDistrictPlan.CanWalk(x, z), Is.False); }
         [TestCase(0, 35)] [TestCase(-1.9f, 29)] [TestCase(0, 43)] [TestCase(0, 55.5f)] [TestCase(0, 58)] [TestCase(24, -5)] [TestCase(22.7f, -2.2f)]

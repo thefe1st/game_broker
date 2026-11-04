@@ -8,7 +8,8 @@ namespace Broker.Runtime.Office
     // Low-poly cars from CarModels on the Broker/Voxel shader (Standard without it): one body submesh per CarPart — paint
     // tinted per car over the grain texture, details and lamps on the voxel palette, dark glossy glass and red brake lamps
     // that brighten while the car brakes — and four wheels that roll with the distance travelled. Meshes are built once
-    // per style, paint materials once per colour; the cars have no colliders (the kerb barriers keep the player off the road).
+    // per style, paint materials once per colour; the boulevard cars have no colliders (the kerb barriers keep the player off
+    // the road), the player's car one box for the aim (OfficeScene.Driving).
     public sealed partial class OfficeScene
     {
         private sealed class CarRig
@@ -116,12 +117,17 @@ namespace Broker.Runtime.Office
             return rig;
         }
         // Wheels turn by the distance rolled (front +X: a forward roll is a negative turn about +Z); the right wheels face
-        // out on −Z, so they are the same wheel turned round the vertical. Brake lamps swap one material array.
-        private static void PoseCar(CarRig rig, float rolled, bool braking)
+        // out on −Z, so they are the same wheel turned round the vertical. The front pair (wheels 0 and 1) steer by `steer`
+        // degrees of Unity yaw. Brake lamps swap one material array.
+        private static void PoseCar(CarRig rig, float rolled, bool braking, float steer = 0)
         {
             float turn = rolled / CarModels.Sedan.WheelRadius * Mathf.Rad2Deg % 360f;
+            var steering = Quaternion.Euler(0, steer, 0);
             for (int w = 0; w < rig.Wheels.Length; w++)
-                rig.Wheels[w].localRotation = CarShape.LeftWheel(w) ? Quaternion.Euler(0, 0, -turn) : Quaternion.Euler(0, 180, turn);
+            {
+                var spin = CarShape.LeftWheel(w) ? Quaternion.Euler(0, 0, -turn) : Quaternion.Euler(0, 180, turn);
+                rig.Wheels[w].localRotation = w < 2 ? steering * spin : spin;
+            }
             int brake = braking ? 1 : 0;
             if (brake == rig.ShownBrake) return;
             rig.ShownBrake = brake; rig.Body.sharedMaterials = braking ? rig.Braking : rig.Cruising;

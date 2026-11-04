@@ -19,10 +19,10 @@ namespace Broker.Runtime.Office
                     if (x > 0 && block == 0) continue;
                     float buildingX = x - 6 + block * 6;
                     Blocker("District / street building", new Vector3(buildingX, ground + 4.5f, -6), new Vector3(6, 9, 8));
-                    // Narrow closed buildings; fronts face the walkable street (+Z). No second café look-alike.
+                    // Narrow closed buildings; fronts face the walkable street (+Z), windowed backs the ring road. No second café look-alike.
                     ShopStyle style = block == 1 ? ShopStyle.Office : ShopStyle.BrickShop;
                     int seed = block + (x < 0 ? 0 : 3);
-                    PlaceVoxel("shop/" + seed, () => VoxelProps.Shop(style, seed), "District / voxel street building",
+                    PlaceVoxel("shop/" + seed, () => VoxelProps.Shop(style, seed, true), "District / voxel street building",
                         transform, new Vector3(buildingX, ground, -6), 180);
                 }
                 var sign = Text("District / address", x < 0 ? "ЗАПАДНАЯ УЛИЦА / 4" : "ОФИСНАЯ УЛИЦА / 8", new Vector3(x, ground + 3.1f, -1.9f), 48, 0.035f, Color.white);

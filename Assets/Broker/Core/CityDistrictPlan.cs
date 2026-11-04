@@ -31,7 +31,8 @@ namespace Broker.Core
         }
     }
     // Walkable plan of both quarters: the old district south of the boulevard, the signalised crossing and the
-    // Exchange quarter to the north. No fast travel, shops or rewards. Local coordinates match CityBlockPlan.
+    // Exchange quarter to the north. The lay-by of the test car (CityRoads) is cut out of the square. No fast travel,
+    // shops or rewards. Local coordinates match CityBlockPlan.
     public static class CityDistrictPlan
     {
         public const float MinX = -44, MaxX = 44, MinZ = -12, MaxZ = 76;
@@ -39,7 +40,8 @@ namespace Broker.Core
         public const float SouthKerbZ = 28.5f, NorthKerbZ = 41.3f, RoadFloorY = 0.03f, NorthFloorY = 0.12f, PodiumFloorY = 1.1f;
         public const float StepsMinZ = 54.8f, PodiumMinZ = 56.8f, PodiumMaxZ = 75.2f, StepsHalfWidth = 9f, PodiumHalfWidth = 12.6f;
         private static readonly CityRect[] areas = {
-            new CityRect(-44, 8, 44, 28),                 // plaza with the western square and the eastern street
+            new CityRect(-44, 8, 44, 25.8f),              // plaza with the western square and the eastern street
+            new CityRect(-44, 25.8f, -32.9f, 28), new CityRect(-16.6f, 25.8f, 44, 28),   // the kerb side, clear of the lay-by and its tapers
             new CityRect(-44, -12, -17, 8), new CityRect(17, -12, 44, 8),   // side streets in front of the facades
             new CityRect(-2, 28, 2, 41.6f),               // zebra crossing between the kerb gates
             new CityRect(-44, 41.6f, 44, 44.5f),          // north pavement along the tower fronts
@@ -65,6 +67,8 @@ namespace Broker.Core
             new CityDestination("crossing", "Переход через бульвар", "Светофор с кнопкой. Машины ждут у стоп-линий, пока на зебре люди.", 0, 26.5f),
             new CityDestination("northsquare", "Биржевая площадь", "Ростральные колонны, газоны и киоск на северной стороне бульвара.", 0, 49),
             new CityDestination("exchange", "Зал Биржи", "Табло котировок дня. Только просмотр: бумагу клиенту выбирают за рабочим столом.", 0, 68),
+            new CityDestination("parking", "Парковка у сквера", "Тестовый седан в кармане у бульвара: E у машины — сесть за руль. Выйти можно только здесь. Езда не тратит деньги и не даёт бонусов.",
+                CityRoads.ParkX, CityRoads.ExitZ - 0.35f),
         };
         public static ReadOnlyCollection<CityDestination> Destinations { get; } = Array.AsReadOnly(destinations);
         public static ReadOnlyCollection<CityRect> Areas { get; } = Array.AsReadOnly(areas);

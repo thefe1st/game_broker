@@ -1,6 +1,6 @@
 namespace Broker.Core
 {
-    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit, Street, ReturnOffice, CityContact, CityPickup, Supervisor, CityMap, CityCompanies, CityExchange, CityCafe, CrosswalkButton }
+    public enum OfficeStation { Desk, Employee, Coffee, Upgrade, Exit, Street, ReturnOffice, CityContact, CityPickup, Supervisor, CityMap, CityCompanies, CityExchange, CityCafe, CrosswalkButton, Car }
     public enum OfficeView { Explore, Desk, Employee, Coffee, Upgrade, Exit, Pause, CityContact, CityPickup, Supervisor, CityMap, CityCompanies, CityExchange, CityCafe }
 
     // UI routing only. Never grants money, ends calls or completes staff tasks.
@@ -28,7 +28,7 @@ namespace Broker.Core
                 case OfficeStation.CityCompanies: View = OfficeView.CityCompanies; break;
                 case OfficeStation.CityExchange: View = OfficeView.CityExchange; break;
                 case OfficeStation.CityCafe: View = OfficeView.CityCafe; break;
-                // The crosswalk button acts in the world and opens no panel.
+                // The crosswalk button and the car act in the world and open no panel.
                 default: return false;
             }
             return true;

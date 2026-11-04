@@ -13,10 +13,14 @@ namespace Broker.Runtime
         {
             if (!ApplicationActive || selectingMode || intro || busy || voice.Working || voice.Recording || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring) return;
             if (IsStreetStation(target.Station) && !office.IsInCity) return;
+            // Behind the wheel nothing else is in reach (the seated walker does not aim).
+            if (office.Driving) return;
             if (IsFounderMode && ((target.Station == OfficeStation.Employee && (!day.HasFounderAssistant || target.EmployeeIndex != 0))
                 || target.Station == OfficeStation.Supervisor || target.Station == OfficeStation.Upgrade || target.Station == OfficeStation.Coffee)) return;
             // The crossing button only asks the signal for the pedestrians' green: no panel, the clock keeps running.
             if (target.Station == OfficeStation.CrosswalkButton) { office.RequestCrossing(); return; }
+            // The test car: behind the wheel in the world, the clock keeps running; a drive costs and earns nothing.
+            if (target.Station == OfficeStation.Car) { if (office.EnterCar()) carHintUntil = Time.realtimeSinceStartupAsDouble + 10; return; }
             if (target.Station == OfficeStation.Street || target.Station == OfficeStation.ReturnOffice)
             {
                 CancelPending(); office.VisitCity(target.Station == OfficeStation.Street); EnterWorld(); return;
@@ -30,7 +34,18 @@ namespace Broker.Runtime
             }
         }
         private static bool IsStreetStation(OfficeStation station) => station == OfficeStation.CityMap || station == OfficeStation.CityCompanies
-            || station == OfficeStation.CityExchange || station == OfficeStation.CityCafe || station == OfficeStation.CrosswalkButton;
+            || station == OfficeStation.CityExchange || station == OfficeStation.CityCafe || station == OfficeStation.CrosswalkButton
+            || station == OfficeStation.Car;
+        // Driving HUD: the keys for the first seconds behind the wheel, the gold notice after E away from the parking.
+        private double carHintUntil, carNoticeUntil;
+        private const string LeaveCarTitle = "Выйти из машины", ParkingOnly = "Выйти можно только на парковке";
+        private const string DrivingKeys = "W/S · газ и тормоз     A/D · руль     Пробел · ручник     Мышь · обзор     Esc · пауза";
+        // E in the driver's seat: out in the lay-by, elsewhere only the notice.
+        private void OnLeaveCarRequest()
+        {
+            if (!ApplicationActive || selectingMode || intro || UtilityOverlayOpen || day.DayEnded || day.PendingEvent != null || !navigation.IsExploring || !office.Driving) return;
+            if (!office.TryLeaveCar()) carNoticeUntil = Time.realtimeSinceStartupAsDouble + 2.5;
+        }
         private static bool IsCityInformation(OfficeView view) => view == OfficeView.CityMap || view == OfficeView.CityCompanies
             || view == OfficeView.CityExchange || view == OfficeView.CityCafe;
         private void EnterWorld()
@@ -69,9 +84,11 @@ namespace Broker.Runtime
             HudMeter(1144, 68, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Gold);
             if (!navigation.IsExploring || day.PendingEvent != null) return;
             var player = office.Player;
-            Crosshair(player.Target != null);
+            bool driving = office.Driving;
+            if (!driving) Crosshair(player.Target != null);
             if (!OfficeInput.Available) HudLabel(420, 812, 600, 32, "Ввод недоступен · открой рабочий экран", theme.HudCenter);
             else if (!player.Captured) HudLabel(420, 812, 600, 32, "Нажми в окне Game", theme.HudCenter);
+            else if (driving) DrawLeaveCarLine();
             else if (player.Target != null)
             {
                 // The key and the title as one centred line; the title and its width are cached per interactable title.
@@ -87,7 +104,9 @@ namespace Broker.Runtime
                 HudLabel(40, 104, 560, 24, IsFounderMode ? "ДАЛЬШЕ / СВОЯ КОНТОРА" : "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.HudTag);
                 HudLabel(40, 130, 560, guidanceHeight, guidance, theme.HudText);
             }
-            if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
+            if (driving) DrawSpeedometer();
+            if (driving && Time.realtimeSinceStartupAsDouble < carHintUntil) HudLabel(220, 900, 1000, 28, DrivingKeys, theme.HudHint);
+            else if (!driving && day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
                 HudLabel(320, 900, 800, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.HudHint);
             else if (officeNews.Count > 0 && Time.realtimeSinceStartupAsDouble < toastUntil)
             {
@@ -107,6 +126,27 @@ namespace Broker.Runtime
                     HudLabel(40, 410, 360, 48, crossing, theme.HudText);
                 }
             }
+        }
+        // Bottom line in the car: E to get out in the lay-by; elsewhere where to get out, in gold for a moment after E.
+        private void DrawLeaveCarLine()
+        {
+            if (office.CanLeaveCar)
+            {
+                string title = TargetTitle(LeaveCarTitle);
+                float left = 720 - (40 + 12 + targetTitleWidth) / 2;
+                KeyCap(left, 808, 40, "E"); HudLabel(left + 52, 812, targetTitleWidth + 8, 32, title, theme.HudHeading);
+                return;
+            }
+            var tint = GUI.contentColor;
+            if (Time.realtimeSinceStartupAsDouble < carNoticeUntil) GUI.contentColor = theme.Gold;
+            HudLabel(420, 812, 600, 32, ParkingOnly, theme.HudCenter);
+            GUI.contentColor = tint;
+        }
+        // Speed in big figures bottom right, the gear under it.
+        private void DrawSpeedometer()
+        {
+            HudLabel(1160, 764, 240, 52, ((int)Math.Round(office.CarSpeedKmh)).ToString(), theme.HudSpeed);
+            HudLabel(1040, 818, 360, 30, office.CarGear == "R" ? "км/ч · задний ход" : "км/ч · передача " + office.CarGear, theme.HudRight);
         }
         // The HUD title of an interactable ("Лифт в офис / …" → "Лифт в офис") and its width in the HUD font,
         // recomputed only when the title string changes, not on every OnGUI call.
@@ -231,7 +271,8 @@ namespace Broker.Runtime
             if (Button(728, 544, 312, 56, "Карта района", !busy && !voice.Working && !voice.Recording)) OpenCityMapFromPause();
             if (Button(400, 624, 640, 48, "Выбрать режим")) RequestConfirmation(ConfirmationKind.SelectMode);
             if (!saveSucceeded) { if (Button(400, 724, 640, 48, "Повторить сохранение")) SaveCareer(); }
-            else Label(400, 700, 640, 64, "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
+            else Label(400, 700, 640, 64, office.Driving ? "W/S · газ и тормоз     A/D · руль     Пробел · ручник\nE · выйти на парковке у сквера     Мышь · обзор"
+                : "WASD · ходить     Мышь · обзор\nE · действие     Shift · быстрее", theme.Small);
         }
     }
 }
