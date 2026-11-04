@@ -56,6 +56,9 @@ namespace Broker.Core
         }
         public static WallLook Wall(ShopStyle style)
             => style == ShopStyle.BrickShop ? new WallLook("brick", 0xFFFFFF) : style == ShopStyle.Cafe ? new WallLook("stucco", 0xF0D49C) : new WallLook("stucco", 0xD2D4D2);
+        // The block under the player's office keeps the sage green of the voxel office (VoxelPalette.PlasterSage): the
+        // author preferred it to the pastel palette's pink (4 November).
+        public static readonly WallLook OfficeWall = new WallLook("stucco", 0xA9BFA4);
 
         // Floors above the ground floor: as many as fit at about 3 m, stretched to fill the height below the cornice.
         public static int Floors(float height, bool shopFloor, out float floorHeight)

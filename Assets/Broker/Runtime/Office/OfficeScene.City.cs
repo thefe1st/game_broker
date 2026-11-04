@@ -82,7 +82,7 @@ namespace Broker.Runtime.Office
             // The office reads as the top floor of a building instead of floating above the plaza; its back has windows
             // too, for the south street of the ring.
             PlaceBuilding("office block", () => BuildingModels.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true),
-                BuildingModels.Wall(TowerStyle.Plaster, 5), "City / office building", new Vector3(0, ground, -2.35f), 180);
+                BuildingModels.OfficeWall, "City / office building", new Vector3(0, ground, -2.35f), 180);
             var plan = new CityBlockPlan();
             int number = 0;
             foreach (var b in plan.Buildings)

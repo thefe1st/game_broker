@@ -356,6 +356,9 @@ namespace Broker.Tests
             Assert.That(BuildingModels.Wall(ShopStyle.BrickShop).Surface, Is.EqualTo("brick"));
             Assert.That(BuildingModels.Wall(ShopStyle.Cafe), Is.Not.EqualTo(BuildingModels.Wall(ShopStyle.Office)));
             Assert.That(new WallLook("stucco", 0xF0D49C).ToString(), Is.EqualTo("stucco #F0D49C"));
+            // The office block stays the sage green of the voxel office.
+            VoxelPalette.Rgb(VoxelPalette.PlasterSage, out byte sr, out byte sg, out byte sb);
+            Assert.That(BuildingModels.OfficeWall, Is.EqualTo(new WallLook("stucco", (uint)(sr << 16 | sg << 8 | sb))), "office block");
             // About 3 m floors between the shop floor and the cornice.
             foreach (var t in Towers())
             {
