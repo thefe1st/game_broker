@@ -20,6 +20,50 @@ namespace Broker.Tests
                 Assert.That(cx * n[a] + cy * n[a + 1] + cz * n[a + 2], Is.GreaterThan(0), "triangle " + t / 3);
             }
         }
+        // Grid corner of vertex i (pivot and voxel size undone).
+        private static (float x, float y, float z) Grid(VoxelModel model, VoxelMesh mesh, int i)
+            => (mesh.Positions[i * 3] / model.VoxelSize + model.PivotX, mesh.Positions[i * 3 + 1] / model.VoxelSize + model.PivotY,
+                mesh.Positions[i * 3 + 2] / model.VoxelSize + model.PivotZ);
+        // The vertex at grid corner (x, y, z) of a face with normal (nx, ny, nz); −1 when no such face has a corner there.
+        private static int VertexAt(VoxelModel model, VoxelMesh mesh, int nx, int ny, int nz, int x, int y, int z)
+        {
+            for (int i = 0; i < mesh.VertexCount; i++)
+            {
+                if (mesh.Normals[i * 3] != nx || mesh.Normals[i * 3 + 1] != ny || mesh.Normals[i * 3 + 2] != nz) continue;
+                var g = Grid(model, mesh, i);
+                if (Math.Abs(g.x - x) < 1e-4f && Math.Abs(g.y - y) < 1e-4f && Math.Abs(g.z - z) < 1e-4f) return i;
+            }
+            return -1;
+        }
+        private static int Uses(VoxelMesh mesh, int vertex) { int n = 0; foreach (int i in mesh.Triangles) if (i == vertex) n++; return n; }
+        // Upward faces on the grid plane y.
+        private static int TopQuads(VoxelModel model, int y)
+        {
+            var mesh = VoxelMesher.Build(model); int n = 0;
+            for (int q = 0; q < mesh.QuadCount; q++) if (mesh.Normals[q * 12 + 1] > 0.5f && Math.Abs(Grid(model, mesh, q * 4).y - y) < 1e-4f) n++;
+            return n;
+        }
+        // Every shade is one of the four corner levels, and a quad longer than one voxel along an edge (corners 0→1 or 0→3)
+        // keeps the same shade along it: the interpolation must not smear a corner over the merged run.
+        private static void AssertMergesKeepShading(VoxelMesh mesh, float voxel, string name)
+        {
+            Assert.That(mesh.Shades.Length, Is.EqualTo(mesh.VertexCount), name);
+            int foreign = 0, smeared = 0;
+            foreach (byte shade in mesh.Shades) if (Array.IndexOf(VoxelMesher.CornerShade, shade) < 0) foreign++;
+            float Edge(int a, int b)
+            {
+                float dx = mesh.Positions[b * 3] - mesh.Positions[a * 3], dy = mesh.Positions[b * 3 + 1] - mesh.Positions[a * 3 + 1], dz = mesh.Positions[b * 3 + 2] - mesh.Positions[a * 3 + 2];
+                return (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            var s = mesh.Shades;
+            for (int v = 0; v < mesh.VertexCount; v += 4)
+            {
+                if (Edge(v, v + 1) > voxel * 1.01f && (s[v] != s[v + 1] || s[v + 3] != s[v + 2])) smeared++;
+                if (Edge(v, v + 3) > voxel * 1.01f && (s[v] != s[v + 3] || s[v + 1] != s[v + 2])) smeared++;
+            }
+            Assert.That(foreign, Is.Zero, name + ": shades outside the corner levels");
+            Assert.That(smeared, Is.Zero, name + ": merged quads that change shade along their length");
+        }
 
         [Test] public void SingleVoxelBuildsSixOutwardQuadsAroundBottomCentrePivot()
         {
@@ -28,6 +72,7 @@ namespace Broker.Tests
             Assert.That(mesh.QuadCount, Is.EqualTo(6)); Assert.That(mesh.VertexCount, Is.EqualTo(24));
             Assert.That(mesh.Triangles.Length, Is.EqualTo(36)); Assert.That(mesh.GlowTriangles, Is.Empty);
             AssertOutwardWinding(mesh);
+            Assert.That(mesh.Shades.Length, Is.EqualTo(mesh.VertexCount)); Assert.That(mesh.Shades, Is.All.EqualTo((byte)255), "nothing shades a lone voxel");
             for (int i = 0; i < mesh.VertexCount; i++)
             {
                 Assert.That(Math.Abs(mesh.Positions[i * 3]), Is.EqualTo(0.25f).Within(1e-6));
@@ -53,6 +98,33 @@ namespace Broker.Tests
             var mesh = VoxelMesher.Build(lamp);
             Assert.That(mesh.Triangles.Length, Is.EqualTo(5 * 6)); Assert.That(mesh.GlowTriangles.Length, Is.EqualTo(5 * 6));
             Assert.That(VoxelPalette.Glows(VoxelPalette.LampWarm), Is.True); Assert.That(VoxelPalette.Glows(VoxelPalette.Metal), Is.False);
+        }
+        [Test] public void CornerShadingDarkensInnerCornersAndMergesOnlyAlongEvenShading()
+        {
+            // A 2×2 floor with an L of walls on it: the free floor cell sits in an inner corner.
+            var corner = new VoxelModel(2, 2, 2, 1); corner.Box(0, 0, 0, 2, 1, 2, VoxelPalette.Stone);
+            corner.Set(0, 1, 0, VoxelPalette.Stone); corner.Set(0, 1, 1, VoxelPalette.Stone); corner.Set(1, 1, 0, VoxelPalette.Stone);
+            var mesh = VoxelMesher.Build(corner);
+            AssertOutwardWinding(mesh); AssertMergesKeepShading(mesh, 1, "corner");
+            int inner = VertexAt(corner, mesh, 0, 1, 0, 1, 1, 1), open = VertexAt(corner, mesh, 0, 1, 0, 2, 1, 2);
+            int alongX = VertexAt(corner, mesh, 0, 1, 0, 2, 1, 1), alongZ = VertexAt(corner, mesh, 0, 1, 0, 1, 1, 2);
+            Assert.That(new[] { inner, open, alongX, alongZ }, Has.None.EqualTo(-1), "the free floor cell has an upward face");
+            Assert.That(mesh.Shades[inner], Is.EqualTo(VoxelMesher.CornerShade[0]), "both walls touch it: darkest level");
+            Assert.That(mesh.Shades[alongX], Is.EqualTo(VoxelMesher.CornerShade[2]), "one wall touches it");
+            Assert.That(mesh.Shades[alongZ], Is.EqualTo(VoxelMesher.CornerShade[2]), "one wall touches it");
+            Assert.That(mesh.Shades[open], Is.EqualTo(VoxelMesher.CornerShade[3]), "nothing touches it");
+            // The diagonal joins the two half-lit corners, so the dark corner fades within one triangle instead of along a streak.
+            Assert.That(Uses(mesh, inner), Is.EqualTo(1)); Assert.That(Uses(mesh, open), Is.EqualTo(1));
+            Assert.That(Uses(mesh, alongX), Is.EqualTo(2)); Assert.That(Uses(mesh, alongZ), Is.EqualTo(2));
+            Assert.That(VoxelMesher.CornerShade, Is.Ordered.Ascending); Assert.That(VoxelMesher.CornerShade[3], Is.EqualTo(255));
+
+            // An open slab merges into one top quad; a wall along its edge shades the row beside it, which then
+            // merges only along the wall and splits at the two ends, where the wall's corner is missing.
+            var slab = new VoxelModel(4, 3, 4, 1); slab.Box(0, 0, 0, 4, 1, 4, VoxelPalette.Stone);
+            Assert.That(TopQuads(slab, 1), Is.EqualTo(1));
+            slab.Box(0, 1, 0, 4, 2, 1, VoxelPalette.Stone);
+            Assert.That(TopQuads(slab, 1), Is.EqualTo(4), "far rows, the shaded middle of the near row, its two ends");
+            AssertMergesKeepShading(VoxelMesher.Build(slab), 1, "slab");
         }
         [Test] public void PaletteIsAnEightByEightTextureWithoutPureBlackOrWhite()
         {
@@ -132,7 +204,7 @@ namespace Broker.Tests
                 var mesh = VoxelMesher.Build(model);
                 Assert.That(mesh.VertexCount, Is.GreaterThan(0).And.LessThan(65000), name);
                 Assert.That(mesh.Positions.Length, Is.EqualTo(mesh.Normals.Length), name);
-                AssertOutwardWinding(mesh);
+                AssertOutwardWinding(mesh); AssertMergesKeepShading(mesh, model.VoxelSize, name);
                 float minY = float.MaxValue; for (int i = 1; i < mesh.Positions.Length; i += 3) minY = Math.Min(minY, mesh.Positions[i]);
                 if (!Hanging(name)) Assert.That(minY, Is.EqualTo(0).Within(1e-5), name + " stands on its pivot");
             }
@@ -355,6 +427,21 @@ namespace Broker.Tests
                 Assert.That(Math.Abs(block.X) + block.Width / 2, Is.LessThan(CityScenery.TerrainSize / 2));
                 Assert.That(Math.Abs(block.Z - CityScenery.TerrainCenterZ) + block.Depth / 2, Is.LessThan(CityScenery.TerrainSize / 2));
             }
+        }
+        [Test] public void TheHazeTurnsTheSkylineIntoSilhouettesBeforeTheFarClip()
+        {
+            Assert.That(CityScenery.FogStart, Is.GreaterThan(0).And.LessThan(CityScenery.FogEnd));
+            Assert.That(CityScenery.FogEnd, Is.LessThan(CityScenery.FarClip), "geometry is fully hazed before it is clipped");
+            int full = 0;
+            foreach (var block in CityScenery.Skyline)
+            {
+                // Linear fog at the point of the footprint nearest to the spawn point.
+                double dx = Math.Max(0, Math.Abs(block.X - CityBlockPlan.SpawnX) - block.Width / 2), dz = Math.Max(0, Math.Abs(block.Z - CityBlockPlan.SpawnZ) - block.Depth / 2);
+                double fog = (Math.Sqrt(dx * dx + dz * dz) - CityScenery.FogStart) / (CityScenery.FogEnd - CityScenery.FogStart);
+                Assert.That(fog, Is.GreaterThan(0.25), "skyline block at " + block.X + ", " + block.Z + " stands too clear of the haze");
+                if (fog >= 1) full++;
+            }
+            Assert.That(full, Is.GreaterThan(0), "the farthest ring melts into the haze completely");
         }
     }
 }

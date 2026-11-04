@@ -35,7 +35,7 @@ namespace Broker.Runtime.Office
         {
             previousFog = RenderSettings.fog; previousFogColor = RenderSettings.fogColor;
             previousFogMode = RenderSettings.fogMode; previousFogStart = RenderSettings.fogStartDistance; previousFogEnd = RenderSettings.fogEndDistance;
-            var pavement = Surface("pavers", "#FFFFFF", 2f, 0.1f);
+            var pavement = Surface("pavers", "#C8C4C0", 2f, 0.1f);
             var asphalt = Surface("asphalt", "#FFFFFF", 2f, 0.04f);
             var concrete = Surface("concrete", "#FFFFFF", 2f, 0.08f);
             var grass = Surface("grass", "#FFFFFF", 2f, 0.03f);
@@ -126,8 +126,8 @@ namespace Broker.Runtime.Office
         // Hazy boxy skyline beyond the playable block: cheap textured boxes that the fog dissolves.
         private void BuildSkyline()
         {
-            var shades = new[] { Surface("windows", "#E8DED2", VoxelSurfaces.TileMetres("windows"), 0.05f),
-                Surface("windows", "#C9CCD0", VoxelSurfaces.TileMetres("windows"), 0.05f), Surface("windows", "#E0C9B2", VoxelSurfaces.TileMetres("windows"), 0.05f) };
+            var shades = new[] { Surface("windows", "#8C8076", VoxelSurfaces.TileMetres("windows"), 0.05f),
+                Surface("windows", "#7E8084", VoxelSurfaces.TileMetres("windows"), 0.05f), Surface("windows", "#927A66", VoxelSurfaces.TileMetres("windows"), 0.05f) };
             foreach (var block in CityScenery.Skyline)
             {
                 var box = Box("City / distant block", new Vector3(block.X, CityBlockPlan.GroundY - 0.2f + block.Height / 2, block.Z),

@@ -17,6 +17,8 @@ namespace Broker.Tools.ScenePreview
     public sealed class Shot
     {
         public string Name; public Vector3 Local; public float Yaw, Pitch, Fov = 72; public bool Employee, City, Hud = true; public string Target;
+        // The crosshair rests on an interactable: the HUD shows its key and title.
+        public bool Aim;
         // Seconds on the boulevard clock from a fresh start: 18–32 s is the pedestrians' green.
         public double Traffic = 1.6;
         // Quotes: a work day with prices on the Exchange board. Crossing: the HUD shows the signal panel.
@@ -34,8 +36,8 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 1.8 },
             new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 21, Crossing = true },
             new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
-            new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true },
-            new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»" },
+            new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true, Aim = true },
+            new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»", Aim = true },
             new Shot { Name = "tunnel", Local = new Vector3(36, CityBlockPlan.GroundY + 1.7f, 27.2f), Yaw = 80, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 6 },
             new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Target = "Телефон — звонки" },
             new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true, Target = "Телефон — звонки" },
@@ -45,6 +47,9 @@ namespace Broker.Tools.ScenePreview
         public static int Main(string[] args)
         {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture; CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            // Same colour space as the Unity project (Player settings), so lighting is tuned for what the editor shows.
+            ColorPipe.Linear = ProjectIsLinear();
+            QualitySettings.activeColorSpace = ColorPipe.Linear ? ColorSpace.Linear : ColorSpace.Gamma;
             bool check = args.Contains("--check"), noHud = args.Contains("--no-hud"), fast = args.Contains("--fast");
             // --at=SECONDS re-times the selected shots on the boulevard clock (to pick a moment for a new shot).
             var at = args.FirstOrDefault(a => a.StartsWith("--at="));
@@ -142,55 +147,90 @@ namespace Broker.Tools.ScenePreview
         private static string Offset(float dx, float dy) =>
             (dx >= 0 ? "+" : "-") + Math.Abs(dx).ToString("0", CultureInfo.InvariantCulture) + (dy >= 0 ? "+" : "-") + Math.Abs(dy).ToString("0", CultureInfo.InvariantCulture);
 
-        // Mirrors PrototypeBootstrap.DrawWorldHUD on its 1440 × 960 canvas: translucent wash, thin white rules, crosshair.
+        // Mirrors PrototypeBootstrap.DrawWorldHUD on its 1440 × 960 canvas: plain text with a drop shadow straight over the
+        // world (no cards), the gold meter, the key of a targeted interactable, the crosshair and the start-of-day hint.
         private static void AddHud(List<string> args, Shot shot, BrokerDay day, OfficeScene scene)
         {
-            var ink = Hex("#F3F7FB"); var muted = Hex("#BAC6D7"); var accent = Hex("#83E4D1"); var border = Hex("#384B63");
+            var ink = Hex("#F5F0E6"); var muted = Hex("#E4DACD"); var gold = Hex("#E9B56D");
+            const string shadow = "rgba(10,6,5,0.66)", track = "rgba(20,13,10,0.45)";
             void Rect(float x, float y, float w, float h, string fill) =>
                 args.AddRange(new[] { "-gravity", "NorthWest", "-stroke", "none", "-fill", fill, "-draw", string.Format(CultureInfo.InvariantCulture, "rectangle {0},{1} {2},{3}", x, y, x + w - 1, y + h - 1) });
-            void Panel(float x, float y, float w, float h)
+            // Text in the box from x to x + w, aligned like its GUIStyle (left, centre or right): shadow pass, then the text.
+            void Text(float x, float y, float w, string value, int size, Color color, bool bold, TextAnchor align = TextAnchor.UpperLeft)
             {
-                Rect(x, y, w, h, "rgba(10,13,18,0.34)"); string line = "rgba(255,255,255,0.82)"; const float t = 1.5f, corner = 12;
-                Rect(x, y, w, t, line); Rect(x, y + h - t, w, t, line);
-                Rect(x, y, t, corner, line); Rect(x + w - t, y, t, corner, line);
-                Rect(x, y + h - corner, t, corner, line); Rect(x + w - t, y + h - corner, t, corner, line);
+                string gravity = align == TextAnchor.UpperCenter ? "North" : align == TextAnchor.UpperRight ? "NorthEast" : "NorthWest";
+                float anchor = align == TextAnchor.UpperCenter ? x + w / 2 - 720 : align == TextAnchor.UpperRight ? 1440 - (x + w) : x;
+                foreach (var (shift, fill) in new[] { (2f, shadow), (0f, Rgba(color, 1)) })
+                    args.AddRange(new[] { "-gravity", gravity, "-font", bold ? "Liberation-Sans-Bold" : "Liberation-Sans", "-pointsize", size.ToString(CultureInfo.InvariantCulture),
+                        "-fill", fill, "-stroke", "none", "-annotate", Offset(anchor + (align == TextAnchor.UpperRight ? -shift : shift), y + shift - size * 0.12f), value });
             }
-            void Text(float x, float y, string value, int size, Color color, bool bold) =>
-                args.AddRange(new[] { "-gravity", "NorthWest", "-font", bold ? "Liberation-Sans-Bold" : "Liberation-Sans", "-pointsize", size.ToString(CultureInfo.InvariantCulture),
-                    "-fill", Rgba(color, 1), "-stroke", "none", "-annotate", Offset(x, y - size * 0.12f), value });
+            void Outline(float x, float y, float size, string fill)
+            {
+                const float t = 2;
+                Rect(x, y, size, t, fill); Rect(x, y + size - t, size, t, fill); Rect(x, y + t, t, size - 2 * t, fill); Rect(x + size - t, y + t, t, size - 2 * t, fill);
+            }
             bool employee = shot.Employee;
-            Panel(32, 32, 320, 80); Text(56, 44, "МОЙКА КАПИТАЛ", 22, ink, true);
-            Text(56, 80, shot.City ? "Деловой квартал" : (employee ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, 16, muted, false);
+            Text(40, 30, 360, "МОЙКА КАПИТАЛ", 22, ink, true);
+            Text(40, 60, 360, shot.City ? "Деловой квартал" : (employee ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, 16, muted, false);
             int seconds = (int)Math.Ceiling(day.RemainingSeconds);
-            Panel(616, 32, 208, 80); Text(648, 48, $"{seconds / 60:00}:{seconds % 60:00}", 32, ink, true);
-            Panel(1104, 32, 304, 80); Text(1128, 44, employee ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, 22, ink, true);
+            Text(620, 26, 200, $"{seconds / 60:00}:{seconds % 60:00}", 32, ink, true, TextAnchor.UpperCenter);
+            Text(1040, 30, 360, employee ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, 22, ink, true, TextAnchor.UpperRight);
             float meter = employee ? day.DealsCount / (float)Math.Max(1, day.SalesTarget) : day.Cash / (float)Math.Max(1, day.TotalExpenses);
-            Rect(1128, 96, 256, 5, Rgba(border, 1)); if (meter > 0) Rect(1128, 96, 256 * Math.Clamp(meter, 0, 1), 5, Rgba(accent, 1));
-            float arm = 7; string cross = "rgba(255,255,255,0.9)", shadow = "rgba(0,0,0,0.35)";
-            Rect(720 - arm + 1, 480, arm * 2, 2, shadow); Rect(720, 480 - arm + 1, 2, arm * 2, shadow);
+            Rect(1146, 70, 256, 4, shadow); Rect(1144, 68, 256, 4, track); if (meter > 0) Rect(1144, 68, 256 * Math.Clamp(meter, 0, 1), 4, Rgba(gold, 1));
+            float arm = shot.Aim ? 10 : 7; string cross = shot.Aim ? Rgba(gold, 1) : "rgba(255,255,255,0.9)", crossShadow = "rgba(0,0,0,0.35)";
+            Rect(720 - arm + 1, 480, arm * 2, 2, crossShadow); Rect(720, 480 - arm + 1, 2, arm * 2, crossShadow);
             Rect(720 - arm, 479, arm * 2, 2, cross); Rect(719, 480 - arm, 2, arm * 2, cross);
-            Panel(420, 784, 600, 88); Text(452, 808, shot.Target ?? "", 22, ink, true);
+            if (shot.Aim)
+            {
+                // As in the game: the E key and the title as one centred line.
+                float width = Math.Min(560, TextWidth(shot.Target, 22, true)), left = 720 - (40 + 12 + width) / 2;
+                Outline(left + 2, 810, 40, shadow); Outline(left, 808, 40, Rgba(ink, 1));
+                Text(left, 816, 40, "E", 20, ink, true, TextAnchor.UpperCenter); Text(left + 52, 812, width + 8, shot.Target, 22, ink, true);
+            }
+            else Text(420, 812, 600, shot.Target ?? "", 22, ink, true, TextAnchor.UpperCenter);
+            if (employee)
+            {
+                Text(40, 104, 560, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, 16, gold, true);
+                foreach (var (shift, fill) in new[] { (2, shadow), (0, Rgba(muted, 1)) })
+                    args.AddRange(new[] { "(", "-size", "560x", "-background", "none", "-font", "Liberation-Sans", "-pointsize", "16", "-fill", fill,
+                        "caption:" + day.EmploymentNextAction, ")", "-gravity", "NorthWest", "-geometry", Offset(40 + shift, 128 + shift), "-composite" });
+            }
+            // A fresh day: the controls hint of the first 15 seconds.
+            Text(320, 900, 800, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", 16, muted, false, TextAnchor.UpperCenter);
             if (shot.City)
             {
                 // As in the game: the chosen landmark (the office lift by default), its distance and direction.
                 var destination = CityDistrictPlan.Find("office");
-                Panel(32, 288, 320, 144); Text(56, 308, destination.Name, 22, ink, true);
-                Text(56, 348, Math.Ceiling(CityDistrictPlan.Distance(shot.Local.x, shot.Local.z, destination)) + " м · "
+                Text(40, 288, 360, destination.Name, 22, ink, true);
+                Text(40, 318, 360, Math.Ceiling(CityDistrictPlan.Distance(shot.Local.x, shot.Local.z, destination)) + " м · "
                     + CityDistrictPlan.Direction(shot.Local.x, shot.Local.z, destination) + "\nКарта — у стенда / в паузе", 16, muted, false);
             }
             if (shot.Crossing)
             {
-                Panel(32, 448, 320, 96); Text(56, 462, "ПЕРЕХОД / СВЕТОФОР", 14, accent, true);
-                Text(56, 490, scene.Life.Hint, 16, muted, false);
-            }
-            if (employee)
-            {
-                Panel(384, 136, 672, 124); Text(408, 152, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, 16, accent, true);
-                args.AddRange(new[] { "(", "-size", "624x", "-background", "none", "-font", "Liberation-Sans", "-pointsize", "16", "-fill", Rgba(muted, 1),
-                    "caption:" + day.EmploymentNextAction, ")", "-gravity", "NorthWest", "-geometry", "+408+190", "-composite" });
+                Text(40, 384, 360, "ПЕРЕХОД / СВЕТОФОР", 16, gold, true);
+                Text(40, 410, 360, scene.Life.Hint, 16, muted, false);
             }
         }
+        // Width in pixels of one line of HUD text, measured by ImageMagick with the font the overlay uses.
+        private static float TextWidth(string text, int size, bool bold)
+        {
+            var info = new ProcessStartInfo("magick") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            foreach (var a in new[] { "-font", bold ? "Liberation-Sans-Bold" : "Liberation-Sans", "-pointsize", size.ToString(CultureInfo.InvariantCulture), "label:" + text, "-format", "%w", "info:" })
+                info.ArgumentList.Add(a);
+            using var process = Process.Start(info); string output = process.StandardOutput.ReadToEnd(); process.WaitForExit();
+            return float.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float width) ? width : text.Length * size * 0.55f;
+        }
         private static Color Hex(string value) { ColorUtility.TryParseHtmlString(value, out var c); return c; }
+        private static bool ProjectIsLinear()
+        {
+            for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir != null; dir = dir.Parent)
+            {
+                string path = Path.Combine(dir.FullName, "ProjectSettings", "ProjectSettings.asset");
+                if (File.Exists(path)) return File.ReadAllText(path).Contains("m_ActiveColorSpace: 1");
+            }
+            Console.WriteLine("warning: ProjectSettings not found, assuming linear colour space");
+            return true;
+        }
 
         private static void Run(string file, List<string> args)
         {

@@ -60,71 +60,94 @@ namespace Broker.Runtime
         }
         private void DrawWorldHUD()
         {
-            HudPanel(32, 32, 320, 80); Label(56, 44, 272, 32, "МОЙКА КАПИТАЛ", theme.Heading);
-            Label(56, 80, 272, 24, office.IsInCity ? "Деловой квартал" : (IsFounderMode ? "Своя контора · день " : IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.Small);
-            HudPanel(616, 32, 208, 80); Label(648, 48, 160, 44, ClockText(), theme.Title);
-            HudPanel(1104, 32, 304, 80); Label(1128, 44, 256, 36, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.Heading);
-            Meter(1128, 96, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Accent);
+            // Plain text with a drop shadow straight over the world, no cards: name and place top left, the clock in the
+            // middle, money with its gold meter top right, the landmark and the crossing below the name, the target at the bottom.
+            HudLabel(40, 30, 360, 30, "МОЙКА КАПИТАЛ", theme.HudHeading);
+            HudLabel(40, 60, 360, 24, office.IsInCity ? "Деловой квартал" : (IsFounderMode ? "Своя контора · день " : IsEmployeeMode ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, theme.HudText);
+            HudLabel(620, 26, 200, 44, ClockText(), theme.HudClock);
+            HudLabel(1040, 30, 360, 30, IsEmployeeMode ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, theme.HudRight);
+            HudMeter(1144, 68, 256, IsEmployeeMode ? day.DealsCount / (float)day.SalesTarget : day.Cash / (float)day.TotalExpenses, theme.Gold);
             if (!navigation.IsExploring || day.PendingEvent != null) return;
             var player = office.Player;
             Crosshair(player.Target != null);
-            string target;
-            if (!OfficeInput.Available) target = "Ввод недоступен · открой рабочий экран";
-            else if (!player.Captured) target = "Нажми в окне Game";
-            else if (player.Target != null) target = player.Target.Title.Split('/')[0].Trim();
-            else target = office.IsInCity ? "Прогулка · лифт ведёт в офис" : "Телефон — звонки";
-            HudPanel(420, 784, 600, 88);
-            if (player.Target != null) { HudFrame(444, 804, 48, 48, 2); Label(459, 811, 32, 36, "E", theme.Heading); }
-            Label(player.Target != null ? 516 : 452, 808, player.Target != null ? 476 : 536, 44, target, theme.Heading);
+            if (!OfficeInput.Available) HudLabel(420, 812, 600, 32, "Ввод недоступен · открой рабочий экран", theme.HudCenter);
+            else if (!player.Captured) HudLabel(420, 812, 600, 32, "Нажми в окне Game", theme.HudCenter);
+            else if (player.Target != null)
+            {
+                // The key and the title as one centred line; the title and its width are cached per interactable title.
+                string title = TargetTitle(player.Target.Title);
+                float left = 720 - (40 + 12 + targetTitleWidth) / 2;
+                KeyCap(left, 808, 40, "E"); HudLabel(left + 52, 812, targetTitleWidth + 8, 32, title, theme.HudHeading);
+            }
+            else HudLabel(420, 812, 600, 32, office.IsInCity ? "Прогулка · лифт ведёт в офис" : "Телефон — звонки", theme.HudCenter);
             if (IsEmployeeMode || IsFounderMode)
             {
                 string guidance = office.IsInCity ? "Вернитесь в офис через лифт. " + day.EmploymentNextAction : day.EmploymentNextAction;
-                float guidanceHeight = Mathf.Max(56, theme.Small.CalcHeight(new GUIContent(guidance), 624));
-                HudPanel(384, 136, 672, guidanceHeight + 68);
-                Label(408, 152, 624, 24, IsFounderMode ? "ДАЛЬШЕ / СВОЯ КОНТОРА" : "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.Tag);
-                Label(408, 192, 624, guidanceHeight, guidance, theme.Small);
+                float guidanceHeight = Mathf.Max(24, theme.HudText.CalcHeight(new GUIContent(guidance), 560));
+                HudLabel(40, 104, 560, 24, IsFounderMode ? "ДАЛЬШЕ / СВОЯ КОНТОРА" : "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, theme.HudTag);
+                HudLabel(40, 130, 560, guidanceHeight, guidance, theme.HudText);
             }
             if (day.RemainingSeconds > BrokerDay.DurationSeconds - 15)
-                Label(420, 896, 600, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.Small);
+                HudLabel(320, 900, 800, 28, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", theme.HudHint);
             else if (officeNews.Count > 0 && Time.realtimeSinceStartupAsDouble < toastUntil)
             {
                 string news = officeNews[officeNews.Count - 1]; if (news.Length > 105) news = news.Substring(0, 102) + "…";
-                Label(240, 896, 960, 44, news, theme.Small);
+                HudLabel(240, 892, 960, 48, news, theme.HudHint);
             }
             if (office.IsInCity && navigation.IsExploring)
             {
                 var destination = CityDistrictPlan.Find(cityDestinationId);
-                HudPanel(32, 288, 320, 144);
-                Label(56, 308, 272, 28, destination.Name, theme.Heading);
-                Label(56, 348, 272, 64, Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, destination)) + " м · "
-                    + CityDistrictPlan.Direction(office.MapX, office.MapZ, destination) + "\nКарта — у стенда / в паузе", theme.Small);
+                HudLabel(40, 288, 360, 30, destination.Name, theme.HudHeading);
+                HudLabel(40, 318, 360, 48, Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, destination)) + " м · "
+                    + CityDistrictPlan.Direction(office.MapX, office.MapZ, destination) + "\nКарта — у стенда / в паузе", theme.HudText);
                 string crossing = office.CrossingHint;
                 if (crossing != null)
                 {
-                    HudPanel(32, 448, 320, 96);
-                    Label(56, 462, 272, 24, "ПЕРЕХОД / СВЕТОФОР", theme.Tag);
-                    Label(56, 490, 272, 48, crossing, theme.Small);
+                    HudLabel(40, 384, 360, 24, "ПЕРЕХОД / СВЕТОФОР", theme.HudTag);
+                    HudLabel(40, 410, 360, 48, crossing, theme.HudText);
                 }
             }
         }
-        // Exploration HUD: a light translucent wash with thin white rules instead of solid cards,
-        // so the voxel city stays visible around the text.
-        private void HudPanel(float x, float y, float w, float h)
+        // The HUD title of an interactable ("Лифт в офис / …" → "Лифт в офис") and its width in the HUD font,
+        // recomputed only when the title string changes, not on every OnGUI call.
+        private string targetTitleSource, targetTitle;
+        private float targetTitleWidth;
+        private string TargetTitle(string source)
         {
-            Paint(new Rect(x, y, w, h), new Color(0.04f, 0.05f, 0.07f, 0.34f));
-            HudFrame(x, y, w, h, 12);
+            if (ReferenceEquals(source, targetTitleSource)) return targetTitle;
+            targetTitleSource = source; targetTitle = (source ?? "").Split('/')[0].Trim();
+            targetTitleWidth = Mathf.Min(560, theme.HudHeading.CalcSize(new GUIContent(targetTitle)).x);
+            return targetTitle;
         }
-        private void HudFrame(float x, float y, float w, float h, float corner)
+        // HUD text on the world: the same text in the shadow colour two pixels down and right, then the text itself.
+        private void HudLabel(float x, float y, float w, float h, string text, GUIStyle style)
         {
-            var line = new Color(1, 1, 1, 0.82f); const float t = 1.5f;
-            Paint(new Rect(x, y, w, t), line); Paint(new Rect(x, y + h - t, w, t), line);
-            Paint(new Rect(x, y, t, corner), line); Paint(new Rect(x + w - t, y, t, corner), line);
-            Paint(new Rect(x, y + h - corner, t, corner), line); Paint(new Rect(x + w - t, y + h - corner, t, corner), line);
+            var tint = GUI.contentColor; GUI.contentColor = theme.HudShadow;
+            GUI.Label(new Rect(x + 2, y + 2, w, h), text, style);
+            GUI.contentColor = tint; GUI.Label(new Rect(x, y, w, h), text, style);
         }
-        // Thin white cross with a soft shadow; it widens and takes the accent colour over an interactable.
+        // Thin gold bar on a dark translucent track, with the same drop shadow as the text.
+        private void HudMeter(float x, float y, float w, float value, Color color)
+        {
+            Paint(new Rect(x + 2, y + 2, w, 4), theme.HudShadow); Paint(new Rect(x, y, w, 4), theme.HudTrack);
+            Paint(new Rect(x, y, w * Mathf.Clamp01(value), 4), color);
+        }
+        // The interaction key: a thin warm-white outline with its shadow and the letter centred inside.
+        private void KeyCap(float x, float y, float size, string key)
+        {
+            KeyOutline(x + 2, y + 2, size, theme.HudShadow); KeyOutline(x, y, size, theme.HudInk);
+            HudLabel(x, y, size, size, key, theme.HudKey);
+        }
+        private void KeyOutline(float x, float y, float size, Color color)
+        {
+            const float t = 2;
+            Paint(new Rect(x, y, size, t), color); Paint(new Rect(x, y + size - t, size, t), color);
+            Paint(new Rect(x, y + t, t, size - 2 * t), color); Paint(new Rect(x + size - t, y + t, t, size - 2 * t), color);
+        }
+        // Thin white cross with a soft shadow; it widens and turns gold over an interactable.
         private void Crosshair(bool target)
         {
-            float arm = target ? 10 : 7; var color = target ? theme.Accent : new Color(1, 1, 1, 0.9f); var shadow = new Color(0, 0, 0, 0.35f);
+            float arm = target ? 10 : 7; var color = target ? theme.Gold : new Color(1, 1, 1, 0.9f); var shadow = new Color(0, 0, 0, 0.35f);
             Paint(new Rect(720 - arm + 1, 480, arm * 2, 2), shadow); Paint(new Rect(720, 480 - arm + 1, 2, arm * 2), shadow);
             Paint(new Rect(720 - arm, 479, arm * 2, 2), color); Paint(new Rect(719, 480 - arm, 2, arm * 2), color);
         }

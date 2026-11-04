@@ -87,32 +87,40 @@ namespace Broker.Core
 
     public sealed class VoxelMesh
     {
-        // Flat arrays: positions/normals xyz, uvs uv. Solid and glowing triangles are separate submeshes.
+        // Flat arrays: positions/normals xyz, uvs uv, one corner shade per vertex (255 = open, lower = occluded corner).
+        // Solid and glowing triangles are separate submeshes.
         public float[] Positions { get; internal set; }
         public float[] Normals { get; internal set; }
         public float[] Uvs { get; internal set; }
+        public byte[] Shades { get; internal set; }
         public int[] Triangles { get; internal set; }
         public int[] GlowTriangles { get; internal set; }
         public int VertexCount => Positions.Length / 3;
         public int QuadCount => VertexCount / 4;
     }
 
-    // Greedy mesher: only faces between a filled voxel and empty space are emitted, then equal-colour
-    // neighbours on one plane merge into rectangles. Triangles are clockwise seen from outside (Unity front faces):
+    // Greedy mesher: only faces between a filled voxel and empty space are emitted, then neighbours on one plane with the
+    // same colour and the same corner shading merge into rectangles. Triangles are clockwise seen from outside (Unity front faces):
     // cross(v1 − v0, v2 − v0) points along the outward normal.
+    // Corner shading (ambient occlusion): each face corner looks at the three cells in front of the face that touch it —
+    // two sides and the diagonal. Both sides filled = darkest level 0, otherwise 3 − filled count. The shader darkens with it.
     public static class VoxelMesher
     {
+        // Shade per occlusion level 0 (inner corner) … 3 (open), as vertex colour bytes.
+        public static readonly byte[] CornerShade = { 148, 186, 222, 255 };
+
         public static VoxelMesh Build(VoxelModel model)
         {
             if (model == null) throw new ArgumentNullException(nameof(model));
-            var positions = new List<float>(); var normals = new List<float>(); var uvs = new List<float>();
+            var positions = new List<float>(); var normals = new List<float>(); var uvs = new List<float>(); var shades = new List<byte>();
             var solid = new List<int>(); var glow = new List<int>();
             int[] size = { model.SizeX, model.SizeY, model.SizeZ };
-            var p = new int[3]; var q = new int[3];
+            var p = new int[3]; var q = new int[3]; var levels = new int[4];
             for (int d = 0; d < 3; d++)
             {
                 int u = (d + 1) % 3, v = (d + 2) % 3;
-                var mask = new byte[size[u] * size[v]];
+                // Key per face cell: colour in the low byte, then four 2-bit occlusion levels (corners 0..3, see Quad). 0 = no face.
+                var mask = new int[size[u] * size[v]];
                 for (int side = -1; side <= 1; side += 2)
                     for (int slice = 0; slice < size[d]; slice++)
                     {
@@ -121,31 +129,52 @@ namespace Broker.Core
                             {
                                 p[d] = slice; p[u] = i; p[v] = j; q[d] = slice + side; q[u] = i; q[v] = j;
                                 byte c = model.Get(p[0], p[1], p[2]);
-                                mask[j * size[u] + i] = c != VoxelPalette.Empty && model.Get(q[0], q[1], q[2]) == VoxelPalette.Empty ? c : VoxelPalette.Empty;
+                                int key = 0;
+                                if (c != VoxelPalette.Empty && model.Get(q[0], q[1], q[2]) == VoxelPalette.Empty)
+                                {
+                                    key = c;
+                                    for (int k = 0; k < 4; k++)
+                                    {
+                                        int du = k == 1 || k == 2 ? 1 : -1, dv = k >= 2 ? 1 : -1;
+                                        bool s1 = Filled(model, q, d, u, v, du, 0), s2 = Filled(model, q, d, u, v, 0, dv), corner = Filled(model, q, d, u, v, du, dv);
+                                        int level = s1 && s2 ? 0 : 3 - (s1 ? 1 : 0) - (s2 ? 1 : 0) - (corner ? 1 : 0);
+                                        key |= level << (8 + 2 * k);
+                                    }
+                                }
+                                mask[j * size[u] + i] = key;
                             }
                         for (int j = 0; j < size[v]; j++)
                             for (int i = 0; i < size[u];)
                             {
-                                byte c = mask[j * size[u] + i];
-                                if (c == VoxelPalette.Empty) { i++; continue; }
-                                int w = 1; while (i + w < size[u] && mask[j * size[u] + i + w] == c) w++;
+                                int key = mask[j * size[u] + i];
+                                if (key == 0) { i++; continue; }
+                                for (int k = 0; k < 4; k++) levels[k] = (key >> (8 + 2 * k)) & 3;
+                                // A merged quad interpolates its four corners, so it may only grow along a direction the shading does not change.
+                                bool alongU = levels[0] == levels[1] && levels[3] == levels[2], alongV = levels[0] == levels[3] && levels[1] == levels[2];
+                                int w = 1; while (alongU && i + w < size[u] && mask[j * size[u] + i + w] == key) w++;
                                 int h = 1;
-                                for (; j + h < size[v]; h++)
+                                for (; alongV && j + h < size[v]; h++)
                                 {
                                     bool row = true;
-                                    for (int k = 0; k < w; k++) if (mask[(j + h) * size[u] + i + k] != c) { row = false; break; }
+                                    for (int k = 0; k < w; k++) if (mask[(j + h) * size[u] + i + k] != key) { row = false; break; }
                                     if (!row) break;
                                 }
-                                for (int jj = 0; jj < h; jj++) for (int k = 0; k < w; k++) mask[(j + jj) * size[u] + i + k] = VoxelPalette.Empty;
-                                Quad(model, d, u, v, side, slice + (side > 0 ? 1 : 0), i, j, w, h, c, positions, normals, uvs, VoxelPalette.Glows(c) ? glow : solid);
+                                for (int jj = 0; jj < h; jj++) for (int k = 0; k < w; k++) mask[(j + jj) * size[u] + i + k] = 0;
+                                byte color = (byte)(key & 0xFF);
+                                Quad(model, d, u, v, side, slice + (side > 0 ? 1 : 0), i, j, w, h, color, levels, positions, normals, uvs, shades, VoxelPalette.Glows(color) ? glow : solid);
                                 i += w;
                             }
                     }
             }
-            return new VoxelMesh { Positions = positions.ToArray(), Normals = normals.ToArray(), Uvs = uvs.ToArray(), Triangles = solid.ToArray(), GlowTriangles = glow.ToArray() };
+            return new VoxelMesh { Positions = positions.ToArray(), Normals = normals.ToArray(), Uvs = uvs.ToArray(), Shades = shades.ToArray(), Triangles = solid.ToArray(), GlowTriangles = glow.ToArray() };
         }
-        private static void Quad(VoxelModel m, int d, int u, int v, int side, int plane, int i, int j, int w, int h, byte color,
-            List<float> positions, List<float> normals, List<float> uvs, List<int> triangles)
+        private static bool Filled(VoxelModel m, int[] q, int d, int u, int v, int du, int dv)
+        {
+            int x = q[0] + (u == 0 ? du : v == 0 ? dv : 0), y = q[1] + (u == 1 ? du : v == 1 ? dv : 0), z = q[2] + (u == 2 ? du : v == 2 ? dv : 0);
+            return m.Get(x, y, z) != VoxelPalette.Empty;
+        }
+        private static void Quad(VoxelModel m, int d, int u, int v, int side, int plane, int i, int j, int w, int h, byte color, int[] levels,
+            List<float> positions, List<float> normals, List<float> uvs, List<byte> shades, List<int> triangles)
         {
             int start = positions.Count / 3;
             var corner = new float[3];
@@ -156,10 +185,22 @@ namespace Broker.Core
                 positions.Add((corner[0] - m.PivotX) * m.VoxelSize); positions.Add((corner[1] - m.PivotY) * m.VoxelSize); positions.Add((corner[2] - m.PivotZ) * m.VoxelSize);
                 normals.Add(d == 0 ? side : 0); normals.Add(d == 1 ? side : 0); normals.Add(d == 2 ? side : 0);
                 uvs.Add(VoxelPalette.U(color)); uvs.Add(VoxelPalette.V(color));
+                shades.Add(CornerShade[levels[k]]);
             }
             // cross(+u, +v) = +d for cyclic axes, so (0, 1, 2) faces +d and the reversed order faces −d.
-            if (side > 0) { triangles.Add(start); triangles.Add(start + 1); triangles.Add(start + 2); triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 3); }
-            else { triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 1); triangles.Add(start); triangles.Add(start + 3); triangles.Add(start + 2); }
+            // The diagonal joins the brighter pair of opposite corners, so one dark corner fades evenly instead of along a streak.
+            bool flip = levels[1] + levels[3] > levels[0] + levels[2];
+            int a = start, b = start + 1, c = start + 2, e = start + 3;
+            if (side > 0)
+            {
+                if (flip) { triangles.Add(a); triangles.Add(b); triangles.Add(e); triangles.Add(b); triangles.Add(c); triangles.Add(e); }
+                else { triangles.Add(a); triangles.Add(b); triangles.Add(c); triangles.Add(a); triangles.Add(c); triangles.Add(e); }
+            }
+            else
+            {
+                if (flip) { triangles.Add(a); triangles.Add(e); triangles.Add(b); triangles.Add(b); triangles.Add(e); triangles.Add(c); }
+                else { triangles.Add(a); triangles.Add(c); triangles.Add(b); triangles.Add(a); triangles.Add(e); triangles.Add(c); }
+            }
         }
     }
 }
