@@ -22,8 +22,8 @@ namespace Broker.Runtime.Office
                     // Narrow closed buildings; fronts face the walkable street (+Z), windowed backs the ring road. No second café look-alike.
                     ShopStyle style = block == 1 ? ShopStyle.Office : ShopStyle.BrickShop;
                     int seed = block + (x < 0 ? 0 : 3);
-                    PlaceVoxel("shop/" + seed, () => VoxelProps.Shop(style, seed, true), "District / voxel street building",
-                        transform, new Vector3(buildingX, ground, -6), 180);
+                    PlaceBuilding("shop/" + seed, () => BuildingModels.Shop(style, seed, true), BuildingModels.Wall(style), "District / street building",
+                        new Vector3(buildingX, ground, -6), 180);
                 }
                 var sign = Text("District / address", x < 0 ? "ЗАПАДНАЯ УЛИЦА / 4" : "ОФИСНАЯ УЛИЦА / 8", new Vector3(x, ground + 3.1f, -1.9f), 48, 0.035f, Color.white);
                 sign.transform.localEulerAngles = new Vector3(0, 180, 0);

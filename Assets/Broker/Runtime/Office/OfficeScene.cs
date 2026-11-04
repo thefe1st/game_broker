@@ -213,6 +213,7 @@ namespace Broker.Runtime.Office
             ReleaseSurfaces();
             ReleaseVoxels();
             ReleaseCars();
+            ReleaseBuildings();
             RenderSettings.ambientMode = previousAmbientMode; RenderSettings.ambientLight = previousAmbient;
             foreach (var material in materials) if (material != null) Destroy(material);
         }

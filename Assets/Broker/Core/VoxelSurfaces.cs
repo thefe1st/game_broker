@@ -9,7 +9,7 @@ namespace Broker.Core
     {
         public const int Size = 128;
         public const float MetresPerTile = 2f;
-        private static readonly string[] keys = { "wood", "plaster", "concrete", "pavers", "asphalt", "brick", "grass", "carpet", "roof", "windows" };
+        private static readonly string[] keys = { "wood", "plaster", "concrete", "pavers", "asphalt", "brick", "grass", "carpet", "roof", "windows", "stucco" };
         // Distant facades tile two 3 m floors with two windows each; everything else is 2 m.
         public static float TileMetres(string key) => key == "windows" ? 6f : MetresPerTile;
         public static bool Has(string key) => Array.IndexOf(keys, key) >= 0;
@@ -29,6 +29,7 @@ namespace Broker.Core
                 case "carpet": return VoxelPalette.Navy;
                 case "roof": return VoxelPalette.RoofDark;
                 case "windows": return VoxelPalette.Concrete;
+                case "stucco": return VoxelPalette.Trim;
                 default: throw new ArgumentException("Unknown surface: " + key, nameof(key));
             }
         }
@@ -69,6 +70,11 @@ namespace Broker.Core
                     break;
                 case "plaster":
                     c = Mix(P(VoxelPalette.Plaster), P(VoxelPalette.PlasterWarm), 0.3f * soft) * (0.98f + 0.03f * fine);
+                    break;
+                case "stucco":
+                    // Near-white render for tinted facades: the building's colour comes from the material, the texture only
+                    // adds soft trowel clouds.
+                    c = Mix(P(VoxelPalette.Trim), P(VoxelPalette.Cream), 0.5f * soft) * (0.96f + 0.04f * Fbm(x, y, seed + 9) + 0.02f * fine);
                     break;
                 case "brick":
                 {
