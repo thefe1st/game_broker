@@ -12,6 +12,7 @@ namespace UnityEngine
     public class Object
     {
         public string name { get; set; } = "";
+        public HideFlags hideFlags { get; set; }
         public static void Destroy(Object obj)
         {
             if (obj is Transform) return;
@@ -38,7 +39,7 @@ namespace UnityEngine
         }
         public T[] GetComponentsInChildren<T>() => gameObject.GetComponentsInChildren<T>();
     }
-    public class Behaviour : Component { public bool enabled { get; set; } = true; }
+    public class Behaviour : Component { public bool enabled { get; set; } = true; public bool isActiveAndEnabled => enabled && gameObject.activeInHierarchy; }
     public class MonoBehaviour : Behaviour { }
     public sealed class GameObject : Object
     {
@@ -126,6 +127,7 @@ namespace UnityEngine
             return new Vector3(r.x / localScale.x, r.y / localScale.y, r.z / localScale.z);
         }
         public Vector3 TransformDirection(Vector3 d) => rotation * d;
+        public Vector3 InverseTransformDirection(Vector3 d) => Quaternion.Inverse(rotation) * d;
         public Vector3 forward => rotation * Vector3.forward;
         public Vector3 right => rotation * Vector3.right;
         public Vector3 up => rotation * Vector3.up;
@@ -137,6 +139,11 @@ namespace UnityEngine
         public IEnumerator GetEnumerator() => children.ToList().GetEnumerator();
     }
 
+    public struct Vector4
+    {
+        public float x, y, z, w;
+        public Vector4(float x, float y, float z, float w) { this.x = x; this.y = y; this.z = z; this.w = w; }
+    }
     public struct Vector2
     {
         public float x, y;
@@ -223,6 +230,7 @@ namespace UnityEngine
         public static Color white => new Color(1, 1, 1);
         public static Color black => new Color(0, 0, 0);
         public static Color clear => new Color(0, 0, 0, 0);
+        public Color linear => new Color(Broker.Core.ScreenLook.SrgbToLinear(r), Broker.Core.ScreenLook.SrgbToLinear(g), Broker.Core.ScreenLook.SrgbToLinear(b), a);
         public static Color operator *(Color c, float s) => new Color(c.r * s, c.g * s, c.b * s, c.a * s);
         public static Color operator *(Color a, Color b) => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a * b.a);
         public static Color operator +(Color a, Color b) => new Color(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a);
@@ -279,8 +287,32 @@ namespace UnityEngine
     public class Shader : Object
     {
         private static readonly Dictionary<string, Shader> found = new Dictionary<string, Shader>();
+        private static readonly Dictionary<string, int> ids = new Dictionary<string, int>();
         public static Shader Find(string name) { if (!found.TryGetValue(name, out var s)) found[name] = s = new Shader { name = name }; return s; }
+        public static int PropertyToID(string name) { if (!ids.TryGetValue(name, out int id)) ids[name] = id = ids.Count + 1; return id; }
+        public bool isSupported => true;
     }
+    [Flags] public enum HideFlags { None = 0, HideInHierarchy = 1, HideInInspector = 2, DontSaveInEditor = 4, NotEditable = 8, DontSaveInBuild = 16, DontUnloadUnusedAsset = 32, DontSave = 52, HideAndDontSave = 61 }
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)] public sealed class RequireComponent : Attribute { public RequireComponent(Type type) { } }
+    public enum RenderTextureFormat { ARGB32 = 0, Depth = 1, ARGBHalf = 2, Default = 7, DefaultHDR = 9, ARGBFloat = 11, RGHalf = 13, RHalf = 15, R8 = 16 }
+    public enum RenderTextureReadWrite { Default, Linear, sRGB }
+    [Flags] public enum DepthTextureMode { None = 0, Depth = 1, DepthNormals = 2, MotionVectors = 4 }
+    public enum ColorSpace { Uninitialized = -1, Gamma = 0, Linear = 1 }
+    public class RenderTexture : Texture
+    {
+        public static int Live;
+        public RenderTextureFormat format { get; private set; }
+        public static RenderTexture GetTemporary(int width, int height, int depthBuffer, RenderTextureFormat format, RenderTextureReadWrite readWrite)
+        { Live++; return new RenderTexture { width = width, height = height, format = format }; }
+        public static void ReleaseTemporary(RenderTexture texture) { if (texture != null) Live--; }
+    }
+    public static class Graphics
+    {
+        public static int Blits;
+        public static void Blit(Texture source, RenderTexture dest) => Blits++;
+        public static void Blit(Texture source, RenderTexture dest, Material material, int pass) => Blits++;
+    }
+    public static class SystemInfo { public static bool SupportsRenderTextureFormat(RenderTextureFormat format) => true; }
     public class Material : Object
     {
         private static readonly string[] standard = { "_Color", "_MainTex", "_Glossiness", "_Metallic", "_BumpMap", "_BumpScale", "_EmissionColor", "_EmissionMap" };
@@ -306,6 +338,11 @@ namespace UnityEngine
         public void SetColor(string p, Color v) => Colors[p] = v;
         public Color GetColor(string p) => Colors.TryGetValue(p, out var v) ? v : Color.black;
         public void SetTexture(string p, Texture t) => Textures[p] = t;
+        public void SetTexture(int id, Texture t) => Textures["#" + id] = t;
+        public void SetVector(int id, Vector4 v) => Vectors[id] = v;
+        public void SetVector(string p, Vector4 v) => NamedVectors[p] = v;
+        public readonly Dictionary<string, Vector4> NamedVectors = new Dictionary<string, Vector4>();
+        public readonly Dictionary<int, Vector4> Vectors = new Dictionary<int, Vector4>();
         public Texture GetTexture(string p) => Textures.TryGetValue(p, out var t) ? t : null;
         public void EnableKeyword(string k) => Keywords.Add(k);
         public void DisableKeyword(string k) => Keywords.Remove(k);
@@ -320,7 +357,15 @@ namespace UnityEngine
     }
     public class Texture2D : Texture
     {
-        private static Texture2D white;
+        private static Texture2D white, black;
+        public static Texture2D blackTexture
+        {
+            get
+            {
+                if (black != null) return black;
+                black = new Texture2D(4, 4); for (int i = 0; i < 16; i++) black.Pixels[i] = new Color32(0, 0, 0, 0); return black;
+            }
+        }
         public Color32[] Pixels;
         public readonly bool MipChain;
         public Texture2D(int width, int height) : this(width, height, TextureFormat.RGBA32, true) { }
@@ -354,6 +399,7 @@ namespace UnityEngine
         public Vector3[] vertices { get; set; } = new Vector3[0];
         public Vector3[] normals { get; set; } = new Vector3[0];
         public Vector2[] uv { get; set; } = new Vector2[0];
+        public Color32[] colors32 { get; set; } = new Color32[0];
         public Rendering.IndexFormat indexFormat { get; set; }
         public int[] triangles { get => submeshes.SelectMany(s => s).ToArray(); set { submeshes.Clear(); submeshes.Add(value); } }
         public int subMeshCount
@@ -372,7 +418,7 @@ namespace UnityEngine
         public void RecalculateBounds() { } public void RecalculateTangents() { } public void RecalculateNormals() { }
         public Mesh Clone()
         {
-            var m = new Mesh { name = name, vertices = (Vector3[])vertices.Clone(), normals = (Vector3[])normals.Clone(), uv = (Vector2[])uv.Clone(), indexFormat = indexFormat };
+            var m = new Mesh { name = name, vertices = (Vector3[])vertices.Clone(), normals = (Vector3[])normals.Clone(), uv = (Vector2[])uv.Clone(), colors32 = (Color32[])colors32.Clone(), indexFormat = indexFormat };
             m.subMeshCount = subMeshCount; for (int i = 0; i < subMeshCount; i++) m.submeshes[i] = (int[])submeshes[i].Clone();
             return m;
         }
@@ -399,6 +445,8 @@ namespace UnityEngine
         public float depth { get; set; } public CameraClearFlags clearFlags { get; set; } = CameraClearFlags.Skybox;
         public Color backgroundColor { get; set; } public bool orthographic { get; set; } public float orthographicSize { get; set; } = 5;
         public Rect rect { get; set; } = new Rect(0, 0, 1, 1);
+        public bool allowHDR { get; set; } = true; public bool allowMSAA { get; set; } = true;
+        public DepthTextureMode depthTextureMode { get; set; }
     }
     public class Light : Behaviour
     {
@@ -430,7 +478,11 @@ namespace UnityEngine
         }
         public static Light sun;
     }
-    public static class QualitySettings { public static float shadowDistance = 150; }
+    public static class QualitySettings
+    {
+        public static float shadowDistance = 150;
+        public static ColorSpace activeColorSpace = ColorSpace.Gamma;
+    }
     public static class DynamicGI { public static int Updates; public static void UpdateEnvironment() => Updates++; }
     public static class Time { public static float unscaledTime = 3.2f, unscaledDeltaTime = 0.016f, time = 3.2f, deltaTime = 0.016f; }
     public static class Debug

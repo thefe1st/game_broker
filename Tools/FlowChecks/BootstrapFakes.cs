@@ -46,7 +46,7 @@ namespace UnityEngine
     public struct Color { public Color(float r, float g, float b, float a = 1) { } }
     public struct Rect { public Rect(float x, float y, float w, float h) { } }
     public class Texture2D { public static Texture2D whiteTexture = new Texture2D(); }
-    public class GUIStyle { public float CalcHeight(GUIContent c, float w) => 24; }
+    public class GUIStyle { public float CalcHeight(GUIContent c, float w) => 24; public Vector2 CalcSize(GUIContent c) => new Vector2(160, 24); }
     public class GUIContent { public GUIContent(string text) { } }
     public static class Screen { public static int width = 1440, height = 960; }
     public enum KeyCode { Return, KeypadEnter }
@@ -56,7 +56,7 @@ namespace UnityEngine
     public static class GUI
     {
         public static bool enabled = true;
-        public static Matrix4x4 matrix; public static Color color;
+        public static Matrix4x4 matrix; public static Color color, contentColor;
         public static string Click;
         public static readonly List<string> Labels = new List<string>();
         public static void Reset() { enabled = true; Click = null; Labels.Clear(); }
@@ -78,11 +78,14 @@ namespace Broker.Runtime.Office
 {
     public sealed class BrokerTheme
     {
-        public UnityEngine.Color Border, Accent, Ink, Gold, Red, Green;
+        public UnityEngine.Color Border, Accent, Ink, Gold, Red, Green, HudInk, HudMuted, HudShadow, HudTrack;
         public UnityEngine.GUIStyle Text = new UnityEngine.GUIStyle(), Small = new UnityEngine.GUIStyle(),
             Heading = new UnityEngine.GUIStyle(), Title = new UnityEngine.GUIStyle(), Tag = new UnityEngine.GUIStyle(),
             Display = new UnityEngine.GUIStyle(), Metric = new UnityEngine.GUIStyle(), Field = new UnityEngine.GUIStyle(),
-            Button = new UnityEngine.GUIStyle(), Primary = new UnityEngine.GUIStyle(), PanelStyle = new UnityEngine.GUIStyle();
+            Button = new UnityEngine.GUIStyle(), Primary = new UnityEngine.GUIStyle(), PanelStyle = new UnityEngine.GUIStyle(),
+            HudHeading = new UnityEngine.GUIStyle(), HudText = new UnityEngine.GUIStyle(), HudTag = new UnityEngine.GUIStyle(),
+            HudClock = new UnityEngine.GUIStyle(), HudRight = new UnityEngine.GUIStyle(), HudCenter = new UnityEngine.GUIStyle(),
+            HudHint = new UnityEngine.GUIStyle(), HudKey = new UnityEngine.GUIStyle();
         public static UnityEngine.Color Hex(string s) => new UnityEngine.Color();
         public void Dispose() { }
     }

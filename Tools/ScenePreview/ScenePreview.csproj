@@ -17,6 +17,7 @@
     <Compile Include="../../Assets/Broker/Runtime/Office/OfficeScene*.cs" />
     <Compile Include="../../Assets/Broker/Runtime/Office/SurfaceLibrary.cs" />
     <Compile Include="../../Assets/Broker/Runtime/Office/OfficeInteractable.cs" />
+    <Compile Include="../../Assets/Broker/Runtime/Office/CameraPost.cs" />
     <Compile Include="*.cs" />
   </ItemGroup>
 </Project>

@@ -37,8 +37,8 @@ namespace Broker.Core
     // and CityDistrictPlan; the scene builds every prop and collider from this list.
     public static class CityScenery
     {
-        public const float FarClip = 420f, FogStart = 30f, FogEnd = 230f;
-        public const float TerrainCenterZ = 45f, TerrainSize = 470f;
+        public const float FarClip = 420f, FogStart = 12f, FogEnd = 235f;
+        public const float TerrainCenterZ = 45f, TerrainSize = 860f;
         // Boulevard tunnels: portal faces at ±TunnelPortalX, dark mouths over the road, embankments around them.
         public const float TunnelPortalX = 80f, TunnelEndX = 97f, TunnelMinZ = 28f, TunnelMaxZ = 42f, TunnelHeight = 6.5f;
         public const float EmbankmentEndX = 100f, EmbankmentMinZ = 16f, EmbankmentMaxZ = 54f, EmbankmentHeight = 10f;

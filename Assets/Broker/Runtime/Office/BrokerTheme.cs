@@ -8,6 +8,10 @@ namespace Broker.Runtime.Office
         public readonly Color Canvas = Hex("#0B1220"), Surface = Hex("#172437"), Border = Hex("#384B63");
         public readonly Color Ink = Hex("#F3F7FB"), Muted = Hex("#BAC6D7"), Gold = Hex("#E9B56D"), Green = Hex("#79D7BA"), Red = Hex("#FFABAD"), Accent = Hex("#83E4D1");
         public GUIStyle Text, Small, Title, Heading, Button, Primary, Field, Card, Tag, Display, Metric, PanelStyle;
+        // Exploration HUD: text straight over the world (no cards) in a warm white with a dark drop shadow and gold accents,
+        // like the golden-hour voxel city it sits on. HudShadow tints the shadow pass of the same text (GUI.contentColor).
+        public readonly Color HudInk = Hex("#F5F0E6"), HudMuted = Hex("#E4DACD"), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.66f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
+        public GUIStyle HudHeading, HudText, HudTag, HudClock, HudRight, HudCenter, HudHint, HudKey;
         private readonly List<Texture2D> textures = new List<Texture2D>();
         private Font font;
         private bool ownsFont;
@@ -19,6 +23,10 @@ namespace Broker.Runtime.Office
             Text = Label(20, Ink); Small = Label(16, Muted); Title = Label(32, Ink, FontStyle.Bold);
             Heading = Label(22, Ink, FontStyle.Bold); Tag = Label(16, Accent, FontStyle.Bold);
             Display = Label(52, Ink, FontStyle.Bold); Metric = Label(36, Ink, FontStyle.Bold);
+            HudHeading = Label(22, HudInk, FontStyle.Bold); HudText = Label(16, HudMuted); HudTag = Label(16, Gold, FontStyle.Bold);
+            HudClock = Label(32, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudRight = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperRight);
+            HudCenter = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudHint = Label(16, HudMuted, FontStyle.Normal, TextAnchor.UpperCenter);
+            HudKey = Label(20, HudInk, FontStyle.Bold, TextAnchor.MiddleCenter);
             PanelStyle = new GUIStyle { border = new RectOffset(10, 10, 10, 10) };
             PanelStyle.normal.background = Rounded(Surface);
             Button = new GUIStyle(GUI.skin.button) { font = font, fontSize = 18, wordWrap = true,
@@ -42,9 +50,10 @@ namespace Broker.Runtime.Office
             Field.normal.background = Rounded(Hex("#0E192B")); Field.normal.textColor = Ink;
             Field.focused.background = Rounded(Hex("#263F55")); Field.focused.textColor = Ink;
         }
-        private GUIStyle Label(int size, Color color, FontStyle weight = FontStyle.Normal)
+        private GUIStyle Label(int size, Color color, FontStyle weight = FontStyle.Normal, TextAnchor alignment = TextAnchor.UpperLeft)
         {
-            var style = new GUIStyle(GUI.skin.label) { font = font, fontSize = size, wordWrap = true, fontStyle = weight, richText = false, padding = new RectOffset(0, 0, 0, 0) };
+            var style = new GUIStyle(GUI.skin.label) { font = font, fontSize = size, wordWrap = true, fontStyle = weight, richText = false,
+                alignment = alignment, padding = new RectOffset(0, 0, 0, 0) };
             style.normal.textColor = color; return style;
         }
         private Texture2D Rounded(Color color)
