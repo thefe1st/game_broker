@@ -7,12 +7,15 @@ with Liberation Sans):
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview sunset-west office --fast
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk --at=24
+dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk plaza-office --hour=19.75
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- --check
 ```
 
 The first form writes every shot to `preview/*.png`; the second renders only the named shots.
 `--fast` turns off 2×2 supersampling, `--no-hud` skips the HUD, `--at=SECONDS` re-times the selected
-shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' green).
+shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' green). `--hour=H` shows
+the selected shots at that hour of the city clock (`Core/DayCycle`, 18.5 = 18:30); without it every shot
+has its own hour, and all but the evening ones below are the approved bright day, 15:00.
 
 | Shot | What it shows |
 |---|---|
@@ -32,6 +35,8 @@ shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' 
 | `drive-parked` | the sedan back in the lay-by: E «Выйти из машины» |
 | `office`, `office-employee` | the office as the owner and as the hired broker |
 | `aerial` | both quarters from above, no HUD |
+| `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4 prototype): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
+| `night-plaza`, `night-boulevard`, `night-office`, `night-aerial` | night, 20:30 (the aerial at 21:00, the end of the day): lit windows and shop fronts, street lamps and their pools of light, the light over the office door, headlights; the office with its lamps and the night city in the windows; no HUD |
 
 Street shots with a HUD enter the city like the elevator does (`VisitCity`) and put the player at the
 camera, so walkers stop for it and the signal counts it on the zebra. Driving shots seat the player in
@@ -54,12 +59,13 @@ pixel textures, low-poly car meshes, lights, sky and fog values, same traffic po
 `Renderer.cs` is a small CPU rasteriser that approximates the built-in forward path of the
 project's **linear colour space with HDR cameras**: sRGB colours and textures are decoded before
 lighting, light colour × intensity goes through Unity's gamma-to-linear, Standard BRDF, trilight
-ambient, the `Broker/Sky` dome (`Core/SkyLook`, clouds at time 0; Unity's procedural skybox when
-the material is not `Broker/Sky`), sky reflections, four soft shadow cascades, point lights, linear
+ambient, the `Broker/Sky` dome (`Core/SkyLook`, clouds at time 0, the hour's palette and sun or moon;
+Unity's procedural skybox when the material is not `Broker/Sky`), sky reflections, four soft shadow
+cascades, point lights (the street lamps after dusk), emission (lit windows, lamp glass), linear
 fog, the corner shade of `Broker/Voxel` and 2×2 SSAA. Cameras with `CameraPost` get the screen pass
-of `BrokerPost.shader` with the values of `Core/ScreenLook`: half-resolution SSAO, the sun's glow in
-the haze (`ScreenLook.HazeGlowAt`), the bloom pyramid, exposure, warm balance and ACES, saturation,
-contrast and vignette, then sRGB encoding. World TextMesh labels and the HUD are drawn by
+of `BrokerPost.shader` with the values of `Core/ScreenLook`: half-resolution SSAO, the sun's (or the
+moon's) glow in the haze (`ScreenLook.HazeGlowAt`, in the sky's glow colour of the hour), the bloom
+pyramid, exposure, warm balance and ACES, saturation, contrast and vignette, then sRGB encoding. World TextMesh labels and the HUD are drawn by
 ImageMagick, NOT by Unity fonts/IMGUI.
 
 `--check` renders each shot at 240×160 and exits with 1 on builder warnings, an empty view

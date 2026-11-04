@@ -106,6 +106,7 @@ namespace Broker.Runtime.Office
             Box("Elevator / city indicator", new Vector3(0, ground + 2.95f, 8.12f), new Vector3(2.5f, 0.12f, 0.2f), cityLight, false);
             var sign = Text("City / elevator sign", "ОФИС", new Vector3(0, ground + 2.05f, 8.43f), 48, 0.048f, new Color(0.98f, 0.93f, 0.82f));
             sign.transform.localEulerAngles = new Vector3(0, 180, 0);
+            NightLight("City / office door light", transform, new Vector3(0, ground + 3.3f, 9.1f), DayCycle.DoorRange, DayCycle.DoorIntensity);
             var portal = Box("Office / street elevator", new Vector3(5.85f, 1.3f, -0.2f), new Vector3(0.14f, 2.6f, 1.3f), navy);
             Interactable(portal, OfficeStation.Street, "Лифт в квартал", "Выйти на площадь");
             Box("Office / elevator light", new Vector3(5.74f, 2.5f, -0.2f), new Vector3(0.05f, 0.06f, 1.15f), cityLight, false);
@@ -133,6 +134,7 @@ namespace Broker.Runtime.Office
         {
             var obj = new GameObject(name); obj.transform.SetParent(transform, false); obj.transform.localPosition = position;
             var point = obj.AddComponent<Light>(); point.type = LightType.Point; point.range = range; point.intensity = intensity; point.color = color;
+            RoomLight(point);
         }
         // Hazy skyline beyond the playable block: one cheap low-poly mesh per shade (BuildingModels.Skyline) that the fog
         // dissolves; it casts no shadows.

@@ -68,7 +68,7 @@ namespace Broker.Runtime.Office
             BuildBayRailing(metal);
             // Lamps over the outer pavements and towers behind them, fronts to the road.
             foreach (var lamp in CityRoads.Lamps)
-                PlaceBuilding("street lamp", StreetModels.StreetLamp, StreetModels.FurnitureLook, "Ring / street lamp", new Vector3(lamp.X, g, lamp.Z), lamp.Yaw);
+                PlaceStreetLamp("Ring / street lamp", new Vector3(lamp.X, g, lamp.Z), lamp.Yaw);
             var frontage = CityRoads.Frontage;
             for (int i = 0; i < frontage.Count; i++)
             {

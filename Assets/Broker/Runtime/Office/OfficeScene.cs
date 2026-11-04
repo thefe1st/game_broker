@@ -91,7 +91,7 @@ namespace Broker.Runtime.Office
                 Box("Ceiling light fixture", new Vector3(x, 3.72f, 0), new Vector3(1.8f, 0.08f, 0.8f), lights, false);
                 var lamp = new GameObject("Warm point light"); lamp.transform.SetParent(transform, false); lamp.transform.localPosition = new Vector3(x, 3.3f, 0);
                 var point = lamp.AddComponent<Light>(); point.type = LightType.Point; point.range = 8; point.intensity = 1.1f;
-                point.color = new Color(1, 0.88f, 0.69f);
+                point.color = new Color(1, 0.88f, 0.69f); RoomLight(point);
             }
             BuildCity();
             BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor(); BuildSupervisor();
@@ -190,6 +190,7 @@ namespace Broker.Runtime.Office
         public void Refresh(BrokerDay day)
         {
             if (day == null) return;
+            FollowDay(day);
             // City errands are hidden; retained implementation is not part of this scene.
             RefreshBoard(day);
             phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
