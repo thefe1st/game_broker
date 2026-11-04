@@ -40,7 +40,7 @@ namespace Broker.Runtime.Office
             voxelGlow.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
         }
         public const string VoxelShader = "Broker/Voxel";
-        public const float GlowEmission = 1.35f;
+        public const float GlowEmission = 0.9f;
         private Material VoxelMat(Shader shader, string hex)
         {
             if (shader == null) return Mat(hex);

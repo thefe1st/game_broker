@@ -379,23 +379,49 @@ namespace Broker.Tests
             Assert.That(VoxelProps.Hedge(9.2f, 1).Width, Is.EqualTo(9.25f).Within(0.01f));
             Assert.Throws<ArgumentOutOfRangeException>(() => VoxelProps.Hedge(0, 1));
         }
-        [Test] public void PixelSurfacesAreTileableDeterministicAndUsePaletteColours()
+        // Smooth surfaces in the manner of Schedule I: no pixel noise, seamless tiles, each close to its palette colour.
+        [Test] public void SurfacesAreSmoothSeamlessAndKeepTheirPaletteColour()
         {
+            int n = VoxelSurfaces.Size;
+            Assert.That(n, Is.EqualTo(128));
             foreach (string key in VoxelSurfaces.Keys)
             {
                 byte[] a = VoxelSurfaces.Rgba(key), b = VoxelSurfaces.Rgba(key);
-                Assert.That(a.Length, Is.EqualTo(32 * 32 * 4)); Assert.That(a, Is.EqualTo(b));
-                var colours = new HashSet<byte>();
-                for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++)
+                Assert.That(a.Length, Is.EqualTo(n * n * 4)); Assert.That(a, Is.EqualTo(b), key + " is deterministic");
+                double r = 0, g = 0, bl = 0, step = 0, edge = 0, luma = 0, luma2 = 0;
+                for (int y = 0; y < n; y++) for (int x = 0; x < n; x++)
                 {
-                    Assert.That(VoxelSurfaces.Texel(key, x, y), Is.EqualTo(VoxelSurfaces.Texel(key, x + 32, y - 32)));
-                    colours.Add(VoxelSurfaces.Texel(key, x, y));
+                    int i = (y * n + x) * 4, right = (y * n + (x + 1) % n) * 4, up = (((y + 1) % n) * n + x) * 4;
+                    Assert.That(a[i + 3], Is.EqualTo(255));
+                    r += a[i]; g += a[i + 1]; bl += a[i + 2];
+                    double l = 0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2]; luma += l; luma2 += l * l;
+                    double d = 0;
+                    for (int k = 0; k < 3; k++) d += Math.Abs(a[i + k] - a[right + k]) + Math.Abs(a[i + k] - a[up + k]);
+                    step += d / 6; if (x == n - 1 || y == n - 1) edge += d / 6;
                 }
-                Assert.That(colours.Count, Is.InRange(2, 6), key);
-                Assert.That(colours.Contains(VoxelPalette.Empty), Is.False, key);
+                int count = n * n;
+                // Neighbouring texels, also across the tile edge, are nearly equal: no pixel-art speckle, no seam where tiles meet.
+                Assert.That(step / count, Is.LessThan(4), key + " is smooth");
+                Assert.That(edge / (2 * n - 1), Is.LessThan(3 * step / count + 2), key + " tiles without a seam");
+                VoxelPalette.Rgb(VoxelSurfaces.BaseColor(key), out byte br, out byte bg, out byte bb);
+                double near = key == "windows" ? 25 : 18;
+                Assert.That(Math.Abs(r / count - br), Is.LessThan(near), key + " red");
+                Assert.That(Math.Abs(g / count - bg), Is.LessThan(near), key + " green");
+                Assert.That(Math.Abs(bl / count - bb), Is.LessThan(near), key + " blue");
+                double spread = Math.Sqrt(Math.Max(0, luma2 / count - (luma / count) * (luma / count)));
+                if (key == "asphalt" || key == "plaster" || key == "grass" || key == "concrete") Assert.That(spread, Is.LessThan(8), key + " stays even");
+                VoxelSurfaces.Color(key, 5, 7, out float r0, out float g0, out float b0);
+                VoxelSurfaces.Color(key, 5 + n, 7 - 2 * n, out float r1, out float g1, out float b1);
+                Assert.That(r1, Is.EqualTo(r0)); Assert.That(g1, Is.EqualTo(g0)); Assert.That(b1, Is.EqualTo(b0));
             }
+            // The distant facades still show lit windows.
+            byte[] windows = VoxelSurfaces.Rgba("windows"); VoxelPalette.Rgb(VoxelPalette.WindowLit, out byte lr, out byte lg, out byte lb);
+            int lit = 0;
+            for (int i = 0; i < windows.Length; i += 4) if (Math.Abs(windows[i] - lr) < 24 && Math.Abs(windows[i + 1] - lg) < 24 && Math.Abs(windows[i + 2] - lb) < 24) lit++;
+            Assert.That(lit, Is.GreaterThan(200), "lit windows");
             Assert.That(VoxelSurfaces.Has("marble"), Is.False);
             Assert.Throws<ArgumentException>(() => VoxelSurfaces.Rgba("marble"));
+            Assert.Throws<ArgumentException>(() => VoxelSurfaces.BaseColor("marble"));
         }
         [Test] public void SceneryKeepsTheDistrictWalkableAndTheSkylineInsideTheFarClip()
         {

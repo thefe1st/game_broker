@@ -159,11 +159,12 @@ namespace Broker.Runtime
             targetTitleWidth = Mathf.Min(560, theme.HudHeading.CalcSize(new GUIContent(targetTitle)).x);
             return targetTitle;
         }
-        // HUD text on the world: the same text in the shadow colour two pixels down and right, then the text itself.
+        // HUD text on the world: the same text in the shadow colour one and two pixels down and right (a solid edge that reads
+        // on light paving and sky), then the text itself.
         private void HudLabel(float x, float y, float w, float h, string text, GUIStyle style)
         {
             var tint = GUI.contentColor; GUI.contentColor = theme.HudShadow;
-            GUI.Label(new Rect(x + 2, y + 2, w, h), text, style);
+            GUI.Label(new Rect(x + 1, y + 1, w, h), text, style); GUI.Label(new Rect(x + 2, y + 2, w, h), text, style);
             GUI.contentColor = tint; GUI.Label(new Rect(x, y, w, h), text, style);
         }
         // Thin gold bar on a dark translucent track, with the same drop shadow as the text.

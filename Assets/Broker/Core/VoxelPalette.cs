@@ -18,7 +18,7 @@ namespace Broker.Core
             Ink = 49, Cream = 50, Brass = 51, Skin = 52, SkinShade = 53, HairDark = 54, HairBrown = 55,
             SignalRed = 56, SignalAmber = 57, SignalGreen = 58, LampWarm = 59, WindowLit = 60, Headlight = 61, TailLight = 62, ScreenGreen = 63;
 
-        // sRGB, warm "golden hour" set: no pure black or white, so lighting and haze keep their colour.
+        // sRGB, a warm set: no pure black or white, so lighting and haze keep their colour.
         private static readonly uint[] colors = {
             0x000000, 0x8AAA4C, 0x6C8E3C, 0x4E722F, 0x95B455, 0x6D923F, 0x4A7233, 0x3F7046,
             0x2C5536, 0x7A5638, 0x5A3E29, 0x5E4632, 0xE58FA8, 0xF0CF55, 0xEDE7D6, 0xC9C4B8,

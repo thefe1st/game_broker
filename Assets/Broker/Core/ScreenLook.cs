@@ -7,20 +7,20 @@ namespace Broker.Core
     public static class ScreenLook
     {
         // Bloom: soft-knee threshold on the brightest channel, a blurred half-resolution pyramid, added with this intensity.
-        public const float BloomThreshold = 1.0f, BloomKnee = 0.5f, BloomIntensity = 0.16f;
+        public const float BloomThreshold = 1.0f, BloomKnee = 0.5f, BloomIntensity = 0.12f;
         public const int BloomLevels = 6;
         // Screen-space occlusion: hemisphere radius in metres, strength, fade-out between the two view distances.
-        public const float OcclusionRadius = 0.55f, OcclusionStrength = 0.9f, OcclusionFadeStart = 40f, OcclusionFadeEnd = 100f;
+        public const float OcclusionRadius = 0.55f, OcclusionStrength = 0.75f, OcclusionFadeStart = 40f, OcclusionFadeEnd = 100f;
         public const int OcclusionSamples = 12;
         // Grade: exposure and a warm white balance before the ACES curve, then saturation and contrast around mid grey.
-        public const float Exposure = 0.75f, WarmR = 1.04f, WarmG = 1.0f, WarmB = 0.92f;
-        public const float Saturation = 0.95f, Contrast = 1.1f, MidGrey = 0.18f;
+        public const float Exposure = 0.72f, WarmR = 1.02f, WarmG = 1.0f, WarmB = 0.96f;
+        public const float Saturation = 1.06f, Contrast = 1.08f, MidGrey = 0.18f;
         // Vignette: darkening at the screen corners (0 = none), over the aspect-corrected distance from the centre.
-        public const float Vignette = 0.24f;
+        public const float Vignette = 0.14f;
 
         // Sun glow in the haze: fogged geometry takes the sky's halo around the sun (SkyLook.Glow × HaloStrength × cos^HaloPower,
         // faded with the height of the view ray like the sky's horizon band) in proportion to its linear fog. A fully fogged
-        // block gets exactly the halo of the sky behind it, so the far city toward the low sun dissolves into its glow.
+        // block gets exactly the halo of the sky behind it, so the far city toward the sun dissolves into its glow.
         // Added to the linear HDR scene before the grade; rayHeight is the world-up component of the unit view ray.
         public static float HazeGlowAt(float depth, float fogStart, float fogEnd, float cosSun, float rayHeight)
         {

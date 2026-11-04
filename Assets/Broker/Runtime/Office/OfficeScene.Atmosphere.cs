@@ -4,15 +4,15 @@ using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
-    // Golden hour: a low warm sun from the west, cool three-colour ambient in the shade, a deep orange linear haze and the
-    // Broker/Sky dome (Core/SkyLook): its pale horizon sits above the haze, so far blocks read as warm silhouettes, and
-    // below the horizon it shows the haze itself. CameraPost adds the sun's glow to the haze. Every global setting is
+    // Bright day (closer to Schedule I): a high warm-white sun from the west, soft three-colour ambient in the shade, a light
+    // grey-blue linear haze and the Broker/Sky dome (Core/SkyLook): its pale horizon sits above the haze, so far blocks fade
+    // into soft shapes, and below the horizon it shows the haze itself. CameraPost adds the sun's glow to the haze. Every global setting is
     // saved first and restored when the office scene is destroyed.
     public sealed partial class OfficeScene
     {
         public static readonly Color Haze = Rgb(SkyLook.Haze);
-        // Direction the light travels: east, down (about 17° sun) and slightly north, so plaza faces and tower fronts catch the sun.
-        public static readonly Vector3 SunDirection = new Vector3(0.88f, -0.29f, 0.31f);
+        // Direction the light travels: east, down (about 40° sun) and slightly north, so plaza faces and tower fronts catch the sun.
+        public static readonly Vector3 SunDirection = new Vector3(0.722f, -0.643f, 0.254f);
         public const string SkyShader = "Broker/Sky";
         private Light sun, previousSun;
         private Material previousSkybox;
@@ -26,16 +26,16 @@ namespace Broker.Runtime.Office
             previousSun = RenderSettings.sun; previousSkybox = RenderSettings.skybox;
             previousSkyColor = RenderSettings.ambientSkyColor; previousEquatorColor = RenderSettings.ambientEquatorColor;
             previousGroundColor = RenderSettings.ambientGroundColor; previousShadowDistance = QualitySettings.shadowDistance;
-            var sunObject = new GameObject("Golden hour sun"); sunObject.transform.SetParent(transform, false);
+            var sunObject = new GameObject("Sun"); sunObject.transform.SetParent(transform, false);
             sunObject.transform.rotation = Quaternion.LookRotation(SunDirection.normalized, Vector3.up);
             sun = sunObject.AddComponent<Light>(); sun.type = LightType.Directional;
-            sun.color = new Color(1f, 0.72f, 0.45f); sun.intensity = 1.4f;
-            sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.86f; sun.shadowBias = 0.05f; sun.shadowNormalBias = 0.35f;
+            sun.color = new Color(1f, 0.94f, 0.84f); sun.intensity = 1.45f;
+            sun.shadows = LightShadows.Soft; sun.shadowStrength = 0.8f; sun.shadowBias = 0.05f; sun.shadowNormalBias = 0.35f;
             RenderSettings.sun = sun;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.42f, 0.45f, 0.56f);
-            RenderSettings.ambientEquatorColor = new Color(0.58f, 0.48f, 0.42f);
-            RenderSettings.ambientGroundColor = new Color(0.3f, 0.25f, 0.22f);
+            RenderSettings.ambientSkyColor = new Color(0.50f, 0.58f, 0.72f);
+            RenderSettings.ambientEquatorColor = new Color(0.54f, 0.55f, 0.56f);
+            RenderSettings.ambientGroundColor = new Color(0.30f, 0.29f, 0.27f);
             RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear; RenderSettings.fogColor = Haze;
             RenderSettings.fogStartDistance = CityScenery.FogStart; RenderSettings.fogEndDistance = CityScenery.FogEnd;
             QualitySettings.shadowDistance = Mathf.Max(previousShadowDistance, 110);
@@ -43,12 +43,12 @@ namespace Broker.Runtime.Office
             var skyShader = GraphicsSettings.currentRenderPipeline == null ? Shader.Find(SkyShader) : null;
             if (skyShader != null && skyShader.isSupported)
             {
-                sky = new Material(skyShader) { name = "Broker / golden hour sky" }; materials.Add(sky);
+                sky = new Material(skyShader) { name = "Broker / sky" }; materials.Add(sky);
                 PaintSky(sky); RenderSettings.skybox = sky;
             }
             else if (previousSkybox != null && previousSkybox.shader != null && previousSkybox.shader.name == "Skybox/Procedural")
             {
-                sky = new Material(previousSkybox) { name = "Broker / golden hour sky" }; materials.Add(sky);
+                sky = new Material(previousSkybox) { name = "Broker / sky" }; materials.Add(sky);
                 SetIf(sky, "_SunSize", 0.06f); SetIf(sky, "_SunSizeConvergence", 3.5f);
                 SetIf(sky, "_AtmosphereThickness", 1.45f); SetIf(sky, "_Exposure", 1.2f);
                 if (sky.HasProperty("_SkyTint")) sky.SetColor("_SkyTint", new Color(0.55f, 0.52f, 0.5f));

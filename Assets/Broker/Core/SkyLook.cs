@@ -2,8 +2,8 @@ using System;
 
 namespace Broker.Core
 {
-    // The golden-hour sky over the city, shared by the Unity sky shader (Shaders/BrokerSky.shader) and the offline preview:
-    // a pale peach horizon above the deeper orange haze, a lilac-grey zenith, a halo around the low sun and a layer of soft
+    // The daytime sky over the city, shared by the Unity sky shader (Shaders/BrokerSky.shader) and the offline preview:
+    // a clear blue zenith, a pale blue horizon above the grey-blue haze, a soft halo around the sun and a layer of white
     // clouds lit from the sun side. The palette is sRGB (as written to the material); Evaluate works on linear colours and returns linear HDR.
     public static class SkyLook
     {
@@ -29,19 +29,19 @@ namespace Broker.Core
             }
         }
 
-        // Palette (sRGB): a lilac-grey zenith over a pale peach horizon. The haze (the fog colour) is a deeper orange than the
-        // horizon, so far blocks read as warm silhouettes against the sky; below the horizon the dome shows the haze itself.
-        public static readonly Rgb Zenith = new Rgb(0.47f, 0.47f, 0.57f), Horizon = new Rgb(0.72f, 0.58f, 0.52f), Haze = new Rgb(0.66f, 0.47f, 0.37f), Ground = Haze;
-        public static readonly Rgb Glow = new Rgb(1.0f, 0.64f, 0.36f), CloudLit = new Rgb(0.92f, 0.78f, 0.68f), CloudShade = new Rgb(0.58f, 0.52f, 0.56f);
+        // Palette (sRGB): a clear blue zenith over a pale blue horizon. The haze (the fog colour) is a little darker and greyer
+        // than the horizon, so far blocks fade into soft blue-grey shapes against the sky; below the horizon the dome shows the haze itself.
+        public static readonly Rgb Zenith = new Rgb(0.36f, 0.56f, 0.86f), Horizon = new Rgb(0.76f, 0.84f, 0.92f), Haze = new Rgb(0.70f, 0.76f, 0.82f), Ground = Haze;
+        public static readonly Rgb Glow = new Rgb(1.0f, 0.93f, 0.80f), CloudLit = new Rgb(0.98f, 0.97f, 0.95f), CloudShade = new Rgb(0.70f, 0.75f, 0.84f);
         // Gradient: exp(−falloff × height) blends the zenith into the horizon.
-        public const float HorizonFalloff = 4.5f;
+        public const float HorizonFalloff = 3.2f;
         // Sun: a wide halo low on the sky, a tight glow and the disk (cosines of its radius and of the end of its soft edge).
-        public const float HaloStrength = 0.55f, HaloPower = 5f, GlowStrength = 1.4f, GlowPower = 160f, DiskStrength = 16f, DiskCos = 0.99955f, DiskSoftCos = 0.99975f;
+        public const float HaloStrength = 0.3f, HaloPower = 6f, GlowStrength = 1.2f, GlowPower = 220f, DiskStrength = 20f, DiskCos = 0.99955f, DiskSoftCos = 0.99975f;
         // Clouds: a plane projected over the city, stretched east–west, faded into the haze at the horizon.
-        public const float CloudCover = 0.38f, CloudSoftness = 0.2f, CloudScale = 1.5f, CloudLift = 0.18f, CloudStretch = 0.5f, CloudDrift = 0.004f;
-        public const float CloudFadeLow = 0.015f, CloudFadeHigh = 0.22f, CloudOpacity = 0.75f;
+        public const float CloudCover = 0.34f, CloudSoftness = 0.22f, CloudScale = 1.3f, CloudLift = 0.18f, CloudStretch = 0.5f, CloudDrift = 0.004f;
+        public const float CloudFadeLow = 0.015f, CloudFadeHigh = 0.25f, CloudOpacity = 0.9f;
         // Cloud light: density a step toward the sun; thinner there means a lit edge. Silver lining near the sun, haze near the horizon.
-        public const float CloudLightStep = 0.16f, CloudLightGain = 3.5f, CloudSilver = 0.8f, CloudHaze = 0.6f;
+        public const float CloudLightStep = 0.16f, CloudLightGain = 3.5f, CloudSilver = 0.5f, CloudHaze = 0.45f;
 
         // d: unit view direction, s: unit direction toward the sun, time: seconds (clouds drift slowly).
         public static Rgb Evaluate(float dx, float dy, float dz, float sx, float sy, float sz, Palette p, float time = 0)

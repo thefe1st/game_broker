@@ -180,7 +180,7 @@ namespace Broker.Tools.ScenePreview
         private static void AddHud(List<string> args, Shot shot, BrokerDay day, OfficeScene scene)
         {
             var ink = Hex("#F5F0E6"); var muted = Hex("#E4DACD"); var gold = Hex("#E9B56D");
-            const string shadow = "rgba(10,6,5,0.66)", track = "rgba(20,13,10,0.45)";
+            const string shadow = "rgba(10,6,5,0.8)", track = "rgba(20,13,10,0.45)";
             void Rect(float x, float y, float w, float h, string fill) =>
                 args.AddRange(new[] { "-gravity", "NorthWest", "-stroke", "none", "-fill", fill, "-draw", string.Format(CultureInfo.InvariantCulture, "rectangle {0},{1} {2},{3}", x, y, x + w - 1, y + h - 1) });
             // Text in the box from x to x + w, aligned like its GUIStyle (left, centre or right): shadow pass, then the text.
@@ -188,7 +188,7 @@ namespace Broker.Tools.ScenePreview
             {
                 string gravity = align == TextAnchor.UpperCenter ? "North" : align == TextAnchor.UpperRight ? "NorthEast" : "NorthWest";
                 float anchor = align == TextAnchor.UpperCenter ? x + w / 2 - 720 : align == TextAnchor.UpperRight ? 1440 - (x + w) : x;
-                foreach (var (shift, fill) in new[] { (2f, shadow), (0f, Rgba(color, 1)) })
+                foreach (var (shift, fill) in new[] { (1f, shadow), (2f, shadow), (0f, Rgba(color, 1)) })
                     args.AddRange(new[] { "-gravity", gravity, "-font", bold ? "Liberation-Sans-Bold" : "Liberation-Sans", "-pointsize", size.ToString(CultureInfo.InvariantCulture),
                         "-fill", fill, "-stroke", "none", "-annotate", Offset(anchor + (align == TextAnchor.UpperRight ? -shift : shift), y + shift - size * 0.12f), value });
             }
@@ -233,7 +233,7 @@ namespace Broker.Tools.ScenePreview
             if (employee)
             {
                 Text(40, 104, 560, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, 16, gold, true);
-                foreach (var (shift, fill) in new[] { (2, shadow), (0, Rgba(muted, 1)) })
+                foreach (var (shift, fill) in new[] { (1, shadow), (2, shadow), (0, Rgba(muted, 1)) })
                     args.AddRange(new[] { "(", "-size", "560x", "-background", "none", "-font", "Liberation-Sans", "-pointsize", "16", "-fill", fill,
                         "caption:" + day.EmploymentNextAction, ")", "-gravity", "NorthWest", "-geometry", Offset(40 + shift, 128 + shift), "-composite" });
             }

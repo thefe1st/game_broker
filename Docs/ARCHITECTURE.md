@@ -70,7 +70,7 @@ DTO `CareerSave` / `CareerDayReport` используют публичные с�
 
 
 ## Локальные текстуры
-`SurfaceLibrary` строит пиксельные 32×32 карты `VoxelSurfaces` (Point, без нормалей) и кеширует их на сцену; фото-текстуры и их загрузка из Resources удалены 3 ноября. `OfficeScene.Surfaces.cs` создаёт метрические UV и освобождает свои меши/изображения. `SurfaceMapping` в Core не зависит от Unity. Добавлен встроенный модуль imageconversion. Экономика, голос и сохранения не менялись. Подробности и ограничения: [MATERIALS.md](MATERIALS.md).
+`SurfaceLibrary` строит гладкие 128×128 карты `VoxelSurfaces` (Trilinear, mipmaps, без нормалей; до 4 ноября — пиксельные 32×32, Point) и кеширует их на сцену; фото-текстуры и их загрузка из Resources удалены 3 ноября. `OfficeScene.Surfaces.cs` создаёт метрические UV и освобождает свои меши/изображения. `SurfaceMapping` в Core не зависит от Unity. Добавлен встроенный модуль imageconversion. Экономика, голос и сохранения не менялись. Подробности и ограничения: [MATERIALS.md](MATERIALS.md).
 
 
 ## Ежедневные дела квартала

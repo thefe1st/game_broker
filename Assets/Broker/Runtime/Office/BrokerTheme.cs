@@ -9,8 +9,8 @@ namespace Broker.Runtime.Office
         public readonly Color Ink = Hex("#F3F7FB"), Muted = Hex("#BAC6D7"), Gold = Hex("#E9B56D"), Green = Hex("#79D7BA"), Red = Hex("#FFABAD"), Accent = Hex("#83E4D1");
         public GUIStyle Text, Small, Title, Heading, Button, Primary, Field, Card, Tag, Display, Metric, PanelStyle;
         // Exploration HUD: text straight over the world (no cards) in a warm white with a dark drop shadow and gold accents,
-        // like the golden-hour voxel city it sits on. HudShadow tints the shadow pass of the same text (GUI.contentColor).
-        public readonly Color HudInk = Hex("#F5F0E6"), HudMuted = Hex("#E4DACD"), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.66f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
+        // over the bright voxel city. HudShadow tints the two shadow passes of the same text (GUI.contentColor).
+        public readonly Color HudInk = Hex("#F5F0E6"), HudMuted = Hex("#E4DACD"), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.8f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
         // HudSpeed: the big speedometer figure while driving.
         public GUIStyle HudHeading, HudText, HudTag, HudClock, HudRight, HudCenter, HudHint, HudKey, HudSpeed;
         private readonly List<Texture2D> textures = new List<Texture2D>();
