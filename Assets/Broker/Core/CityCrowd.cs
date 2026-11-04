@@ -77,12 +77,15 @@ namespace Broker.Core
     }
 
     // Decorative passers-by on closed routes in both quarters and in the Exchange hall. They cross the boulevard only
-    // on the green and only if there is time to finish, stop for the player, follow each other on a route and yield to
-    // lower-numbered walkers from other routes. Not clients, no dialogue, no effect on the day.
+    // on the green and only if there is time to finish, stop for the player and before the player's car, follow each
+    // other on a route and yield to lower-numbered walkers from other routes. Not clients, no dialogue, no effect on the day.
     public sealed class CityCrowd
     {
         public const float BodyRadius = 0.3f, PlayerStop = 1.2f, Lane = 0.55f, FollowGap = 0.85f, CrossSpeed = 1.4f, MinSpeed = 1.05f, MaxSpeed = 1.45f;
+        // How far ahead a walker looks for the player's car, and the room kept from its body.
+        public const float CarLook = 1.2f, CarRoom = 0.1f;
         private const double Step = 0.05; private const float PatienceSeconds = 2.5f, PassSeconds = 1.5f;
+        private static readonly float[] carSteps = { 0.35f, 0.8f, CarLook };
         public static ReadOnlyCollection<CityRoute> Routes { get; } = Array.AsReadOnly(new[]
         {
             new CityRoute(-11.5f, 12, 11.5f, 12, 11.5f, 21.5f, -11.5f, 21.5f),                                   // plaza ring
@@ -126,24 +129,27 @@ namespace Broker.Core
         }
         public bool AnyOnCrossing { get { foreach (var w in walkers) if (w.InCrosswalk) return true; return false; } }
         public void Advance(double seconds, CrosswalkSignal signal, bool playerPresent, float playerX, float playerZ)
+            => Advance(seconds, signal, playerPresent, playerX, playerZ, null);
+        // The same with the player's car: walkers stop before its body instead of stepping into it.
+        public void Advance(double seconds, CrosswalkSignal signal, bool playerPresent, float playerX, float playerZ, OrientedRect? car)
         {
             if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
             while (seconds > 1e-9)
             {
                 double dt = Math.Min(Step, seconds); seconds -= dt;
-                foreach (var walker in walkers) StepWalker(walker, (float)dt, signal, playerPresent, playerX, playerZ);
+                foreach (var walker in walkers) StepWalker(walker, (float)dt, signal, playerPresent, playerX, playerZ, car);
             }
         }
         private static bool MayStartCrossing(CityRoute route, int segment, CrosswalkSignal signal)
             => signal == null || (signal.Phase == CrosswalkPhase.Walk && signal.WalkSecondsLeft >= route.SegmentLength(segment) / CrossSpeed - 1);
-        private void StepWalker(CityWalker w, float dt, CrosswalkSignal signal, bool playerPresent, float px, float pz)
+        private void StepWalker(CityWalker w, float dt, CrosswalkSignal signal, bool playerPresent, float px, float pz, OrientedRect? car)
         {
             var route = Routes[w.Route];
             if (route.IsCrossing(w.Segment) && w.Along <= 0 && !MayStartCrossing(route, w.Segment, signal))
             { w.Waiting = true; w.Moving = false; w.InCrosswalk = false; return; }
             w.Waiting = false;
             route.Direction(w.Segment, out float dx, out float dz);
-            bool blocked = playerPresent && Ahead(w, dx, dz, px, pz, PlayerStop);
+            bool blocked = (playerPresent && Ahead(w, dx, dz, px, pz, PlayerStop)) || (car.HasValue && CarAhead(w, dx, dz, car.Value));
             bool yielding = false;
             if (!blocked)
                 foreach (var other in walkers)
@@ -182,6 +188,14 @@ namespace Broker.Core
             route.Direction(w.Segment, out float dx, out float dz);
             w.Heading = (float)(Math.Atan2(dx, dz) * 180 / Math.PI);
             w.InCrosswalk = route.IsCrossing(w.Segment) && w.Along > 0;
+        }
+        // The car's body within reach of the next steps.
+        private static bool CarAhead(CityWalker w, float dx, float dz, OrientedRect car)
+        {
+            if (car.Distance(w.X, w.Z) > CarLook + BodyRadius + CarRoom + 0.5f) return false;
+            foreach (float k in carSteps)
+                if (car.Contains(w.X + dx * k, w.Z + dz * k, BodyRadius + CarRoom)) return true;
+            return false;
         }
         private static bool Ahead(CityWalker w, float dx, float dz, float ox, float oz, float range)
         {

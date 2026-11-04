@@ -166,8 +166,13 @@ namespace Broker.Tests
             yield return ("desk", VoxelProps.Desk(3.6f, 0.85f, 1.25f, VoxelPalette.Wood, VoxelPalette.WoodDark));
             yield return ("chair", VoxelProps.OfficeChair(VoxelPalette.Navy)); yield return ("keyboard", VoxelProps.Keyboard());
             yield return ("mouse", VoxelProps.Mouse()); yield return ("coffee", VoxelProps.CoffeeMachine());
-            foreach (ShopStyle style in Enum.GetValues(typeof(ShopStyle))) yield return ("shop " + style, VoxelProps.Shop(style, 9));
+            foreach (ShopStyle style in Enum.GetValues(typeof(ShopStyle)))
+            {
+                yield return ("shop " + style, VoxelProps.Shop(style, 9)); yield return ("shop back " + style, VoxelProps.Shop(style, 9, true));
+            }
             foreach (var b in new CityBlockPlan().Buildings) yield return ("tower", VoxelProps.Tower(b.Width, b.Depth, b.Height, (TowerStyle)b.Style, 11));
+            foreach (var b in CityRoads.Frontage) yield return ("ring tower", VoxelProps.Tower(b.Front, b.Depth, b.Height, (TowerStyle)b.Style, 40));
+            yield return ("office block", VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true));
             foreach (PersonStyle style in Enum.GetValues(typeof(PersonStyle)))
             {
                 var f = VoxelProps.Person(style);
@@ -220,6 +225,36 @@ namespace Broker.Tests
             }
             Assert.That(lit / (float)windows, Is.InRange(0.04f, 0.25f));
             Assert.Throws<ArgumentOutOfRangeException>(() => VoxelProps.Tower(1, 11, 20, TowerStyle.Brick, 0));
+        }
+        // The backs that face the ring road get windows only when asked; the rest of the model stays as it was.
+        [Test] public void BacksSeenFromTheRingHaveWindowsOnlyWhenAsked()
+        {
+            const int panes = 2 * 3 * 4 * 6;
+            foreach (ShopStyle style in Enum.GetValues(typeof(ShopStyle)))
+            {
+                var plain = VoxelProps.Shop(style, 9); var windowed = VoxelProps.Shop(style, 9, true);
+                Assert.That(BackPanes(plain, plain.SizeZ - 1, -1), Is.Zero, "plain back " + style);
+                Assert.That(BackPanes(windowed, windowed.SizeZ - 1, -1), Is.EqualTo(panes), "windowed back " + style);
+                for (int z = 0; z < plain.SizeZ - 2; z++) for (int y = 0; y < plain.SizeY; y++) for (int x = 0; x < plain.SizeX; x++)
+                    if (windowed.Get(x, y, z) != plain.Get(x, y, z)) Assert.Fail("shop " + style + " changed in front of its back wall");
+            }
+            Assert.That(BackPanes(VoxelProps.CafeShell(), 0, 1), Is.EqualTo(panes), "café back");
+            var office = VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false, true);
+            var blank = VoxelProps.Tower(31, 19.5f, 7.5f, TowerStyle.Plaster, 5, false, false);
+            Assert.That(BackPanes(office, office.SizeZ - 2, -1), Is.GreaterThan(0), "office back");
+            Assert.That(BackPanes(blank, blank.SizeZ - 2, -1), Is.Zero, "blank tower back");
+        }
+        // Glass behind the open cells of a facade layer z, one voxel along inward: the window area of that face.
+        private static int BackPanes(VoxelModel m, int z, int inward)
+        {
+            int n = 0;
+            for (int y = 0; y < m.SizeY; y++) for (int x = 0; x < m.SizeX; x++)
+            {
+                if (m.Get(x, y, z) != VoxelPalette.Empty) continue;
+                byte pane = m.Get(x, y, z + inward);
+                if (pane == VoxelPalette.Glass || pane == VoxelPalette.GlassDark || pane == VoxelPalette.GlassSky || pane == VoxelPalette.WindowLit) n++;
+            }
+            return n;
         }
         [Test] public void FiguresStandAboutOnePointEightFiveMetresWithJointsAtNeckAndShoulders()
         {

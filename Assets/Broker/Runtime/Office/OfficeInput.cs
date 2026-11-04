@@ -72,6 +72,17 @@ namespace Broker.Runtime.Office
             return false;
 #endif
         }
+        // The car's handbrake.
+        public static bool Handbrake()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current.spaceKey.isPressed;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+            return Input.GetKey(KeyCode.Space);
+#else
+            return false;
+#endif
+        }
         public static bool Sprinting()
         {
 #if ENABLE_INPUT_SYSTEM

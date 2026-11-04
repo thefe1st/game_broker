@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Broker.Core;
 using UnityEngine;
 
@@ -36,17 +37,32 @@ namespace Broker.Runtime.Office
             Box("Crossing / westbound stop line", new Vector3(CityCrosswalk.WestboundStopX + 0.2f, markY, (north + centre) / 2), new Vector3(0.4f, 0.01f, north - centre - 0.3f), paint, false);
             for (int stripe = 0; stripe < 12; stripe++)
                 Box("Crossing / zebra stripe", new Vector3(0, markY, south + 0.9f + stripe), new Vector3(2 * CityCrosswalk.HalfWidth, 0.01f, 0.5f), paint, false);
-            // Kerbs from the crossing to the tunnels; inside the district a railing and an invisible barrier above them.
-            foreach (float z in new[] { south, north })
-                foreach (float side in new[] { -1f, 1f })
+            // Kerbs from the crossing to the tunnels; inside the district a railing and an invisible barrier above them. The
+            // south kerb opens for the ring streets and the lay-by (CityRoads.SouthKerbCuts), its pieces reaching into the
+            // openings under the slanted kerbs of OfficeScene.Roads; west of the crossing its railing and barrier follow
+            // the lay-by (BuildBayRailing).
+            const float gap = CityCrosswalk.GateHalfWidth, districtEdge = 44.5f;
+            foreach (float side in new[] { -1f, 1f })
+            {
+                Box("Boulevard / kerb", new Vector3(side * (gap + portalX) / 2, g + 0.17f, north), new Vector3(portalX - gap, 0.34f, 0.35f), concrete);
+                foreach (float z in side < 0 ? new[] { north } : new[] { south, north })
                 {
-                    const float gap = CityCrosswalk.GateHalfWidth, districtEdge = 44.5f;
-                    Box("Boulevard / kerb", new Vector3(side * (gap + portalX) / 2, g + 0.17f, z), new Vector3(portalX - gap, 0.34f, 0.35f), concrete);
                     Blocker("Boulevard / kerb barrier", new Vector3(side * (gap + districtEdge) / 2, g + 0.65f, z), new Vector3(districtEdge - gap, 1.3f, 0.35f));
                     for (int post = 0; post <= 12; post++)
-                        Box("Boulevard / railing post", new Vector3(side * (3.3f + post * 3.4f), g + 0.8f, z), new Vector3(0.1f, 1.1f, 0.1f), metal, false);
-                    Box("Boulevard / railing", new Vector3(side * 23.7f, g + 1.33f, z), new Vector3(40.8f, 0.08f, 0.14f), metal, false);
+                        Box("Boulevard / railing post", new Vector3(side * (3.3f + post * RailPostSpacing), g + 0.8f, z), new Vector3(0.1f, 1.1f, 0.1f), metal, false);
+                    Box("Boulevard / railing", new Vector3(side * 23.7f, g + RailHeight, z), new Vector3(40.8f, 0.08f, 0.14f), metal, false);
                 }
+            }
+            var openings = new List<(float min, float max, float join)> { (-gap, gap, 0) };
+            foreach (var cut in CityRoads.SouthKerbCuts) openings.Add((cut.MinX, cut.MaxX, KerbJoin));
+            openings.Sort((a, b) => a.min.CompareTo(b.min));
+            float from = -portalX;
+            foreach (var (min, max, join) in openings)
+            {
+                Box("Boulevard / kerb", new Vector3((from + min + join) / 2, g + 0.17f, south), new Vector3(min + join - from, 0.34f, 0.35f), concrete);
+                from = max - join;
+            }
+            Box("Boulevard / kerb", new Vector3((from + portalX) / 2, g + 0.17f, south), new Vector3(portalX - from, 0.34f, 0.35f), concrete);
             // Gates in the kerb gaps and walls along the zebra.
             crossingGates = new Collider[2];
             for (int i = 0; i < 2; i++)
@@ -56,15 +72,18 @@ namespace Broker.Runtime.Office
                 Blocker("Crossing / corridor wall", new Vector3(side * CityCrosswalk.CorridorX, g + 0.65f, centre), new Vector3(0.3f, 1.3f, north - south));
             BuildSignals();
             BuildTunnels(grass);
-            // Grass verges and a row of trees between the district and the tunnels.
+            // Grass verges and a row of trees between the district and the tunnels; south of the boulevard they begin past the
+            // outer pavements of the ring streets.
             float[] treeX = { 50, 59, 68, 76 };
+            const float verge = -CityRoads.OuterPavementWestX, vergeEnd = 80.3f;
             foreach (float side in new[] { -1f, 1f })
             {
-                Box("Boulevard / south verge", new Vector3(side * 62.4f, CityBlockPlan.TerrainTopY + 0.01f, 22.2f), new Vector3(35.8f, 0.02f, 12.2f), grass, false);
+                Box("Boulevard / south verge", new Vector3(side * (verge + vergeEnd) / 2, CityBlockPlan.TerrainTopY + 0.01f, 22.2f), new Vector3(vergeEnd - verge, 0.02f, 12.2f), grass, false);
                 Box("Boulevard / north verge", new Vector3(side * 62.4f, CityBlockPlan.TerrainTopY + 0.01f, 47.8f), new Vector3(35.8f, 0.02f, 12.6f), grass, false);
                 for (int t = 0; t < treeX.Length; t++)
                     foreach (float z in new[] { 25.5f, 45f })
                     {
+                        if (z < centre && treeX[t] < verge) continue;
                         int seed = t * 2 + (z > centre ? 1 : 0) + (side > 0 ? 3 : 0);
                         PlaceTree(t % 2 == 1, seed, new Vector3(side * treeX[t], CityBlockPlan.TerrainTopY, z), seed * 37);
                     }

@@ -8,36 +8,48 @@ namespace Broker.Runtime
     {
         private string cityDestinationId = "office";
         private bool cityMapFromPause;
-        // Walking map at 4 px per metre: walkable areas, the boulevard with its zebra, closed buildings in gold with the
-        // open rooms (café, Exchange hall) cut out, the chosen landmark and the player. It never moves the player.
+        // District map at 3.3 px per metre: the ring of roads with the lay-by, the walkable areas, the zebra, closed
+        // buildings in gold with the open rooms (café, Exchange hall) cut out, the chosen landmark and the player (in the
+        // car while driving). It never moves the player.
+        private const float MapLeft = 212, MapTop = 234, MapScale = 3.3f, MapMinX = -62, MapMaxX = 62, MapMinZ = -32, MapMaxZ = 76;
+        private static Rect MapRect(CityRect r)
+        {
+            float minX = Mathf.Max(r.MinX, MapMinX), maxX = Mathf.Min(r.MaxX, MapMaxX), minZ = Mathf.Max(r.MinZ, MapMinZ), maxZ = Mathf.Min(r.MaxZ, MapMaxZ);
+            return new Rect(MapLeft + (minX - MapMinX) * MapScale, MapTop + (MapMaxZ - maxZ) * MapScale,
+                Mathf.Max(0, maxX - minX) * MapScale, Mathf.Max(0, maxZ - minZ) * MapScale);
+        }
+        private static Rect MapDot(float x, float z, float size) => new Rect(MapLeft + (x - MapMinX) * MapScale - size / 2, MapTop + (MapMaxZ - z) * MapScale - size / 2, size, size);
         private void DrawCityMap()
         {
-            Panel(160, 64, 1120, 832, ""); Label(200, 92, 1040, 48, "Район / пешая навигация", theme.Title);
-            Label(200, 148, 1040, 52, "Юг — площадь у офиса, сквер и офисная улица. Север — Биржа за бульваром: переходите по зебре на зелёный, кнопка на столбе. Открыты только зал Биржи и кофейня.", theme.Small);
+            Panel(160, 64, 1120, 832, ""); Label(200, 92, 1040, 48, "Район / навигация", theme.Title);
+            Label(200, 148, 1040, 52, "Юг — площадь у офиса, сквер и офисная улица. Север — Биржа за бульваром: зебра на зелёный, кнопка на столбе. Кольцо дорог — для тестового седана с парковки у сквера.", theme.Small);
             Panel(200, 216, 432, 480, "");
-            const float left = 240, top = 248, scale = 4;
-            Rect Map(CityRect r) => new Rect(left + (r.MinX - CityDistrictPlan.MinX) * scale, top + (CityDistrictPlan.MaxZ - r.MaxZ) * scale, r.Width * scale, r.Depth * scale);
-            foreach (var area in CityDistrictPlan.Areas) Paint(Map(area), theme.Border);
-            Paint(Map(CityDistrictPlan.Road), Broker.Runtime.Office.BrokerTheme.Hex("#0F1B2D"));
+            foreach (var area in CityDistrictPlan.Areas) Paint(MapRect(area), theme.Border);
+            var road = Broker.Runtime.Office.BrokerTheme.Hex("#0F1B2D");
+            foreach (var piece in CityRoads.Drivable) Paint(MapRect(piece), road);
             for (int i = 0; i < 6; i++)
-                Paint(Map(new CityRect(-CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 0.6f + i * 2, CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 1.6f + i * 2)), theme.Ink);
-            foreach (var footprint in CityDistrictPlan.Footprints) Paint(Map(footprint), theme.Gold);
-            foreach (var opening in CityDistrictPlan.Openings) Paint(Map(opening), theme.Border);
-            Label(392, 276, 96, 24, "БИРЖА", theme.Tag);
-            Label(248, 400, 120, 24, "БУЛЬВАР", theme.Tag);
-            Label(380, 468, 120, 24, "ПЛОЩАДЬ", theme.Tag);
-            Label(256, 504, 96, 24, "СКВЕР", theme.Tag);
-            Label(504, 504, 96, 24, "ОФИСЫ", theme.Tag);
+                Paint(MapRect(new CityRect(-CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 0.6f + i * 2, CityCrosswalk.HalfWidth, CityDistrictPlan.SouthKerbZ + 1.6f + i * 2)), theme.Ink);
+            foreach (var footprint in CityDistrictPlan.Footprints) Paint(MapRect(footprint), theme.Gold);
+            foreach (var building in CityRoads.Frontage) Paint(MapRect(building.Footprint), theme.Gold);
+            foreach (var opening in CityDistrictPlan.Openings) Paint(MapRect(opening), theme.Border);
+            Label(396, 256, 96, 24, "БИРЖА", theme.Tag);
+            Label(278, 358, 120, 24, "БУЛЬВАР", theme.Tag);
+            Label(312, 400, 96, 24, "ПАРКОВКА", theme.Tag);
+            Label(400, 422, 120, 24, "ПЛОЩАДЬ", theme.Tag);
+            Label(284, 446, 96, 24, "СКВЕР", theme.Tag);
+            Label(488, 446, 96, 24, "ОФИСЫ", theme.Tag);
+            Label(382, 536, 96, 24, "КОЛЬЦО", theme.Tag);
             var selected = CityDistrictPlan.Find(cityDestinationId);
-            Paint(new Rect(left + (selected.X - CityDistrictPlan.MinX) * scale - 4, top + (CityDistrictPlan.MaxZ - selected.Z) * scale - 4, 8, 8), theme.Accent);
-            if (office.IsInCity) Paint(new Rect(left + (office.MapX - CityDistrictPlan.MinX) * scale - 3, top + (CityDistrictPlan.MaxZ - office.MapZ) * scale - 3, 6, 6), theme.Ink);
-            Label(224, 616, 384, 64, "Белый — вы; зелёный — ориентир. Золотой — закрытые здания, в них открыты только кофейня и зал Биржи.", theme.Small);
+            Paint(MapDot(selected.X, selected.Z, 8), theme.Accent);
+            if (office.IsInCity) Paint(MapDot(office.MapX, office.MapZ, 6), theme.Ink);
+            Label(224, 606, 384, 72, "Белый — вы, зелёный — ориентир, тёмное — дороги. Золотое — закрытые здания; открыты кофейня и зал Биржи.", theme.Small);
             var destinations = CityDistrictPlan.Destinations;
             for (int i = 0; i < destinations.Count; i++)
-                if (Button(664, 216 + i * 54, 568, 44, "Ориентир / " + destinations[i].Name, ApplicationActive, destinations[i].Id == cityDestinationId)) cityDestinationId = destinations[i].Id;
+                if (Button(664, 216 + i * 48, 568, 40, "Ориентир / " + destinations[i].Name, ApplicationActive, destinations[i].Id == cityDestinationId)) cityDestinationId = destinations[i].Id;
             Label(664, 652, 568, 64, selected.Description, theme.Small);
             Label(200, 724, 700, 64, office.IsInCity ? "От вас: " + Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, selected)) + " м по прямой · "
-                + CityDistrictPlan.Direction(office.MapX, office.MapZ, selected) + ". Обходите клумбы и фасады пешком, бульвар — только по зебре."
+                + CityDistrictPlan.Direction(office.MapX, office.MapZ, selected) + (office.Driving ? ". В машине — только по кольцу; выйти можно на парковке у сквера."
+                : ". Обходите клумбы и фасады пешком, бульвар — только по зебре.")
                 : "Карта не переносит игрока. Выйдите через лифт в квартал; выбранный ориентир появится на улице.", theme.Small);
             if (Button(936, 820, 296, 48, "Назад · Esc", ApplicationActive)) CloseCityInformation();
         }

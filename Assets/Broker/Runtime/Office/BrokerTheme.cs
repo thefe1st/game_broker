@@ -11,7 +11,8 @@ namespace Broker.Runtime.Office
         // Exploration HUD: text straight over the world (no cards) in a warm white with a dark drop shadow and gold accents,
         // like the golden-hour voxel city it sits on. HudShadow tints the shadow pass of the same text (GUI.contentColor).
         public readonly Color HudInk = Hex("#F5F0E6"), HudMuted = Hex("#E4DACD"), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.66f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
-        public GUIStyle HudHeading, HudText, HudTag, HudClock, HudRight, HudCenter, HudHint, HudKey;
+        // HudSpeed: the big speedometer figure while driving.
+        public GUIStyle HudHeading, HudText, HudTag, HudClock, HudRight, HudCenter, HudHint, HudKey, HudSpeed;
         private readonly List<Texture2D> textures = new List<Texture2D>();
         private Font font;
         private bool ownsFont;
@@ -26,7 +27,7 @@ namespace Broker.Runtime.Office
             HudHeading = Label(22, HudInk, FontStyle.Bold); HudText = Label(16, HudMuted); HudTag = Label(16, Gold, FontStyle.Bold);
             HudClock = Label(32, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudRight = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperRight);
             HudCenter = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudHint = Label(16, HudMuted, FontStyle.Normal, TextAnchor.UpperCenter);
-            HudKey = Label(20, HudInk, FontStyle.Bold, TextAnchor.MiddleCenter);
+            HudKey = Label(20, HudInk, FontStyle.Bold, TextAnchor.MiddleCenter); HudSpeed = Label(44, HudInk, FontStyle.Bold, TextAnchor.UpperRight);
             PanelStyle = new GUIStyle { border = new RectOffset(10, 10, 10, 10) };
             PanelStyle.normal.background = Rounded(Surface);
             Button = new GUIStyle(GUI.skin.button) { font = font, fontSize = 18, wordWrap = true,

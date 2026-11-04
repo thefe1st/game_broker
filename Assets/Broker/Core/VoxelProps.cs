@@ -365,7 +365,8 @@ namespace Broker.Core
 
         // ---------- Buildings ----------
         // City tower in 0.5 m voxels with recessed windows; one voxel of margin carries the cornice and canopy.
-        public static VoxelModel Tower(float width, float depth, float height, TowerStyle style, int seed, bool roofUnits = true, bool shopFloor = true)
+        public static VoxelModel Tower(float width, float depth, float height, TowerStyle style, int seed, bool roofUnits = true, bool shopFloor = true,
+            bool backWindows = false)
         {
             const float s = TowerVoxel;
             int w = Round(width / s), d = Round(depth / s), h = Round(height / s);
@@ -383,7 +384,7 @@ namespace Broker.Core
             int groundH = shopFloor ? 8 : 2;
             m.Box(1, 0, 1, w, h, d, wall);
             m.Box(1, h - 1, 1, w, 1, d, VoxelPalette.RoofDark);
-            // Facades: front (−Z) and both sides get windows; the unseen back keeps bands only.
+            // Facades: front (−Z) and both sides get windows; an unseen back keeps bands only.
             for (int face = 0; face < 4; face++)
             {
                 int length = face < 2 ? w : d;
@@ -391,7 +392,7 @@ namespace Broker.Core
                     for (int y = 0; y < h - 1; y++)
                     {
                         Facade(face, u, w, d, out int fx, out int fz, out int ix, out int iz);
-                        int kind = Cell(style, u, y, length, groundH, h, face == 1);
+                        int kind = Cell(style, u, y, length, groundH, h, face == 1 && !backWindows);
                         if (kind == 0) continue;
                         if (kind == 1) { m.Set(fx, y, fz, band); continue; }
                         if (kind == 2) { m.Set(fx, y, fz, trim); continue; }
@@ -476,8 +477,9 @@ namespace Broker.Core
             }
         }
 
-        // Narrow street building, 6 × 9 × 8 m in 0.25 m voxels; the awning porch extends 2 m in front (−Z).
-        public static VoxelModel Shop(ShopStyle style, int seed)
+        // Narrow street building, 6 × 9 × 8 m in 0.25 m voxels; the awning porch extends 2 m in front (−Z). With backWindows
+        // the back (+Z), seen from the ring road, gets bands, two rows of plain windows and a service door.
+        public static VoxelModel Shop(ShopStyle style, int seed, bool backWindows = false)
         {
             const int w = 24, h = 36, d = 32, porch = 8;
             var m = new VoxelModel(w, h + 3, d + porch, ShopVoxel) { PivotX = w / 2f, PivotZ = porch + d / 2f };
@@ -529,6 +531,7 @@ namespace Broker.Core
             for (int x = 0; x < w; x++) for (int z = f; z < f + d; z++)
                 if (x == 0 || x == w - 1 || z == f || z == f + d - 1) m.Set(x, h, z, trim);
             m.Box(3, h, f + d - 8, 4, 2, 4, VoxelPalette.MetalDark);
+            if (backWindows) BackFacade(m, f + d - 1, -1, seed, band, trim);
             if (style == ShopStyle.Office)
             {
                 m.Box(15, 9, f - 3, 6, 1, 3, VoxelPalette.MetalLight);
@@ -544,6 +547,28 @@ namespace Broker.Core
                 for (int x = 1; x < 15; x += 2) m.Set(x, 8, f - 6, x / 2 % 2 == 0 ? a : b);
             }
             return m;
+        }
+        // Back of a 6 m street building in 0.25 m voxels on layer z (glass one voxel inwards along inward): a plinth, a flush
+        // service door, a band per upper floor and three plain windows with flush sills on each.
+        internal static void BackFacade(VoxelModel m, int z, int inward, int seed, byte band, byte trim)
+        {
+            m.Box(0, 0, z, m.SizeX, 1, 1, VoxelPalette.StoneDark);
+            m.Box(4, 1, z, 3, 7, 1, VoxelPalette.MetalDark);
+            for (int floor = 0; floor < 2; floor++)
+            {
+                int y0 = 12 + floor * 12;
+                m.Box(0, y0, z, m.SizeX, 1, 1, band);
+                foreach (int x0 in new[] { 3, 10, 17 })
+                {
+                    float n = VoxelNoise.Value(x0, floor, 9, seed);
+                    for (int y = y0 + 3; y <= y0 + 8; y++) for (int x = x0; x < x0 + 4; x++)
+                    {
+                        m.Set(x, y, z, E);
+                        m.Set(x, y, z + inward, n < 0.15f ? VoxelPalette.WindowLit : y == y0 + 8 ? VoxelPalette.GlassSky : VoxelPalette.GlassDark);
+                    }
+                    m.Box(x0, y0 + 2, z, 4, 1, 1, trim);
+                }
+            }
         }
     }
 }

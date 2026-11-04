@@ -24,16 +24,24 @@ shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' 
 | `exchange`, `exchange-hall` | the Exchange square and steps; the hall with the quote board of a work day, aimed at it (E and its title) |
 | `cafe` | the café «Бык и медведь»: counter, barista, tables, aimed at the counter |
 | `tunnel` | the eastern tunnel portal at the end of the boulevard |
+| `parking` | the red test sedan in its lay-by by the square, aimed at (E «Сесть за руль») |
+| `drive-boulevard`, `drive-south`, `drive-corner` | behind the wheel with the chase camera: among the traffic on the boulevard, on the southern street of the ring past the office's windowed back, turning into the eastern street; speedometer, gear and the driving keys |
+| `drive-parked` | the sedan back in the lay-by: E «Выйти из машины» |
 | `office`, `office-employee` | the office as the owner and as the hired broker |
 | `aerial` | both quarters from above, no HUD |
 
 Street shots with a HUD enter the city like the elevator does (`VisitCity`) and put the player at the
-camera, so walkers stop for it and the signal counts it on the zebra. Every shot starts the boulevard clock
+camera, so walkers stop for it and the signal counts it on the zebra. Driving shots seat the player in
+the test sedan (`EnterCar`), put it at the shot's position, heading and speed, hold the shot's throttle
+and steering for its last `DriveSeconds` in 1/30 s frames through the real `PlayerCar`, kerbs and chase
+camera, and render from that camera. Every shot starts the boulevard clock
 afresh and advances signal, cars and walkers to its time, so a shot always shows the same moment. The
 HUD repeats `DrawWorldHUD`: warm white text with a 2 px drop shadow and no panels — name and place top
 left, the clock in the middle, money and the gold meter top right, the controls hint of a fresh day at
 the bottom; on the street also the landmark (name, straight-line distance, direction) and, near the
-crossing, «ПЕРЕХОД / СВЕТОФОР» with the signal state. Shots marked as aimed draw the gold crosshair and the
+crossing, «ПЕРЕХОД / СВЕТОФОР» with the signal state; behind the wheel the speedometer with the gear
+bottom right, the exit line (E «Выйти из машины» in the lay-by, «Выйти можно только на парковке»
+elsewhere) and the driving keys instead of the walking ones. Shots marked as aimed draw the gold crosshair and the
 E key with the target's title as one centred line; the others print the shot's target line.
 
 The project compiles the **actual Core, OfficeScene partials, SurfaceLibrary and
