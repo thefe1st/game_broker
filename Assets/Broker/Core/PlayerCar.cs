@@ -310,7 +310,7 @@ namespace Broker.Core
                     foreach (var car in traffic.Cars)
                     {
                         if (Math.Abs(car.X - X) > 6 || Math.Abs(car.Z - Z) > 6) continue;
-                        var other = new OrientedRect(car.X, car.Z, CityTraffic.Eastbound(car.Lane) ? 0 : (float)Math.PI, CityTraffic.CarLength / 2, HalfWidth);
+                        var other = car.Footprint;
                         float depth = footprint.Penetration(other, out float cnx, out float cnz);
                         if (depth <= 0) continue;
                         ContactPoint(footprint, other, cnx, cnz, out float cx, out float cz);

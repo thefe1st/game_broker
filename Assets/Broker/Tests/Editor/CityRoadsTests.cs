@@ -220,7 +220,7 @@ namespace Broker.Tests
             Assert.That(PlayerCar.ToFrontAxle, Is.EqualTo(shape.FrontAxleX).Within(1e-4f));
             Assert.That(PlayerCar.ToRearAxle, Is.EqualTo(-shape.RearAxleX).Within(1e-4f));
             Assert.That(PlayerCar.WheelRadius, Is.EqualTo(shape.WheelRadius).Within(1e-4f));
-            Assert.That(2 * PlayerCar.HalfLength, Is.EqualTo(CityTraffic.CarLength).Within(0.02f));
+            Assert.That(new CityTraffic().Cars, Has.Some.Matches<CityCar>(c => c.Style == CarStyle.Sedan), "the player drives one of the boulevard bodies");
             Assert.That(CarModels.Paints[PlayerCar.Paint].Name, Is.EqualTo("красный"));
             Assert.That(PlayerCar.Paint, Is.Not.EqualTo(CarModels.TaxiPaint));
         }

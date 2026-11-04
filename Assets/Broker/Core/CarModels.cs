@@ -3,7 +3,9 @@ using System.Collections.Generic;
 
 namespace Broker.Core
 {
-    public enum CarStyle { Sedan, Taxi }
+    // Body styles: the old four-door sedan and its taxi, a small five-door hatchback, a pickup with an open bed and a
+    // cargo van. New styles go at the end, so stored values keep their meaning.
+    public enum CarStyle { Sedan, Taxi, Hatchback, Pickup, Van }
 
     // Submeshes of car bodies and wheels, in this order, one material each. Paint is tinted per car over a grain
     // texture (box-mapped UVs in metres); Detail and Lamp sample VoxelPalette texels (Lamp glows); Glass is dark and
@@ -41,13 +43,29 @@ namespace Broker.Core
     }
 
     // Low-poly cars in the manner of Schedule I: boxy bodies with soft chamfers, dark glass, grey steel wheels,
-    // simple lamps and bumpers, a light grain on the paint. The first model is a cheap old four-door sedan
-    // (a "bucket of bolts"); the taxi is the same body in yellow with a roof sign and a checker band.
-    // Built from code: a lofted shell (cross-sections along X with wheel wells and a greenhouse), chamfered boxes and lathed wheels.
-    public static class CarModels
+    // simple lamps and bumpers, a light grain on the paint. Cheap old cars of four bodies: the four-door sedan (a
+    // "bucket of bolts"; the taxi is the same body in yellow with a roof sign and a checker band), a small five-door
+    // hatchback, a pickup with an open bed and a tall cargo van. Built from code: a lofted shell (cross-sections along X
+    // with wheel wells and a greenhouse, one BodyPlan per body), chamfered boxes and lathed wheels.
+    public static partial class CarModels
     {
         public const float SmoothAngle = 50, PaintTile = 1.6f;
         public static CarShape Sedan { get; } = new CarShape(4.14f, 1.664f, 1.42f, 1.24f, -1.20f, 1.38f, 0.30f, 0.19f);
+        public static CarShape Hatchback { get; } = new CarShape(3.70f, 1.62f, 1.44f, 1.13f, -1.14f, 1.35f, 0.285f, 0.175f);
+        public static CarShape Pickup { get; } = new CarShape(4.90f, 1.78f, 1.74f, 1.58f, -1.42f, 1.50f, 0.34f, 0.22f);
+        public static CarShape Van { get; } = new CarShape(4.80f, 1.86f, 2.04f, 1.48f, -1.52f, 1.56f, 0.33f, 0.21f);
+        // The taxi is a sedan.
+        public static CarShape Shape(CarStyle style)
+        {
+            switch (style)
+            {
+                case CarStyle.Sedan: case CarStyle.Taxi: return Sedan;
+                case CarStyle.Hatchback: return Hatchback;
+                case CarStyle.Pickup: return Pickup;
+                case CarStyle.Van: return Van;
+                default: throw new ArgumentOutOfRangeException(nameof(style));
+            }
+        }
 
         private static readonly CarPaint[] paints =
         {
@@ -57,111 +75,211 @@ namespace Broker.Core
             new CarPaint("голубой", 0x73A1C4), new CarPaint("жёлтое такси", 0xE3B43C),
         };
         public static IReadOnlyList<CarPaint> Paints => paints;
-        public const int TaxiPaint = 10, StreetPaints = 10;
+        public const int TaxiPaint = 10, StreetPaints = 10, WhitePaint = 2, SilverPaint = 4;
+        // Taxis are yellow; work vans white, every third one silver; the rest take any street colour.
         public static int PaintFor(CarStyle style, int seed)
-            => style == CarStyle.Taxi ? TaxiPaint : (int)(VoxelNoise.Hash(seed, 19, 3, 71) % StreetPaints);
+        {
+            uint roll = VoxelNoise.Hash(seed, 19, 3, 71);
+            if (style == CarStyle.Taxi) return TaxiPaint;
+            if (style == CarStyle.Van) return roll % 3 == 0 ? SilverPaint : WhitePaint;
+            return (int)(roll % StreetPaints);
+        }
 
         private const int PaintPart = (int)CarPart.Paint, DetailPart = (int)CarPart.Detail, GlassPart = (int)CarPart.Glass,
             LampPart = (int)CarPart.Lamp, BrakePart = (int)CarPart.Brake, PartCount = 5;
-
-        // ---------- Sedan shell, metres (the first car) ----------
-        private const float FrontX = 2.0f, RearX = -2.0f, EndRound = 0.10f;
-        private const float FloorY = 0.22f, InnerZ = 0.57f, SillZ = 0.80f, SillY = 0.29f, CreaseZ = 0.832f, CreaseY = 0.70f;
-        private const float SideTopZ = 0.815f, ShoulderZ = 0.79f, BeltZ = 0.755f, ArchRadius = 0.375f;
-        private const float CowlX = 0.62f, RoofFrontX = 0.12f, RoofRearX = -0.92f, TrunkX = -1.30f;
-        private const float BPillarFront = -0.22f, BPillarRear = -0.30f, RearWindowEnd = -0.86f, SeamHalf = 0.006f;
-        private static readonly float[] seams = { 0.70f, -0.26f, -0.96f };
-        private static readonly float[,] roof = { { 0.645f, 1.365f }, { 0.585f, 1.405f }, { 0.32f, 1.417f }, { 0, 1.42f } };
         public const int SectionPoints = 12;
 
-        // Hood falls 5 cm towards the nose, the trunk 1.5 cm towards the tail; the waist is level under the greenhouse.
-        private static float DeckY(float x)
+        // ---------- Body plans, metres ----------
+        // The sedan, the first car.
+        private static readonly BodyPlan sedanPlan = new BodyPlan
         {
-            if (x >= CowlX) return 0.935f - 0.05f * Math.Min(1, (x - CowlX) / (1.90f - CowlX));
-            if (x <= TrunkX) return 0.94f - 0.015f * Math.Min(1, (TrunkX - x) / (TrunkX + 1.90f));
-            return 0.94f;
-        }
-        // Top of the wheel arch over a station, or −1 outside both arches. Arches are half circles on the sill line.
-        private static float ArchTop(float x)
+            Shape = Sedan, FrontX = 2.0f, RearX = -2.0f,
+            FloorY = 0.22f, InnerZ = 0.57f, SillZ = 0.80f, SillY = 0.29f, CreaseZ = 0.832f, CreaseY = 0.70f,
+            SideTopZ = 0.815f, ShoulderZ = 0.79f, BeltZ = 0.755f, ArchRadius = 0.375f,
+            HoodY = 0.935f, HoodDrop = 0.05f, BeltY = 0.94f, TailY = 0.94f, TailDrop = 0.015f,
+            CowlX = 0.62f, RoofFrontX = 0.12f, RoofRearX = -0.92f, TrunkX = -1.30f,
+            Windows = new[] { -0.22f, 0.62f, -0.86f, -0.30f }, Seams = new[] { 0.70f, -0.26f, -0.96f },
+            Roof = new[,] { { 0.645f, 1.365f }, { 0.585f, 1.405f }, { 0.32f, 1.417f }, { 0, 1.42f } },
+            Crown = new[,] { { 0.745f, 0.002f }, { 0.70f, 0.005f }, { 0.36f, 0.011f }, { 0, 0.014f } },
+        };
+        // A short nose, a tall glasshouse with a thick rear pillar and a steep hatch over a stub of a tail.
+        private static readonly BodyPlan hatchPlan = new BodyPlan
         {
-            foreach (float axle in new[] { Sedan.FrontAxleX, Sedan.RearAxleX })
+            Shape = Hatchback, FrontX = 1.78f, RearX = -1.78f,
+            FloorY = 0.22f, InnerZ = 0.56f, SillZ = 0.78f, SillY = 0.29f, CreaseZ = 0.81f, CreaseY = 0.70f,
+            SideTopZ = 0.795f, ShoulderZ = 0.77f, BeltZ = 0.735f, ArchRadius = 0.36f,
+            HoodY = 0.92f, HoodDrop = 0.06f, BeltY = 0.93f, TailY = 0.93f, TailDrop = 0.01f,
+            CowlX = 0.80f, RoofFrontX = 0.24f, RoofRearX = -1.30f, TrunkX = -1.64f,
+            Windows = new[] { -0.12f, 0.80f, -0.96f, -0.20f }, Seams = new[] { 0.88f, -0.16f, -1.00f },
+            Roof = new[,] { { 0.625f, 1.385f }, { 0.565f, 1.425f }, { 0.31f, 1.437f }, { 0, 1.44f } },
+            Crown = BodyPlan.CrownOf(0.735f),
+        };
+        // A long high hood, a two-door cab with small rear quarter windows and an open bed behind its upright back.
+        private static readonly BodyPlan pickupPlan = new BodyPlan
+        {
+            Shape = Pickup, FrontX = 2.38f, RearX = -2.38f,
+            FloorY = 0.32f, InnerZ = 0.60f, SillZ = 0.86f, SillY = 0.36f, CreaseZ = 0.89f, CreaseY = 0.74f,
+            SideTopZ = 0.875f, ShoulderZ = 0.855f, BeltZ = 0.81f, ArchRadius = 0.41f,
+            HoodY = 1.12f, HoodDrop = 0.045f, BeltY = 1.14f, TailY = PickupBedFloor, TailDrop = 0,
+            CowlX = 0.86f, RoofFrontX = 0.34f, RoofRearX = -0.80f, TrunkX = PickupCabBack,
+            Windows = new[] { -0.30f, 0.86f, -0.72f, -0.38f }, Seams = new[] { 0.94f, -0.34f },
+            Roof = new[,] { { 0.735f, 1.69f }, { 0.68f, 1.728f }, { 0.37f, 1.738f }, { 0, 1.74f } },
+            Crown = BodyPlan.CrownOf(0.81f), RearScreen = false, Bed = true,
+        };
+        // A short sloping nose, a long box with a flat roof and an upright back; windows only in the front doors.
+        private static readonly BodyPlan vanPlan = new BodyPlan
+        {
+            Shape = Van, FrontX = 2.33f, RearX = -2.33f,
+            FloorY = 0.26f, InnerZ = 0.62f, SillZ = 0.90f, SillY = 0.33f, CreaseZ = 0.93f, CreaseY = 0.78f,
+            SideTopZ = 0.925f, ShoulderZ = 0.915f, BeltZ = 0.895f, ArchRadius = 0.40f,
+            HoodY = 1.16f, HoodDrop = 0.12f, BeltY = 1.18f, TailY = 1.18f, TailDrop = 0,
+            CowlX = 1.56f, RoofFrontX = 0.98f, RoofRearX = -2.329f, TrunkX = -2.3295f,
+            Windows = new[] { 0.30f, 1.56f }, Seams = new[] { 1.50f, 0.26f, 0.16f, -1.04f }, TallSeams = true,
+            Roof = new[,] { { 0.875f, 1.975f }, { 0.83f, 2.025f }, { 0.46f, 2.038f }, { 0, 2.04f } },
+            Crown = BodyPlan.CrownOf(0.895f), RearScreen = false,
+        };
+        // The pickup's bed: its floor, the top of its walls and the back of the cab.
+        public const float PickupBedFloor = 0.88f, PickupBedRail = 1.16f, PickupCabBack = -0.84f;
+        private static BodyPlan PlanFor(CarStyle style)
+        {
+            switch (style)
             {
-                float d = x - axle;
-                if (Math.Abs(d) < ArchRadius) return SillY + (float)Math.Sqrt(ArchRadius * ArchRadius - d * d);
+                case CarStyle.Hatchback: return hatchPlan;
+                case CarStyle.Pickup: return pickupPlan;
+                case CarStyle.Van: return vanPlan;
+                default: Shape(style); return sedanPlan;
             }
-            return -1;
         }
-        private static void Deck(float deck, float[] z, float[] y)
+
+        // Side silhouette and cross-section of a lofted body: the car faces +X, the origin is on the road under the
+        // middle of the footprint. Bumpers, lamps and mirrors are added around it by each body's dress.
+        private sealed class BodyPlan
         {
-            z[8] = 0.745f; y[8] = deck + 0.002f; z[9] = 0.70f; y[9] = deck + 0.005f;
-            z[10] = 0.36f; y[10] = deck + 0.011f; z[11] = 0; y[11] = deck + 0.014f;
-        }
-        // Half cross-section at station x, (z ≥ 0, y) from the floor centre out and up the left side to the roof centre:
-        // 0 floor centre, 1 floor edge, 2–3 wheel-well wall and ceiling (folded flat outside the arches), 3 sill,
-        // 4 crease, 5–6 shoulder, 7 waist (window base), 8–9 pillar or roof edge, 10 crown, 11 centre line.
-        internal static void Section(float x, float[] z, float[] y)
-        {
-            float deck = DeckY(x), arch = ArchTop(x);
-            float d = Math.Min(FrontX - x, x - RearX), f = d < EndRound ? 1 - Math.Max(0, d) / EndRound : 0;
-            float width = 1 - 0.05f * f * f, drop = 0.035f * f * f, floor = FloorY + 0.03f * f * f;
-            deck -= drop;
-            z[0] = 0; y[0] = floor; z[1] = InnerZ; y[1] = floor;
-            z[2] = InnerZ; y[2] = arch >= 0 ? arch : floor;
-            z[3] = SillZ; y[3] = arch >= 0 ? arch : SillY;
-            z[4] = CreaseZ; y[4] = CreaseY; z[5] = SideTopZ; y[5] = deck - 0.05f; z[6] = ShoulderZ; y[6] = deck - 0.012f;
-            z[7] = BeltZ; y[7] = deck;
-            if (x >= CowlX || x <= TrunkX) Deck(deck, z, y);
-            else
+            public CarShape Shape;
+            // Ends of the shell (the bumpers stand 7 cm further out) and the length over which they round off.
+            public float FrontX, RearX, EndRound = 0.10f;
+            // Cross-section: floor, wheel-well wall, sill, crease (the widest line), side top, shoulder, waist; the arches.
+            public float FloorY, InnerZ, SillZ, SillY, CreaseZ, CreaseY, SideTopZ, ShoulderZ, BeltZ, ArchRadius;
+            // Deck line: the hood falls from HoodY at the cowl by HoodDrop towards the nose, the waist is level at BeltY
+            // under the greenhouse, the tail deck falls from TailY at TrunkX by TailDrop towards the tail.
+            public float HoodY, HoodDrop, BeltY, TailY, TailDrop;
+            // Greenhouse: windscreen from the cowl up to the roof, roof, rear screen down to the trunk.
+            public float CowlX, RoofFrontX, RoofRearX, TrunkX;
+            // Side window openings as (from, to) pairs along X; door seams; seams also over the paint above the waist.
+            public float[] Windows, Seams; public bool TallSeams;
+            // Half cross-sections (z, y) of the roof from its edge to the centre line, and (z, rise) of the decks.
+            public float[,] Roof, Crown;
+            // The slope between the trunk and the roof is glass; the deck behind the cab is the floor of an open bed.
+            public bool RearScreen = true, Bed;
+            public const float SeamHalf = 0.006f;
+            public static float[,] CrownOf(float beltZ)
+                => new[,] { { beltZ - 0.01f, 0.002f }, { beltZ - 0.055f, 0.005f }, { beltZ * 0.4768f, 0.011f }, { 0, 0.014f } };
+
+            public float DeckY(float x)
             {
-                float t; bool front = x > RoofFrontX, rear = x < RoofRearX;
-                var baseZ = new float[SectionPoints]; var baseY = new float[SectionPoints];
-                if (front) { t = (CowlX - x) / (CowlX - RoofFrontX); Deck(DeckY(CowlX), baseZ, baseY); }
-                else if (rear) { t = (RoofRearX - x) / (RoofRearX - TrunkX); Deck(DeckY(TrunkX), baseZ, baseY); t = 1 - t; }
-                else t = 1;
-                for (int k = 0; k < 4; k++)
+                if (x >= CowlX) return HoodY - HoodDrop * Math.Min(1, (x - CowlX) / (FrontX - EndRound - CowlX));
+                if (x <= TrunkX) return TailY - TailDrop * Math.Min(1, (TrunkX - x) / Math.Max(0.05f, TrunkX - RearX - EndRound));
+                return BeltY;
+            }
+            // Top of the wheel arch over a station, or −1 outside both arches. Arches are half circles on the sill line.
+            public float ArchTop(float x)
+            {
+                foreach (float axle in new[] { Shape.FrontAxleX, Shape.RearAxleX })
                 {
-                    float rz = roof[k, 0], ry = roof[k, 1];
-                    z[8 + k] = front || rear ? baseZ[8 + k] + (rz - baseZ[8 + k]) * t : rz;
-                    y[8 + k] = front || rear ? baseY[8 + k] + (ry - baseY[8 + k]) * t : ry;
+                    float d = x - axle;
+                    if (Math.Abs(d) < ArchRadius) return SillY + (float)Math.Sqrt(ArchRadius * ArchRadius - d * d);
+                }
+                return -1;
+            }
+            private void Deck(float deck, float[] z, float[] y)
+            {
+                for (int k = 0; k < 4; k++) { z[8 + k] = Crown[k, 0]; y[8 + k] = deck + Crown[k, 1]; }
+            }
+            // Half cross-section at station x, (z ≥ 0, y) from the floor centre out and up the left side to the roof centre:
+            // 0 floor centre, 1 floor edge, 2–3 wheel-well wall and ceiling (folded flat outside the arches), 3 sill,
+            // 4 crease, 5–6 shoulder, 7 waist (window base), 8–9 pillar or roof edge, 10 crown, 11 centre line.
+            public void Section(float x, float[] z, float[] y)
+            {
+                float deck = DeckY(x), arch = ArchTop(x);
+                float d = Math.Min(FrontX - x, x - RearX), f = d < EndRound ? 1 - Math.Max(0, d) / EndRound : 0;
+                float width = 1 - 0.05f * f * f, drop = 0.035f * f * f, floor = FloorY + 0.03f * f * f;
+                deck -= drop;
+                z[0] = 0; y[0] = floor; z[1] = InnerZ; y[1] = floor;
+                z[2] = InnerZ; y[2] = arch >= 0 ? arch : floor;
+                z[3] = SillZ; y[3] = arch >= 0 ? arch : SillY;
+                z[4] = CreaseZ; y[4] = CreaseY; z[5] = SideTopZ; y[5] = deck - 0.05f; z[6] = ShoulderZ; y[6] = deck - 0.012f;
+                z[7] = BeltZ; y[7] = deck;
+                if (x >= CowlX || x <= TrunkX) Deck(deck, z, y);
+                else
+                {
+                    // Windscreen and rear screen blend the deck at the waist into the roof; behind a pickup's cab the
+                    // bed floor is lower, so the back of the cab rises straight from it.
+                    float t; bool front = x > RoofFrontX, rear = x < RoofRearX;
+                    var baseZ = new float[SectionPoints]; var baseY = new float[SectionPoints];
+                    if (front) { t = (CowlX - x) / (CowlX - RoofFrontX); Deck(HoodY, baseZ, baseY); }
+                    else if (rear) { t = (RoofRearX - x) / (RoofRearX - TrunkX); Deck(BeltY, baseZ, baseY); t = 1 - t; }
+                    else t = 1;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        float rz = Roof[k, 0], ry = Roof[k, 1];
+                        z[8 + k] = front || rear ? baseZ[8 + k] + (rz - baseZ[8 + k]) * t : rz;
+                        y[8 + k] = front || rear ? baseY[8 + k] + (ry - baseY[8 + k]) * t : ry;
+                    }
+                }
+                for (int k = 0; k < SectionPoints; k++) z[k] *= width;
+            }
+            public float[] Stations()
+            {
+                var xs = new List<float> { FrontX, RearX, CowlX, RoofFrontX, RoofRearX, TrunkX };
+                xs.AddRange(Windows);
+                foreach (float d in new[] { 0.05f, 0.02f, EndRound }) { xs.Add(FrontX - d); xs.Add(RearX + d); }
+                foreach (float s in Seams) { xs.Add(s - SeamHalf); xs.Add(s + SeamHalf); }
+                foreach (float axle in new[] { Shape.FrontAxleX, Shape.RearAxleX })
+                    for (int k = 0; k <= 12; k++) xs.Add(axle + ArchRadius * (float)Math.Cos(Math.PI * k / 12));
+                xs.Sort();
+                var result = new List<float>();
+                foreach (float x in xs) if (result.Count == 0 || x - result[result.Count - 1] > 1e-4f) result.Add(x);
+                return result.ToArray();
+            }
+            private bool InSeam(float x)
+            {
+                foreach (float s in Seams) if (Math.Abs(x - s) < SeamHalf) return true;
+                return false;
+            }
+            private bool InWindow(float x)
+            {
+                for (int k = 0; k + 1 < Windows.Length; k += 2) if (x > Windows[k] && x < Windows[k + 1]) return true;
+                return false;
+            }
+            // Surface of section segment j (points j → j + 1) between two stations centred on xm.
+            public (int part, byte color, float shade) Segment(int j, float xm)
+            {
+                var paint = (PaintPart, (byte)0, 1f); var seam = (DetailPart, VoxelPalette.Ink, 0.8f);
+                bool greenhouse = xm > TrunkX && xm < CowlX, bed = Bed && xm < TrunkX, cabBack = Bed && greenhouse && xm < RoofRearX;
+                bool tallSeam = TallSeams && InSeam(xm);
+                switch (j)
+                {
+                    case 0: case 1: case 2: return (DetailPart, VoxelPalette.Ink, 0.45f);
+                    case 3: case 4: case 5: return InSeam(xm) ? seam : paint;
+                    case 6: return greenhouse && !cabBack ? (DetailPart, VoxelPalette.Ink, 1f) : tallSeam ? seam : paint;
+                    case 7: return greenhouse && InWindow(xm) ? (GlassPart, (byte)0, 1f) : bed ? Liner : tallSeam ? seam : paint;
+                    case 8: return bed ? Liner : paint;
+                    default:
+                        bool screen = (xm > RoofFrontX && xm < CowlX) || (RearScreen && xm > TrunkX && xm < RoofRearX);
+                        return screen ? (GlassPart, (byte)0, 1f) : bed ? Liner : paint;
                 }
             }
-            for (int k = 0; k < SectionPoints; k++) z[k] *= width;
-        }
-        internal static float[] Stations()
-        {
-            var xs = new List<float> { FrontX, RearX, CowlX, RoofFrontX, RoofRearX, TrunkX, BPillarFront, BPillarRear, RearWindowEnd };
-            foreach (float d in new[] { 0.05f, 0.02f, EndRound }) { xs.Add(FrontX - d); xs.Add(RearX + d); }
-            foreach (float s in seams) { xs.Add(s - SeamHalf); xs.Add(s + SeamHalf); }
-            foreach (float axle in new[] { Sedan.FrontAxleX, Sedan.RearAxleX })
-                for (int k = 0; k <= 12; k++) xs.Add(axle + ArchRadius * (float)Math.Cos(Math.PI * k / 12));
-            xs.Sort();
-            var result = new List<float>();
-            foreach (float x in xs) if (result.Count == 0 || x - result[result.Count - 1] > 1e-4f) result.Add(x);
-            return result.ToArray();
-        }
-        private static bool InSeam(float x)
-        {
-            foreach (float s in seams) if (Math.Abs(x - s) < SeamHalf) return true;
-            return false;
-        }
-        // Surface of section segment j (points j → j + 1) between two stations centred on xm.
-        private static (int part, byte color, float shade) Segment(int j, float xm)
-        {
-            bool greenhouse = xm > TrunkX && xm < CowlX;
-            switch (j)
+            private static readonly (int, byte, float) Liner = (DetailPart, VoxelPalette.Tire, 0.9f);
+            // Body surface z (left side) at station x and height y, between the crease and the shoulder.
+            public float SideZ(float x, float y)
             {
-                case 0: case 1: case 2: return (DetailPart, VoxelPalette.Ink, 0.45f);
-                case 3: case 4: case 5: return InSeam(xm) ? (DetailPart, VoxelPalette.Ink, 0.8f) : (PaintPart, (byte)0, 1f);
-                case 6: return greenhouse ? (DetailPart, VoxelPalette.Ink, 1f) : (PaintPart, (byte)0, 1f);
-                case 7:
-                    bool window = (xm > BPillarFront && xm < CowlX) || (xm > RearWindowEnd && xm < BPillarRear);
-                    return window ? (GlassPart, (byte)0, 1f) : (PaintPart, (byte)0, 1f);
-                case 8: return (PaintPart, (byte)0, 1f);
-                default:
-                    bool screen = (xm > RoofFrontX && xm < CowlX) || (xm > TrunkX && xm < RoofRearX);
-                    return screen ? (GlassPart, (byte)0, 1f) : (PaintPart, (byte)0, 1f);
+                var z = new float[SectionPoints]; var h = new float[SectionPoints]; Section(x, z, h);
+                for (int k = 3; k < 7; k++)
+                    if (y >= h[k] && y <= h[k + 1]) return z[k] + (z[k + 1] - z[k]) * (y - h[k]) / Math.Max(1e-6f, h[k + 1] - h[k]);
+                return z[4];
             }
         }
+
         // Light falls off towards the road: the sills and wheels sit in their own contact shade.
         private static float Ground(V3 p)
         {
@@ -174,32 +292,44 @@ namespace Broker.Core
 
         public static PolyMesh Body(CarStyle style)
         {
+            var plan = PlanFor(style);
             var b = NewBuilder();
             b.Ambient = Ground;
-            Shell(b);
-            Front(b); Rear(b); Sides(b);
-            if (style == CarStyle.Taxi) Taxi(b);
+            Shell(b, plan);
+            switch (style)
+            {
+                case CarStyle.Hatchback: HatchbackDress(b, plan); break;
+                case CarStyle.Pickup: PickupDress(b, plan); break;
+                case CarStyle.Van: VanDress(b, plan); break;
+                default:
+                    SedanFront(b); SedanRear(b); SedanSides(b);
+                    if (style == CarStyle.Taxi) Taxi(b, plan);
+                    break;
+            }
             return b.Build(PaletteUv);
         }
 
-        private static void Shell(PolyBuilder b)
+        private static void Shell(PolyBuilder b, BodyPlan plan)
         {
-            var xs = Stations();
+            var xs = plan.Stations();
             int n = xs.Length;
             var z = new float[n][]; var y = new float[n][];
-            for (int i = 0; i < n; i++) { z[i] = new float[SectionPoints]; y[i] = new float[SectionPoints]; Section(xs[i], z[i], y[i]); }
+            for (int i = 0; i < n; i++) { z[i] = new float[SectionPoints]; y[i] = new float[SectionPoints]; plan.Section(xs[i], z[i], y[i]); }
             for (int i = 0; i + 1 < n; i++)
             {
-                float xm = (xs[i] + xs[i + 1]) / 2;
+                float xm = (xs[i] + xs[i + 1]) / 2, dx = xs[i + 1] - xs[i];
                 for (int j = 0; j + 1 < SectionPoints; j++)
                 {
-                    var (part, color, shade) = Segment(j, xm);
+                    var (part, color, shade) = plan.Segment(j, xm);
+                    // Along the section (dz, dy) and along the body (dyx, dzx): their cross product is the outward normal
+                    // of the left side, mirrored for the right; it also turns the upright back of a cab the right way.
                     float dz = (z[i][j + 1] - z[i][j] + z[i + 1][j + 1] - z[i + 1][j]) / 2, dy = (y[i][j + 1] - y[i][j] + y[i + 1][j + 1] - y[i + 1][j]) / 2;
+                    float dzx = (z[i + 1][j] - z[i][j] + z[i + 1][j + 1] - z[i][j + 1]) / 2, dyx = (y[i + 1][j] - y[i][j] + y[i + 1][j + 1] - y[i][j + 1]) / 2;
                     for (int side = 1; side >= -1; side -= 2)
                     {
                         var a = new V3(xs[i], y[i][j], side * z[i][j]); var bb = new V3(xs[i], y[i][j + 1], side * z[i][j + 1]);
                         var c = new V3(xs[i + 1], y[i + 1][j + 1], side * z[i + 1][j + 1]); var d = new V3(xs[i + 1], y[i + 1][j], side * z[i + 1][j]);
-                        b.Quad(a, bb, c, d, new V3(0, -dz, side * dy), part, color, shade);
+                        b.Quad(a, bb, c, d, new V3(dz * dyx - dy * dzx, -dz * dx, side * dy * dx), part, color, shade);
                     }
                 }
             }
@@ -211,106 +341,6 @@ namespace Broker.Core
                 for (int k = SectionPoints - 2; k >= 1; k--) loop.Add(new V3(xs[i], y[i][k], -z[i][k]));
                 b.Polygon(loop, new V3(i == 0 ? -1 : 1, 0, 0), PaintPart, 0);
             }
-        }
-        // A box mirrored to the car's side (side = 1 left, −1 right): z0 < z1 are distances from the centre line.
-        private static void SideBox(PolyBuilder b, int side, float x0, float x1, float y0, float y1, float z0, float z1, float bevel, int part, byte color, float shade = 1)
-            => b.Box(new V3(x0, y0, side > 0 ? z0 : -z1), new V3(x1, y1, side > 0 ? z1 : -z0), bevel, part, color, shade);
-        private static void Plate(PolyBuilder b, float faceX, float y0, float y1, int facing)
-        {
-            float back = faceX - facing * 0.016f;
-            b.Box(new V3(Math.Min(faceX, back), y0, -0.25f), new V3(Math.Max(faceX, back), y1, 0.25f), 0.004f, DetailPart, VoxelPalette.Cream);
-            float ym = (y0 + y1) / 2;
-            for (int k = 0; k < 6; k++)
-            {
-                float zc = -0.185f + k * 0.066f, h = k == 0 || k >= 4 ? 0.022f : 0.03f;
-                float out1 = faceX + facing * 0.003f;
-                b.Box(new V3(Math.Min(faceX - facing * 0.002f, out1), ym - h, zc - 0.021f), new V3(Math.Max(faceX - facing * 0.002f, out1), ym + h, zc + 0.021f), 0, DetailPart, VoxelPalette.Ink);
-            }
-            b.Box(new V3(Math.Min(faceX - facing * 0.002f, faceX + facing * 0.003f), ym - 0.03f, 0.205f), new V3(Math.Max(faceX - facing * 0.002f, faceX + facing * 0.003f), ym + 0.03f, 0.235f), 0, DetailPart, VoxelPalette.Ink);
-        }
-        private static void Front(PolyBuilder b)
-        {
-            // Bumper with a bright strip and short side wraps; plate with characters; amber indicators.
-            b.Box(new V3(1.965f, 0.30f, -0.80f), new V3(2.065f, 0.47f, 0.80f), 0.03f, DetailPart, VoxelPalette.MetalDark);
-            b.Box(new V3(2.0f, 0.452f, -0.775f), new V3(2.07f, 0.474f, 0.775f), 0.008f, DetailPart, VoxelPalette.Chrome);
-            Plate(b, 2.07f, 0.335f, 0.445f, 1);
-            // Grille between the headlights: dark recess, grey slats, bright frame and a small badge.
-            b.Box(new V3(1.99f, 0.565f, -0.405f), new V3(2.012f, 0.79f, 0.405f), 0.006f, DetailPart, VoxelPalette.Ink);
-            for (int k = 0; k < 4; k++)
-            {
-                float y = 0.597f + k * 0.05f;
-                b.Box(new V3(2.006f, y, -0.38f), new V3(2.017f, y + 0.016f, 0.38f), 0.004f, DetailPart, VoxelPalette.Metal);
-            }
-            foreach (float y in new[] { 0.557f, 0.782f })
-                b.Box(new V3(2.004f, y, -0.41f), new V3(2.02f, y + 0.016f, 0.41f), 0.005f, DetailPart, VoxelPalette.Chrome);
-            b.Box(new V3(2.016f, 0.66f, -0.035f), new V3(2.026f, 0.73f, 0.035f), 0.006f, DetailPart, VoxelPalette.Chrome);
-            // Wipers resting on the cowl.
-            b.Box(new V3(0.628f, 0.946f, -0.60f), new V3(0.642f, 0.958f, -0.08f), 0.004f, DetailPart, VoxelPalette.Ink);
-            b.Box(new V3(0.628f, 0.946f, 0.0f), new V3(0.642f, 0.958f, 0.52f), 0.004f, DetailPart, VoxelPalette.Ink);
-            for (int side = 1; side >= -1; side -= 2)
-            {
-                SideBox(b, side, 1.70f, 1.99f, 0.31f, 0.46f, 0.78f, 0.845f, 0.025f, DetailPart, VoxelPalette.MetalDark);
-                SideBox(b, side, 2.055f, 2.071f, 0.37f, 0.43f, 0.58f, 0.74f, 0.005f, DetailPart, VoxelPalette.Amber);
-                // Square twin headlights in a bright surround.
-                SideBox(b, side, 1.99f, 2.012f, 0.575f, 0.80f, 0.42f, 0.765f, 0.008f, DetailPart, VoxelPalette.Chrome);
-                SideBox(b, side, 2.006f, 2.02f, 0.59f, 0.785f, 0.435f, 0.592f, 0.005f, LampPart, VoxelPalette.Headlight);
-                SideBox(b, side, 2.006f, 2.02f, 0.59f, 0.785f, 0.606f, 0.75f, 0.005f, LampPart, VoxelPalette.Headlight);
-            }
-        }
-        private static void Rear(PolyBuilder b)
-        {
-            b.Box(new V3(-2.065f, 0.30f, -0.80f), new V3(-1.965f, 0.47f, 0.80f), 0.03f, DetailPart, VoxelPalette.MetalDark);
-            b.Box(new V3(-2.07f, 0.452f, -0.775f), new V3(-2.0f, 0.474f, 0.775f), 0.008f, DetailPart, VoxelPalette.Chrome);
-            Plate(b, -2.011f, 0.615f, 0.725f, -1);
-            b.Box(new V3(-2.008f, 0.745f, -0.03f), new V3(-1.995f, 0.775f, 0.03f), 0.004f, DetailPart, VoxelPalette.Chrome);
-            b.Box(new V3(-2.07f, 0.235f, -0.56f), new V3(-1.85f, 0.275f, -0.50f), 0.01f, DetailPart, VoxelPalette.MetalDark);
-            for (int side = 1; side >= -1; side -= 2)
-            {
-                SideBox(b, side, -1.99f, -1.66f, 0.31f, 0.46f, 0.78f, 0.845f, 0.025f, DetailPart, VoxelPalette.MetalDark);
-                // Wide rear lamps: amber indicator outside, red brake lamp, white reverse lamp, red tail lamp inside; both reds
-                // are Brake, so the whole red of the cluster lights up when the car brakes.
-                SideBox(b, side, -2.012f, -1.99f, 0.60f, 0.82f, 0.35f, 0.765f, 0.008f, DetailPart, VoxelPalette.Ink);
-                SideBox(b, side, -2.022f, -2.006f, 0.612f, 0.808f, 0.645f, 0.752f, 0.004f, DetailPart, VoxelPalette.Amber);
-                SideBox(b, side, -2.022f, -2.006f, 0.612f, 0.808f, 0.495f, 0.638f, 0.004f, BrakePart, VoxelPalette.TailLight);
-                SideBox(b, side, -2.022f, -2.006f, 0.612f, 0.808f, 0.435f, 0.488f, 0.004f, DetailPart, VoxelPalette.Cream);
-                SideBox(b, side, -2.022f, -2.006f, 0.612f, 0.808f, 0.365f, 0.428f, 0.004f, BrakePart, VoxelPalette.TailLight);
-            }
-        }
-        private static void Sides(PolyBuilder b)
-        {
-            for (int side = 1; side >= -1; side -= 2)
-            {
-                // Mirrors on the door corners, glass facing back; door handles near the rear edge of each door.
-                SideBox(b, side, 0.50f, 0.545f, 0.945f, 0.975f, 0.77f, 0.865f, 0.006f, DetailPart, VoxelPalette.MetalDark);
-                SideBox(b, side, 0.455f, 0.565f, 0.935f, 1.035f, 0.85f, 0.94f, 0.018f, DetailPart, VoxelPalette.Ink);
-                SideBox(b, side, 0.449f, 0.46f, 0.947f, 1.023f, 0.862f, 0.928f, 0.003f, DetailPart, VoxelPalette.Chrome);
-                foreach (float x in new[] { -0.20f, -0.92f })
-                    SideBox(b, side, x, x + 0.11f, 0.846f, 0.863f, 0.81f, 0.829f, 0.004f, DetailPart, VoxelPalette.Chrome);
-            }
-        }
-        // Body surface z (left side) at station x and height y, between the crease and the shoulder.
-        internal static float SideZ(float x, float y)
-        {
-            var z = new float[SectionPoints]; var h = new float[SectionPoints]; Section(x, z, h);
-            for (int k = 3; k < 7; k++)
-                if (y >= h[k] && y <= h[k + 1]) return z[k] + (z[k + 1] - z[k]) * (y - h[k]) / Math.Max(1e-6f, h[k + 1] - h[k]);
-            return z[4];
-        }
-        private static void Taxi(PolyBuilder b)
-        {
-            b.Box(new V3(-0.40f, 1.41f, -0.22f), new V3(-0.10f, 1.44f, 0.22f), 0.01f, DetailPart, VoxelPalette.Ink);
-            b.Box(new V3(-0.43f, 1.435f, -0.27f), new V3(-0.07f, 1.57f, 0.27f), 0.025f, LampPart, VoxelPalette.SignalAmber);
-            // Checker band on the doors and wings: two rows of 5.5 cm squares just off the paint.
-            const float cell = 0.055f, y0 = 0.73f, x0 = -1.65f;
-            int columns = (int)Math.Round(-2 * x0 / cell);
-            for (int side = 1; side >= -1; side -= 2)
-                for (int c = 0; c < columns; c++)
-                    for (int r = 0; r < 2; r++)
-                    {
-                        float xa = x0 + c * cell, xb = xa + cell, ya = y0 + r * cell, yb = ya + cell;
-                        V3 P(float x, float y) => new V3(x, y, side * (SideZ(x, y) + 0.003f));
-                        b.Quad(P(xa, ya), P(xb, ya), P(xb, yb), P(xa, yb), new V3(0, 0, side), DetailPart, (c + r) % 2 == 0 ? VoxelPalette.Ink : VoxelPalette.Cream);
-                    }
         }
 
         // ---------- Wheel: axle along Z, outer face +Z, centre at the origin ----------
@@ -331,14 +361,16 @@ namespace Broker.Core
         private static readonly float[] wheelShade = { 0.45f, 0.7f, 0.8f, 0.85f, 0.85f, 0.85f, 0.9f, 0.95f, 0.95f, 1, 0.8f, 0.85f, 1, 1, 1, 1 };
         // Segment of the disc that alternates with dark vent holes.
         public const int VentSegment = 12, Vents = WheelSegments / 2;
-        public static PolyMesh Wheel()
+        // The wheel of a body: the same tyre and hubcap scaled to its radius and width.
+        public static PolyMesh Wheel(CarStyle style)
         {
+            var shape = Shape(style);
             var b = NewBuilder();
-            float scale = Sedan.WheelRadius / 0.30f;
+            float scale = shape.WheelRadius / 0.30f, across = shape.WheelWidth / 0.19f;
             int points = wheelProfile.GetLength(0);
             for (int j = 0; j + 1 < points; j++)
             {
-                float r0 = wheelProfile[j, 0] * scale, z0 = wheelProfile[j, 1] * scale, r1 = wheelProfile[j + 1, 0] * scale, z1 = wheelProfile[j + 1, 1] * scale;
+                float r0 = wheelProfile[j, 0] * scale, z0 = wheelProfile[j, 1] * across, r1 = wheelProfile[j + 1, 0] * scale, z1 = wheelProfile[j + 1, 1] * across;
                 for (int k = 0; k < WheelSegments; k++)
                 {
                     double a0 = 2 * Math.PI * k / WheelSegments, a1 = 2 * Math.PI * (k + 1) / WheelSegments, am = (a0 + a1) / 2;

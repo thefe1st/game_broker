@@ -8,6 +8,11 @@ namespace Broker.Core
         public int Lane { get; } public CarStyle Style { get; } public int Seed { get; }
         // Index into CarModels.Paints.
         public int Paint => CarModels.PaintFor(Style, Seed);
+        // The body: its length keeps the gaps in the lane, its footprint is what the player's car runs into.
+        public CarShape Shape => CarModels.Shape(Style);
+        public float Length => Shape.Length;
+        public float Width => Shape.Width;
+        public OrientedRect Footprint => new OrientedRect(X, Z, Yaw == 0 ? 0 : (float)Math.PI, Length / 2, Width / 2);
         public float Cruise { get; }
         // Position of the car centre along its lane ring, 0 ≤ S < RingLength; the lane direction is +S.
         public float S { get; internal set; }
@@ -22,7 +27,8 @@ namespace Broker.Core
         internal CityCar(int lane, CarStyle style, int seed, float cruise, float s) { Lane = lane; Style = style; Seed = seed; Cruise = cruise; S = s; }
     }
 
-    // Visual boulevard traffic: 12 cars (CarModels.Sedan, a fifth of them taxis) in four lanes, right-hand, ring roads that wrap inside the end tunnels.
+    // Visual boulevard traffic: 12 cars in four lanes (sedans, hatchbacks, two taxis, two pickups and a van, each keeping
+    // gaps by its own length), right-hand, ring roads that wrap inside the end tunnels.
     // Gipps-style safe speed behind the leader and before the stop line, an amber rule for cars too close to stop
     // and hard limits so a car never overlaps its leader or passes the line on red. The player's car is one more leader
     // for every lane it reaches into: the cars brake for it and never drive into it. Not a collision physics model:
@@ -30,7 +36,7 @@ namespace Broker.Core
     public sealed class CityTraffic
     {
         public const int LaneCount = 4, CarsPerLane = 3;
-        public const float RoadHalf = 90, RingLength = 2 * RoadHalf, CarLength = 4.15f, MinGap = 2f, BumperGap = 0.5f;
+        public const float RoadHalf = 90, RingLength = 2 * RoadHalf, MinGap = 2f, BumperGap = 0.5f;
         // Ring positions of the stop line and the zebra; equal for both directions.
         public const float StopS = RoadHalf + CityCrosswalk.EastboundStopX, CrossStartS = RoadHalf - CityCrosswalk.HalfWidth, CrossEndS = RoadHalf + CityCrosswalk.HalfWidth;
         public const float Accel = 2, ComfortBrake = 3, MaxBrake = 6, MinCruise = 6.4f, MaxCruise = 7.5f, StopMargin = 0.2f;
@@ -40,6 +46,12 @@ namespace Broker.Core
         public const float LaneBand = 1.2f;
         private const double Step = 0.05;
         private static readonly float[] laneZ = { 30.5f, 33.5f, 36.5f, 39.5f };
+        // Bodies by car index, three a lane from the nearest eastbound lane.
+        private static readonly CarStyle[] mix =
+        {
+            CarStyle.Sedan, CarStyle.Hatchback, CarStyle.Taxi, CarStyle.Sedan, CarStyle.Pickup, CarStyle.Hatchback,
+            CarStyle.Van, CarStyle.Sedan, CarStyle.Taxi, CarStyle.Pickup, CarStyle.Sedan, CarStyle.Hatchback,
+        };
         private readonly CityCar[] cars;
         public ReadOnlyCollection<CityCar> Cars { get; }
         public static float LaneZ(int lane)
@@ -55,8 +67,7 @@ namespace Broker.Core
                 for (int k = 0; k < CarsPerLane; k++)
                 {
                     int i = lane * CarsPerLane + k;
-                    uint roll = VoxelNoise.Hash(i, 3, 17, 41) % 10;
-                    var style = roll < 2 ? CarStyle.Taxi : CarStyle.Sedan;
+                    var style = mix[i];
                     float cruise = MinCruise + (MaxCruise - MinCruise) * VoxelNoise.Value(i, 5, 2, 43);
                     float s = 5 + lane * 13 + k * 60 + 6 * VoxelNoise.Value(i, 7, 1, 47);
                     cars[i] = new CityCar(lane, style, i * 3 + 1, cruise, s) { Speed = cruise };
@@ -71,7 +82,7 @@ namespace Broker.Core
                 foreach (var car in cars)
                 {
                     float d = LineGap(car);
-                    if (d < -0.1f && car.S - CarLength / 2 < CrossEndS + BumperGap) return true;
+                    if (d < -0.1f && car.S - car.Length / 2 < CrossEndS + BumperGap) return true;
                     if (car.Committed && d >= -0.1f) return true;
                 }
                 return false;
@@ -98,8 +109,8 @@ namespace Broker.Core
         // Distance from the nose to the stopping point before the next stop line; negative once the nose is past it.
         private static float LineGap(CityCar car)
         {
-            float d = StopS - StopMargin - (car.S + CarLength / 2);
-            if (d < -(CrossEndS - StopS + CarLength + 2)) d += RingLength;
+            float d = StopS - StopMargin - (car.S + car.Length / 2);
+            if (d < -(CrossEndS - StopS + car.Length + 2)) d += RingLength;
             return d;
         }
         private void StepAll(float dt, CrosswalkSignal signal, OrientedRect? obstacle, float obstacleVelocityX)
@@ -120,7 +131,7 @@ namespace Broker.Core
                 int leader = Leader(i, oldS);
                 if (leader >= 0)
                 {
-                    float gap = Mod(oldS[leader] - oldS[i]) - CarLength;
+                    float gap = Mod(oldS[leader] - oldS[i]) - (car.Length + cars[leader].Length) / 2;
                     room = gap - BumperGap;
                     target = Math.Min(target, (float)Math.Sqrt(Math.Max(0, 2 * ComfortBrake * (gap - MinGap) + oldV[leader] * oldV[leader])));
                 }
@@ -132,9 +143,9 @@ namespace Broker.Core
                     bool east = Eastbound(car.Lane);
                     float near = east ? bounds.MinX + RoadHalf : RoadHalf - bounds.MaxX, length = bounds.Width;
                     float ahead = Wrapped(near - oldS[i]);
-                    if (ahead + length > -CarLength / 2)
+                    if (ahead + length > -car.Length / 2)
                     {
-                        float gap = Math.Max(0, ahead - CarLength / 2), speed = Math.Max(0, east ? obstacleVelocityX : -obstacleVelocityX);
+                        float gap = Math.Max(0, ahead - car.Length / 2), speed = Math.Max(0, east ? obstacleVelocityX : -obstacleVelocityX);
                         room = Math.Min(room, gap - BumperGap);
                         target = Math.Min(target, (float)Math.Sqrt(Math.Max(0, 2 * ComfortBrake * (gap - MinGap) + speed * speed)));
                     }

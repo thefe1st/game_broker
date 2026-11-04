@@ -6,12 +6,10 @@ namespace Broker.Tests
 {
     public sealed class CityDrivingTests
     {
-        private static OrientedRect Body(CityCar car)
-            => new OrientedRect(car.X, car.Z, CityTraffic.Eastbound(car.Lane) ? 0 : (float)Math.PI, CityTraffic.CarLength / 2, PlayerCar.HalfWidth);
         private static float WorstOverlap(CityLife life)
         {
             float worst = 0; var footprint = life.Car.Footprint;
-            foreach (var car in life.Traffic.Cars) worst = Math.Max(worst, footprint.Penetration(Body(car), out _, out _));
+            foreach (var car in life.Traffic.Cars) worst = Math.Max(worst, footprint.Penetration(car.Footprint, out _, out _));
             return worst;
         }
 
@@ -149,7 +147,7 @@ namespace Broker.Tests
                 life.Advance(0.05, true, 0, 20);
                 Assert.That(WorstOverlap(life), Is.LessThan(0.03f));
                 foreach (var other in life.Traffic.Cars)
-                    if (other.Lane == 0 && other.X < car.X) closest = Math.Min(closest, car.X - PlayerCar.HalfLength - (other.X + CityTraffic.CarLength / 2));
+                    if (other.Lane == 0 && other.X < car.X) closest = Math.Min(closest, car.X - PlayerCar.HalfLength - (other.X + other.Length / 2));
             }
             Assert.That(life.Car.X, Is.GreaterThan(30));
             Assert.That(closest, Is.InRange(CityTraffic.BumperGap - 0.05f, 6));
