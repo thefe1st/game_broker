@@ -8,6 +8,7 @@ dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- previe
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview sunset-west office --fast
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk --at=24
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk plaza-office --hour=19.75
+dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview people-faces --faces=whites --mood=worry
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- --check
 ```
 
@@ -16,6 +17,9 @@ The first form writes every shot to `preview/*.png`; the second renders only the
 shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' green). `--hour=H` shows
 the selected shots at that hour of the city clock (`Core/DayCycle`, 18.5 = 18:30); without it every shot
 has its own hour, and all but the evening ones below are the approved bright day, 15:00.
+`--faces=none|dots|brows|whites` and `--mood=own|calm|smile|worry` show the people's faces in the
+selected shots as the office scene object's `Faces` and `Moods` would (stage 5, a prototype: no face,
+dots, eyes with brows — the default — or eyes with whites; everybody's own expression or one for all).
 
 | Shot | What it shows |
 |---|---|
@@ -37,6 +41,10 @@ has its own hour, and all but the evening ones below are the approved bright day
 | `aerial` | both quarters from above, no HUD |
 | `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
 | `night-plaza`, `night-boulevard`, `night-office`, `night-aerial` | night, 20:30 (the aerial at midnight, the end of the day): lit windows and shop fronts, street lamps and their pools of light, the light over the office door, headlights; the office with its lamps and the night city in the windows; no HUD |
+| `people-lineup`, `people-lineup-2` | the low-poly people (stage 5): the twelve kinds of passer-by in two rows of six on the plaza, staged to face the camera — the game never lines them up; no HUD |
+| `people-faces` | three faces close up (the banker, the casual walker and the elder) for the face variants and moods; no HUD |
+| `people-office`, `people-supervisor` | Lena behind her desk; Orlov as the hired broker sees him; no HUD |
+| `people-cafe` | the seated café guest with the forearms on the table by the cup, the barista at the counter; no HUD |
 
 Street shots with a HUD enter the city like the elevator does (`VisitCity`) and put the player at the
 camera, so walkers stop for it and the signal counts it on the zebra. Driving shots seat the player in
@@ -69,7 +77,8 @@ pyramid, exposure, warm balance and ACES, saturation, contrast and vignette, the
 ImageMagick, NOT by Unity fonts/IMGUI.
 
 `--check` renders each shot at 240×160 and exits with 1 on builder warnings, an empty view
-(less than 25% geometry) or a flat image (luminance spread below 0.08). It writes no files and
+(less than 25% geometry) or a flat image (luminance spread below 0.08). Before the shots it switches
+the faces through every variant and fails if one does not reach every person. It writes no files and
 does not need ImageMagick; CI runs it as the `scene-preview` job.
 
 This is NOT a Unity render or build. Shader variants, the real Quality-level shadow settings,

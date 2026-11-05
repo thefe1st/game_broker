@@ -4,22 +4,16 @@ using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    // Passers-by of CityCrowd and the four standing figures: jointed voxel people whose legs and arms swing with the
-    // distance walked. Their capsules are on the Ignore Raycast layer, so they block walking but never hide a stand,
-    // the counter or the crossing button from the aim.
+    // Passers-by of CityCrowd and the four figures (OfficeScene.People): jointed low-poly people whose legs and arms swing
+    // with the distance walked. Their capsules are on the Ignore Raycast layer, so they block walking but never hide a
+    // stand, the counter or the crossing button from the aim.
     public sealed partial class OfficeScene
     {
         private sealed class PersonView { public Transform Root, Head, LeftArm, RightArm, LeftLeg, RightLeg; public float Yaw, Swing; }
-        private readonly Dictionary<WalkerStyle, VoxelWalker> walkerModels = new Dictionary<WalkerStyle, VoxelWalker>();
         private PersonView[] walkerViews = new PersonView[0], figureViews = new PersonView[0];
         // One full step (left and right) per 1.5 m walked.
         private const float StrideRadians = 2 * Mathf.PI / 1.5f, LegSwing = 28, ArmSwing = 20;
 
-        private VoxelWalker WalkerModel(WalkerStyle style)
-        {
-            if (!walkerModels.TryGetValue(style, out var model)) { model = VoxelProps.Walker(style); walkerModels.Add(style, model); }
-            return model;
-        }
         private void BuildCrowd()
         {
             var walkers = Life.Crowd.Walkers;
@@ -36,30 +30,17 @@ namespace Broker.Runtime.Office
                 var figure = figures[i]; var view = BuildPerson("City / " + figure.Style, figure.Style, figure.Seated);
                 view.Root.localPosition = new Vector3(figure.X, CityBlockPlan.GroundY + CityDistrictPlan.FloorY(figure.X, figure.Z), figure.Z);
                 view.Root.localRotation = Quaternion.Euler(0, figure.Facing + 180, 0);
-                // The café guest rests the forearms on the table.
-                if (figure.Seated) view.LeftArm.localRotation = view.RightArm.localRotation = Quaternion.Euler(55, 0, 0);
                 figureViews[i] = view;
             }
         }
-        // Models face −Z: the root turns to heading + 180°. Legs hang from the hips, arms from the shoulders.
+        // Models face −Z: the root turns to heading + 180°. Legs hang from the hips, arms from the shoulders; the café guest
+        // rests the forearms on the table.
         private PersonView BuildPerson(string name, WalkerStyle style, bool seated)
         {
-            var model = WalkerModel(style); string key = "walker/" + style + "/";
             var root = new GameObject(name); root.transform.SetParent(transform, false); root.layer = 2;
             var body = root.AddComponent<CapsuleCollider>(); body.height = 1.8f; body.radius = 0.25f; body.center = new Vector3(0, 0.9f, 0);
-            float hip = seated ? model.SeatedHipY : model.HipY, neck = model.NeckY(seated);
-            var view = new PersonView { Root = root.transform };
-            PlaceVoxel(key + "torso", () => model.Torso, "Person / torso", root.transform, new Vector3(0, hip, 0));
-            view.Head = PlaceVoxel(key + "head", () => model.Head, "Person / head", root.transform, new Vector3(0, neck, 0)).transform;
-            view.LeftArm = PlaceVoxel(key + "arm", () => model.Arm, "Person / left arm", root.transform, new Vector3(-model.ShoulderX, neck, 0)).transform;
-            view.RightArm = PlaceVoxel(key + "arm", () => model.Arm, "Person / right arm", root.transform, new Vector3(model.ShoulderX, neck, 0)).transform;
-            if (seated) PlaceVoxel(key + "seated", () => model.SeatedLegs, "Person / seated legs", root.transform, new Vector3(0, hip, 0));
-            else
-            {
-                view.LeftLeg = PlaceVoxel(key + "leg", () => model.Leg, "Person / left leg", root.transform, new Vector3(-model.HipX, hip, 0)).transform;
-                view.RightLeg = PlaceVoxel(key + "leg", () => model.Leg, "Person / right leg", root.transform, new Vector3(model.HipX, hip, 0)).transform;
-            }
-            return view;
+            var parts = PlacePerson("walker/" + style, WalkerModel(style), root.transform, seated);
+            return new PersonView { Root = root.transform, Head = parts.Head, LeftArm = parts.LeftArm, RightArm = parts.RightArm, LeftLeg = parts.LeftLeg, RightLeg = parts.RightLeg };
         }
         private void ShowCrowd(float dt)
         {
