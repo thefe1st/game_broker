@@ -1,5 +1,6 @@
 // Renders still previews of the procedural office and city without the Unity editor:
 //   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud] [--at=SECONDS] [--hour=H]
+//       [--mood=calm|smile|worry]
 //   dotnet run --project Tools/ScenePreview -c Release -- --check      (CI smoke check, no image files)
 // The real OfficeScene builders run against UnityStubs.cs; Renderer.cs approximates the built-in forward renderer.
 using System;
@@ -29,6 +30,13 @@ namespace Broker.Tools.ScenePreview
         public bool Drive; public float CarX, CarZ, CarHeading, CarSpeed, Throttle, Steer; public double DriveSeconds;
         // Hour of the city clock (Core/DayCycle); without one the approved bright day, DayCycle.DayHour.
         public float? Hour;
+        // Stage 5, staged: these passers-by (walkers first, then the standing figures of their style) stand still in a row,
+        // LineupGap apart from left to right and centred on LineupAt, each turned to the camera. The game never lines them
+        // up; the row is put back after the shot.
+        public WalkerStyle[] Lineup; public Vector3 LineupAt; public float LineupGap = 0.85f;
+        // The office staff after the passers-by in the same row, brought out from their places in the office (Orlov's desk
+        // is only shown in the employee career: his figure joins the row from it) and put back after the shot.
+        public PersonStyle[] Staff;
     }
 
     public static class Program
@@ -70,6 +78,22 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "night-boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Hud = false, Traffic = 1.8, Hour = 20.5f },
             new Shot { Name = "night-office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Hud = false, Hour = 20.5f },
             new Shot { Name = "night-aerial", Local = new Vector3(0, 60, -32), Yaw = 0, Pitch = 42, Fov = 60, City = true, Hud = false, Hour = DayCycle.EndHour },
+            // Stage 5: the people. Two staged rows of all twelve kinds of passers-by on the office plaza, three faces close up,
+            // then the staff at their desks and the café at their places; no HUD.
+            new Shot { Name = "people-lineup", Local = new Vector3(0, CityBlockPlan.GroundY + 1.5f, 13.7f), Yaw = 0, Pitch = 7, Fov = 40, City = true, Hud = false,
+                Lineup = new[] { WalkerStyle.Clerk, WalkerStyle.Banker, WalkerStyle.Casual, WalkerStyle.Coat, WalkerStyle.Courier, WalkerStyle.Student }, LineupAt = new Vector3(0, 0, 18.6f) },
+            new Shot { Name = "people-lineup-2", Local = new Vector3(0, CityBlockPlan.GroundY + 1.5f, 13.7f), Yaw = 0, Pitch = 7, Fov = 40, City = true, Hud = false,
+                Lineup = new[] { WalkerStyle.Elder, WalkerStyle.Tourist, WalkerStyle.Analyst, WalkerStyle.Barista, WalkerStyle.Guard, WalkerStyle.Trader }, LineupAt = new Vector3(0, 0, 18.6f) },
+            new Shot { Name = "people-faces", Local = new Vector3(0, CityBlockPlan.GroundY + 1.62f, 16.4f), Yaw = 0, Pitch = 2, Fov = 30, City = true, Hud = false,
+                Lineup = new[] { WalkerStyle.Banker, WalkerStyle.Casual, WalkerStyle.Elder }, LineupAt = new Vector3(0, 0, 18.6f), LineupGap = 0.62f },
+            new Shot { Name = "people-office", Local = new Vector3(-2.35f, 1.62f, 0.3f), Yaw = -28, Pitch = 1, Fov = 46, Hud = false },
+            new Shot { Name = "people-cafe", Local = new Vector3(24.35f, CityBlockPlan.GroundY + 1.55f, -2.65f), Yaw = 153, Pitch = 9, Fov = 58, City = true, Hud = false },
+            new Shot { Name = "people-supervisor", Local = new Vector3(-2.65f, 1.62f, -1.75f), Yaw = -158, Pitch = 4, Fov = 30, Employee = true, Hud = false },
+            // The three the player talks to — Lena, Max and Orlov — side by side on the plaza, then their faces close up.
+            new Shot { Name = "people-staff", Local = new Vector3(0, CityBlockPlan.GroundY + 1.15f, 15.3f), Yaw = 0, Pitch = 2, Fov = 40, City = true, Hud = false, Traffic = 14,
+                Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f) },
+            new Shot { Name = "people-staff-faces", Local = new Vector3(0, CityBlockPlan.GroundY + 1.64f, 16.4f), Yaw = 0, Pitch = 1, Fov = 28, City = true, Hud = false, Traffic = 14,
+                Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f), LineupGap = 0.52f },
         };
 
         public static int Main(string[] args)
@@ -92,10 +116,32 @@ namespace Broker.Tools.ScenePreview
             var clock = Stopwatch.StartNew();
             var root = new GameObject("Office scene");
             var scene = root.AddComponent<OfficeScene>();
+            // --mood=MOOD: everybody's expression in the selected shots, as the office scene object's Mood in the Inspector
+            // (calm by default).
+            var moodArg = args.FirstOrDefault(a => a.StartsWith("--mood="));
+            if (moodArg != null) scene.Mood = (FaceMood)Enum.Parse(typeof(FaceMood), moodArg.Substring(7), true);
             var day = new BrokerDay(); var quotesDay = new BrokerDay(6, mode: CareerMode.EmployeeWork, clientIds: ClientCatalog.Appointments(6));
             Console.WriteLine($"scene built in {clock.ElapsedMilliseconds} ms: {GameObject.All.Count} objects, warnings {UnityEngine.Debug.Warnings.Count}");
             foreach (var warning in UnityEngine.Debug.Warnings.Distinct().Take(8)) Console.WriteLine("  warning: " + warning);
             int failures = UnityEngine.Debug.Warnings.Count;
+            if (check)
+            {
+                // Faces (stage 5): every expression of the Inspector reaches every person, also one chosen after the people
+                // were built and before the first Refresh.
+                var faces = GameObject.All.Where(o => o.name == "Person / face").ToList(); var chosen = scene.Mood;
+                var before = faces.Select(o => o.GetComponent<MeshFilter>().sharedMesh).ToList();
+                foreach (var mood in new[] { FaceMood.Smile, FaceMood.Worry, FaceMood.Calm })
+                {
+                    scene.Mood = mood; scene.Refresh(day);
+                    var meshes = faces.Select(o => o.GetComponent<MeshFilter>().sharedMesh).ToList();
+                    bool ok = faces.Count > 0 && faces.All(o => o.GetComponent<MeshRenderer>().enabled && o.GetComponent<MeshFilter>().sharedMesh != null)
+                        && meshes.Zip(before, (now, was) => now != was).All(changed => changed);
+                    if (!ok) failures++;
+                    Console.WriteLine($"{(ok ? "faces" : "FAIL faces")} {mood}: {faces.Count} people");
+                    before = meshes;
+                }
+                scene.Mood = chosen; scene.Refresh(day);
+            }
             bool employee = false;
             foreach (var shot in Shots.OrderBy(s => s.Employee))
             {
@@ -103,7 +149,9 @@ namespace Broker.Tools.ScenePreview
                 if (shot.Employee && !employee) { employee = true; scene.ConfigureCareerMode(CareerMode.Employee); day = new BrokerDay(mode: CareerMode.Employee); }
                 var renderer = check ? new Renderer { Width = 240, Height = 160, Supersample = 1 } : new Renderer { Supersample = fast ? 1 : 2 };
                 var camera = Prepare(scene, root, shot, shot.Quotes ? quotesDay : day, retime ?? shot.Traffic);
+                var putBack = shot.Lineup != null ? LineUp(scene, shot) : null;
                 renderer.Render(SceneSoup.Collect(), camera);
+                putBack?.Invoke();
                 if (check)
                 {
                     // Smoke check: the builders ran, the shot sees geometry and lighting produced a non-flat image.
@@ -164,6 +212,53 @@ namespace Broker.Tools.ScenePreview
             foreach (var label in GameObject.All.Select(g => g.GetComponent<TextMesh>()).Where(t => t != null && t.name == "Employee label"))
                 label.transform.rotation = rotation;
             return camera;
+        }
+
+        // The staged row of a Lineup shot: walkers of each style first, then a standing figure of that style, moved into the
+        // row and turned to the camera, limbs and head at rest; the staff of the shot after them. Returns how to put them
+        // back (the figures and the staff stay where the scene built them; the walkers are placed again by the next shot's
+        // clock anyway).
+        private static Action LineUp(OfficeScene scene, Shot shot)
+        {
+            var used = new List<(Transform person, Transform parent, Vector3 position, Quaternion rotation, List<(Transform part, Quaternion rotation)> parts)>();
+            var walkers = scene.Life.Crowd.Walkers;
+            GameObject Find(string name) => GameObject.All.FirstOrDefault(g => g.name == name && g.activeInHierarchy && !used.Any(u => u.person == g.transform));
+            var row = new List<GameObject>();
+            foreach (var style in shot.Lineup)
+            {
+                GameObject person = null;
+                for (int i = 0; i < walkers.Count && person == null; i++) if (walkers[i].Style == style) person = Find("City / passer-by " + i);
+                person ??= CityCrowd.Figures.Any(f => f.Style == style && !f.Seated) ? Find("City / " + style) : null;
+                row.Add(person ?? throw new InvalidOperationException("nobody of style " + style + " to line up"));
+            }
+            foreach (var style in shot.Staff ?? new PersonStyle[0])
+            {
+                string name = style == PersonStyle.Lena ? "Lena - person" : style == PersonStyle.Max ? "Max - person" : "Orlov / figure";
+                row.Add(GameObject.All.FirstOrDefault(g => g.name == name && g.activeSelf) ?? throw new InvalidOperationException("no " + name + " to line up"));
+            }
+            for (int k = 0; k < row.Count; k++)
+            {
+                var t = row[k].transform; var parts = new List<(Transform, Quaternion)>();
+                foreach (Transform part in t) parts.Add((part, part.localRotation));
+                used.Add((t, t.parent, t.localPosition, t.localRotation, parts));
+                // Out of a hidden place (Orlov's desk in the owner's office) onto the scene itself.
+                if (!row[k].activeInHierarchy) t.SetParent(scene.transform, false);
+                float x = shot.LineupAt.x + (k - (row.Count - 1) / 2f) * shot.LineupGap, z = shot.LineupAt.z;
+                var at = new Vector3(x, CityBlockPlan.GroundY + CityDistrictPlan.FloorY(x, z), z);
+                // Models face −Z: the root turns so that −Z points at the camera.
+                var to = shot.Local - at;
+                t.localPosition = at; t.localRotation = Quaternion.Euler(0, Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg + 180, 0);
+                foreach (Transform part in t) part.localRotation = Quaternion.identity;
+            }
+            return () =>
+            {
+                foreach (var u in used)
+                {
+                    if (u.person.parent != u.parent) u.person.SetParent(u.parent, false);
+                    u.person.localPosition = u.position; u.person.localRotation = u.rotation;
+                    foreach (var (part, rotation) in u.parts) part.localRotation = rotation;
+                }
+            };
         }
 
         // Every shot starts the boulevard clock afresh, so the same shot always shows the same signal, cars and walkers.

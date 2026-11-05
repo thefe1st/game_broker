@@ -10,6 +10,7 @@ namespace Broker.Runtime.Office
     {
         private readonly List<Material> materials = new List<Material>();
         private readonly Transform[] people = new Transform[2], heads = new Transform[2], arms = new Transform[4];
+        private float workerReach;
         private readonly Renderer[] screens = new Renderer[2];
         private readonly TextMesh[] workerLabels = new TextMesh[2];
         private Material navy, wood, brass, green, amber, ink, cream, skin, phoneMaterial;
@@ -142,11 +143,15 @@ namespace Broker.Runtime.Office
             screens[index] = Box("Employee screen", new Vector3(x + 0.4f, 1.12f, 1.08f), new Vector3(0.58f, 0.39f, 0.025f), green, false).GetComponent<Renderer>();
             Box("Employee papers", new Vector3(x - 0.55f, 0.87f, 1.2f), new Vector3(0.4f, 0.06f, 0.3f), cream, false);
             Chair(x, 2.9f);
-            var person = new GameObject(index == 0 ? "Lena - voxel" : "Max - voxel"); person.transform.SetParent(transform, false);
+            var person = new GameObject(index == 0 ? "Lena - person" : "Max - person"); person.transform.SetParent(transform, false);
             person.transform.localPosition = new Vector3(x, 0, 2.45f); people[index] = person.transform;
             var hitbox = person.AddComponent<CapsuleCollider>(); hitbox.height = 1.85f; hitbox.radius = 0.3f; hitbox.center = new Vector3(0, 0.94f, 0);
             Interactable(person, OfficeStation.Employee, index == 0 ? "Лена / порядок в хаосе" : "Макс / отдел громких обещаний", "Поговорить и дать поручение", index);
-            PlaceFigure(index == 0 ? PersonStyle.Lena : PersonStyle.Max, person.transform, out heads[index], out arms[index * 2], out arms[index * 2 + 1]);
+            var model = StaffModel(index == 0 ? PersonStyle.Lena : PersonStyle.Max);
+            var parts = PlacePerson("staff/" + (index == 0 ? PersonStyle.Lena : PersonStyle.Max), model, person.transform, false);
+            heads[index] = parts.Head; arms[index * 2] = parts.LeftArm; arms[index * 2 + 1] = parts.RightArm;
+            // At work the hands reach the keyboard at the desk's near edge.
+            workerReach = model.PitchToReach(PeopleModels.DeskTop + 0.04f, false);
             workerLabels[index] = Text("Employee label", index == 0 ? "ЛЕНА" : "МАКС", new Vector3(x, 2.25f, 2.45f), 48, 0.035f, new Color(0.98f, 0.93f, 0.82f));
         }
         private void BuildCoffee()
@@ -191,6 +196,7 @@ namespace Broker.Runtime.Office
         {
             if (day == null) return;
             FollowDay(day);
+            RefreshFaces();
             // City errands are hidden; retained implementation is not part of this scene.
             RefreshBoard(day);
             phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
@@ -204,7 +210,7 @@ namespace Broker.Runtime.Office
                 workerLabels[i].text = worker.Name + " / " + (employeeMode ? "КОЛЛЕГА" : day.IsFounder ? (working ? "ДОСЬЕ / В РАБОТЕ" : "ПОМОЩНИК / ДОСЬЕ") : worker.Work == WorkKind.Idle ? (i == 0 ? "СВОБОДНА" : "СВОБОДЕН") : worker.Work == WorkKind.Break ? "ПЕРЕРЫВ" : "В РАБОТЕ");
                 heads[i].localRotation = Quaternion.Euler(0, working ? Mathf.Sin(Time.unscaledTime * 1.7f + i) * 8 : 0, 0);
                 // Arms hang from the shoulder joint; a positive pitch reaches forward to the keyboard.
-                for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? 26 + Mathf.Sin(Time.unscaledTime * 3 + a * 1.7f) * 6 : 0, 0, 0);
+                for (int a = 0; a < 2; a++) arms[i * 2 + a].localRotation = Quaternion.Euler(working ? workerReach + Mathf.Sin(Time.unscaledTime * 3 + a * 1.7f) * 6 : 0, 0, 0);
             }
         }
         private void OnDestroy()

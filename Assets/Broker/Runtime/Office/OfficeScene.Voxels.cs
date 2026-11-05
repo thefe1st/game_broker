@@ -91,17 +91,6 @@ namespace Broker.Runtime.Office
             obj.AddComponent<MeshRenderer>().sharedMaterials = asset.Materials;
             return obj;
         }
-        // A jointed person: body at the root, head on the neck, arms on the shoulders.
-        private void PlaceFigure(PersonStyle style, Transform root, out Transform head, out Transform leftArm, out Transform rightArm)
-        {
-            VoxelFigure figure = null;
-            VoxelFigure Figure() => figure ?? (figure = VoxelProps.Person(style));
-            string key = "person/" + style;
-            PlaceVoxel(key + "/body", () => Figure().Body, "Voxel body", root, Vector3.zero);
-            head = PlaceVoxel(key + "/head", () => Figure().Head, "Voxel head", root, new Vector3(0, Figure().NeckY, 0)).transform;
-            leftArm = PlaceVoxel(key + "/arm", () => Figure().LeftArm, "Voxel left arm", root, new Vector3(-Figure().ShoulderX, Figure().ShoulderY, 0)).transform;
-            rightArm = PlaceVoxel(key + "/arm", () => Figure().RightArm, "Voxel right arm", root, new Vector3(Figure().ShoulderX, Figure().ShoulderY, 0)).transform;
-        }
         private void ReleaseVoxels()
         {
             foreach (var asset in voxelAssets.Values) if (asset.Mesh != null) Destroy(asset.Mesh);

@@ -52,11 +52,22 @@ namespace Broker.Runtime.Office
             UseTexture(material, surfaces.Albedo(look.Surface), BuildingWallSmoothness);
             buildingWalls.Add(look, material); return material;
         }
-        // Places a building with its footprint centre at a local position; the front (−Z) turns with yaw. Far scenery that
-        // the fog dissolves casts no shadows. The glow part takes the voxel glow unless another material is given (street
-        // lamps: their glass lights only after dusk).
+        // Places a building with its footprint centre at a local position (under `parent`, the scene by default); the front
+        // (−Z) turns with yaw. Far scenery that the fog dissolves casts no shadows. The glow part takes the voxel glow unless
+        // another material is given (street lamps: their glass lights only after dusk).
         private GameObject PlaceBuilding(string key, Func<PolyMesh> build, WallLook look, string name, Vector3 position, float yaw = 0,
-            bool castShadows = true, Material glow = null)
+            bool castShadows = true, Material glow = null, Transform parent = null)
+        {
+            var asset = BuildingMesh(key, build);
+            var obj = new GameObject(name); obj.transform.SetParent(parent != null ? parent : transform, false);
+            obj.transform.localPosition = position; obj.transform.localRotation = Quaternion.Euler(0, yaw, 0);
+            obj.AddComponent<MeshFilter>().sharedMesh = asset.Mesh;
+            var renderer = obj.AddComponent<MeshRenderer>(); renderer.sharedMaterials = BuildingMaterials(asset, look, glow);
+            if (!castShadows) renderer.shadowCastingMode = ShadowCastingMode.Off;
+            return obj;
+        }
+        // A model's mesh, built once per key.
+        private BuildingAsset BuildingMesh(string key, Func<PolyMesh> build)
         {
             EnsureBuildingMaterials();
             if (!buildingAssets.TryGetValue(key, out var asset))
@@ -66,6 +77,10 @@ namespace Broker.Runtime.Office
                 asset = new BuildingAsset { Mesh = PolyToMesh(data, "Broker building / " + key, parts.ToArray()), Parts = parts.ToArray() };
                 buildingAssets.Add(key, asset);
             }
+            return asset;
+        }
+        private Material[] BuildingMaterials(BuildingAsset asset, WallLook look, Material glow)
+        {
             var materials = new Material[asset.Parts.Length];
             for (int k = 0; k < materials.Length; k++)
                 switch ((BuildingPart)asset.Parts[k])
@@ -77,12 +92,7 @@ namespace Broker.Runtime.Office
                     case BuildingPart.Metal: materials[k] = buildingMetal; break;
                     default: materials[k] = buildingTrim; break;
                 }
-            var obj = new GameObject(name); obj.transform.SetParent(transform, false);
-            obj.transform.localPosition = position; obj.transform.localRotation = Quaternion.Euler(0, yaw, 0);
-            obj.AddComponent<MeshFilter>().sharedMesh = asset.Mesh;
-            var renderer = obj.AddComponent<MeshRenderer>(); renderer.sharedMaterials = materials;
-            if (!castShadows) renderer.shadowCastingMode = ShadowCastingMode.Off;
-            return obj;
+            return materials;
         }
         // Unity mesh with the given parts of a PolyMesh as its submeshes; the vertex colour carries the corner shade.
         private static Mesh PolyToMesh(PolyMesh data, string name, int[] parts)
