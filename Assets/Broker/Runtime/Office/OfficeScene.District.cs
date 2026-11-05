@@ -6,7 +6,7 @@ namespace Broker.Runtime.Office
 {
     // The old district south of the boulevard: closed street facades, the information stands of the plaza, area signs,
     // and the dressing of both quarters from CityScenery with the colliders the plan marks as solid: low-poly greenery,
-    // lamps, benches, bins, bollards, cones, works and stands (StreetModels); only the café's furniture is still voxel.
+    // lamps, benches, bins, bollards, cones, works and stands (StreetModels), the café's furniture (InteriorModels).
     public sealed partial class OfficeScene
     {
         private void BuildDistrict(Material[] facades)
@@ -70,13 +70,13 @@ namespace Broker.Runtime.Office
                         PlaceBuilding("kiosk", BuildingModels.Kiosk, BuildingModels.KioskWall, "Exchange / press kiosk", position, yaw);
                         Text("Exchange / kiosk sign", "ПРЕССА", position + new Vector3(0, 2.25f, -item.HalfZ - 0.02f), 48, 0.05f, new Color(0.98f, 0.93f, 0.82f)); break;
                     case SceneryKind.ExchangeColumn: PlaceBuilding("exchange column", BuildingModels.ExchangeColumn, BuildingModels.ExchangeStone, "Exchange / column", position, yaw); break;
-                    case SceneryKind.CafeCounter: PlaceVoxel("cafe counter", VoxelProps.CafeCounter, "Cafe / counter", transform, position, yaw); break;
-                    case SceneryKind.CafeShelf: PlaceVoxel("cafe shelf/" + seed % 2, () => VoxelProps.CafeShelf(seed % 2), "Cafe / shelf", transform, position, yaw); break;
-                    case SceneryKind.CafeTable: PlaceVoxel("cafe table", VoxelProps.CafeTable, "Cafe / table", transform, position, yaw); break;
-                    case SceneryKind.CafeChair: PlaceVoxel("cafe chair", VoxelProps.CafeChair, "Cafe / chair", transform, position, yaw); break;
+                    case SceneryKind.CafeCounter: PlaceBuilding("cafe counter", InteriorModels.CafeCounter, StreetModels.FurnitureLook, "Cafe / counter", position, yaw); break;
+                    case SceneryKind.CafeShelf: PlaceBuilding("cafe shelf/" + seed % 2, () => InteriorModels.CafeShelf(seed % 2), StreetModels.FurnitureLook, "Cafe / shelf", position, yaw); break;
+                    case SceneryKind.CafeTable: PlaceBuilding("cafe table", InteriorModels.CafeTable, StreetModels.FurnitureLook, "Cafe / table", position, yaw); break;
+                    case SceneryKind.CafeChair: PlaceBuilding("cafe chair", InteriorModels.CafeChair, StreetModels.FurnitureLook, "Cafe / chair", position, yaw); break;
                     // Wall-mounted and hanging props: the menu at 1.5 m on the back wall, the lamps from the 3 m ceiling.
-                    case SceneryKind.MenuBoard: PlaceVoxel("menu board", VoxelProps.MenuBoard, "Cafe / menu board", transform, position + new Vector3(0, 1.5f, 0), yaw); break;
-                    case SceneryKind.PendantLamp: PlaceVoxel("pendant lamp", VoxelProps.PendantLamp, "Cafe / pendant lamp", transform, position + new Vector3(0, 3, 0), yaw); break;
+                    case SceneryKind.MenuBoard: PlaceBuilding("menu board", InteriorModels.MenuBoard, StreetModels.FurnitureLook, "Cafe / menu board", position + new Vector3(0, 1.5f, 0), yaw); break;
+                    case SceneryKind.PendantLamp: PlaceBuilding("pendant lamp", InteriorModels.PendantLamp, StreetModels.FurnitureLook, "Cafe / pendant lamp", position + new Vector3(0, 3, 0), yaw); break;
                     default: throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "Scenery kind without a model.");
                 }
                 if (!item.Solid) continue;

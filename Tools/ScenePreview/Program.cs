@@ -94,6 +94,13 @@ namespace Broker.Tools.ScenePreview
                 Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f) },
             new Shot { Name = "people-staff-faces", Local = new Vector3(0, CityBlockPlan.GroundY + 1.64f, 16.4f), Yaw = 0, Pitch = 1, Fov = 28, City = true, Hud = false, Traffic = 14,
                 Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f), LineupGap = 0.52f },
+            // Stage 6: the office and the café close up — the director's desk, the room towards the door from the windows, the
+            // door with the display stand and the street elevator, the coffee corner, the café's counter and shelf.
+            new Shot { Name = "office-desk", Local = new Vector3(1.05f, 1.6f, -2.75f), Yaw = 2, Pitch = 26, Fov = 52, Hud = false },
+            new Shot { Name = "office-entrance", Local = new Vector3(1.5f, 2.3f, 4.1f), Yaw = 200, Pitch = 14, Fov = 72, Hud = false },
+            new Shot { Name = "office-door", Local = new Vector3(-1.6f, 1.75f, 0.4f), Yaw = 128, Pitch = 10, Fov = 66, Hud = false },
+            new Shot { Name = "office-coffee", Local = new Vector3(-3.75f, 1.75f, -2.85f), Yaw = -42, Pitch = 22, Fov = 50, Hud = false },
+            new Shot { Name = "cafe-counter", Local = new Vector3(25.6f, CityBlockPlan.GroundY + 1.6f, -4.4f), Yaw = 192, Pitch = 8, Fov = 64, City = true, Hud = false },
         };
 
         public static int Main(string[] args)

@@ -97,7 +97,7 @@ namespace Broker.Runtime.Office
             BuildCity();
             BuildBossDesk(); BuildWorker(0, -3.5f); BuildWorker(1, 3.5f); BuildCoffee(); BuildUpgrade(); BuildDoor(); BuildSupervisor();
             Box("Plant pot", new Vector3(5.3f, 0.32f, 3.3f), new Vector3(0.6f, 0.64f, 0.6f), brass);
-            BuildVoxelFurniture();
+            BuildFurniture();
             var player = new GameObject("Player - WASD and mouse"); player.transform.SetParent(transform, false);
             player.transform.localPosition = new Vector3(0, 0.05f, -3.4f); player.AddComponent<CharacterController>();
             Player = player.AddComponent<FirstPersonOfficeController>();
@@ -199,7 +199,7 @@ namespace Broker.Runtime.Office
             RefreshFaces();
             // City errands are hidden; retained implementation is not part of this scene.
             RefreshBoard(day);
-            phoneMaterial.color = day.HasGoldenPhone ? brass.color : navy.color;
+            deskPhone.SetActive(!day.HasGoldenPhone); goldenDeskPhone.SetActive(day.HasGoldenPhone);
             Camera active = overview.enabled ? overview : Player.Eye;
             if (employeeMode) supervisorLabel.transform.rotation = active.transform.rotation;
             for (int i = 0; i < 2; i++)
