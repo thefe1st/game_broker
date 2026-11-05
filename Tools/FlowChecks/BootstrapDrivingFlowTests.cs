@@ -29,16 +29,23 @@ namespace Broker.FlowChecks
         [Test] public void DrivingHudShowsSpeedGearKeysAndWhereToGetOut()
         {
             Begin(); var office = Get<OfficeScene>("office"); Interact(OfficeStation.Street);
-            Assert.That(NotebookText(), Does.Not.Contain("км/ч"));
+            Assert.That(Pictograms(), Does.Not.Contain("Gauge")); Assert.That(GUI.Labels, Does.Not.Contain("км/ч"));
             Interact(OfficeStation.Car); office.CarSpeedKmh = 47.4f; office.CarGear = "3";
-            string text = NotebookText();
-            Assert.That(text, Does.Contain("47")); Assert.That(text, Does.Contain("км/ч · передача 3"));
-            Assert.That(text, Does.Contain("Выйти можно только на парковке")); Assert.That(text, Does.Contain("Пробел · ручник"));
-            Assert.That(text, Does.Not.Contain("WASD · ходить")); Assert.That(text, Does.Not.Contain("Прогулка · лифт ведёт в офис"));
-            office.CarGear = "R"; Assert.That(NotebookText(), Does.Contain("км/ч · задний ход"));
-            office.Parked = true; text = NotebookText();
-            Assert.That(text, Does.Contain("Выйти из машины")); Assert.That(text, Does.Not.Contain("Выйти можно только на парковке"));
-            Time.realtimeSinceStartupAsDouble = 11; Assert.That(NotebookText(), Does.Not.Contain("Пробел · ручник"));
+            var pictures = Pictograms(); var labels = GUI.Labels.ToArray();
+            Assert.That(labels, Does.Contain("47")); Assert.That(labels, Does.Contain("км/ч")); Assert.That(labels, Does.Contain("3"));
+            // Away from the lay-by: the parking sign, the arrow to it and the metres instead of a sentence.
+            Assert.That(pictures, Does.Contain("Parking")); Assert.That(pictures, Does.Contain("Arrow")); Assert.That(labels.Any(l => l.EndsWith(" м")), Is.True);
+            Assert.That(labels, Does.Not.Contain("Выйти")); Assert.That(pictures, Does.Not.Contain("Exit"));
+            // The first seconds behind the wheel: the pedals, the wheel and the handbrake as keys with pictograms.
+            Assert.That(pictures, Is.SupersetOf(new[] { "Gauge", "Wheel", "Handbrake", "Space", "Mouse", "Pause" }));
+            Assert.That(pictures, Does.Not.Contain("Walker")); Assert.That(pictures, Does.Not.Contain("Pointer"));
+            office.CarGear = "R"; Pictograms(); Assert.That(GUI.Labels, Does.Contain("R"));
+            office.Parked = true; pictures = Pictograms();
+            Assert.That(GUI.Labels, Does.Contain("Выйти")); Assert.That(GUI.Labels, Does.Contain("E"));
+            Assert.That(pictures, Does.Contain("Exit")); Assert.That(pictures, Does.Not.Contain("Parking"));
+            Time.realtimeSinceStartupAsDouble = 11; Assert.That(Pictograms(), Does.Not.Contain("Handbrake"));
+            string text = string.Join("\n", GUI.Labels);
+            Assert.That(text, Does.Not.Contain("ручник")); Assert.That(text, Does.Not.Contain("передача")); Assert.That(text, Does.Not.Contain("задний ход"));
         }
         [Test] public void TheDriverGetsOutOnlyAtTheParkingAndNeverDuringAPause()
         {
@@ -47,7 +54,8 @@ namespace Broker.FlowChecks
             Assert.That(Get<double>("carNoticeUntil"), Is.GreaterThan(Time.realtimeSinceStartupAsDouble));
             office.Parked = true; Call("PauseGameplay");
             office.Player.OnLeaveRequest(); Assert.That(office.Driving, Is.True);
-            Assert.That(NotebookText(), Does.Contain("E · выйти на парковке у сквера"));
+            // The pause lists the car's controls with getting out at the parking: E, the door and the parking sign.
+            Assert.That(Pictograms(), Is.SupersetOf(new[] { "Gauge", "Wheel", "Handbrake", "Exit", "Parking", "Mouse" }));
             Click("Продолжить · Esc"); office.Player.OnLeaveRequest();
             Assert.That(office.Driving, Is.False); Assert.That(Get<OfficeNavigation>("navigation").IsExploring, Is.True);
             Assert.That(office.IsInCity, Is.True); Assert.That(Day.Cash, Is.Zero);

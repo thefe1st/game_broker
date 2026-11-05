@@ -233,7 +233,7 @@ namespace Broker.Runtime
             MetricCard(320, 376, 248, "В кассе", "$" + day.OpeningCash);
             MetricCard(592, 376, 248, "Счета сегодня", "$" + day.TotalExpenses);
             MetricCard(864, 376, 256, "Клиенты", "3");
-            Label(320, 520, 800, 28, "WASD — ходить    Мышь — обзор    E — действие    Esc — пауза", theme.Small);
+            DrawHud(Hud.Controls(false, false, 516));
             Label(320, 560, 800, 52, saveNotice, theme.Small);
             if (Button(320, 632, 800, 56, "Начать день " + day.DayNumber, true, true)) { intro = false; EnterWorld(); }
             if (Button(320, 704, 800, 48, "Проверить микрофон без API")) OpenVoiceSetup();

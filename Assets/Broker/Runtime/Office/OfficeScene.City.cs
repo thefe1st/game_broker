@@ -19,8 +19,19 @@ namespace Broker.Runtime.Office
         public float MapZ => Driving ? Life.Car.Z : Player == null ? CityBlockPlan.SpawnZ : Player.transform.localPosition.z;
         // Signal, cars and passers-by of the boulevard. Decoration: nothing here touches the day, money or clients.
         public CityLife Life { get; private set; } = new CityLife();
-        // Signal state for the HUD while the player walks near the crossing; null elsewhere, in the car and in the office.
-        public string CrossingHint => IsInCity && !Driving && CityCrosswalk.Near(MapX, MapZ) ? Life.Hint : null;
+        // Where the view looks on the plan, for the HUD's arrow: degrees clockwise from north (+Z) toward east (+X), from the
+        // walker's eye or the chase camera.
+        public float MapHeading
+        {
+            get
+            {
+                if (Player == null || Player.Eye == null) return 0;
+                var forward = transform.InverseTransformDirection(Player.Eye.transform.forward);
+                return Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            }
+        }
+        // The signal for the HUD while the player walks near the crossing; null elsewhere, in the car and in the office.
+        public CrosswalkSignal CrossingSignal => IsInCity && !Driving && CityCrosswalk.Near(MapX, MapZ) ? Life.Signal : null;
         // The button on the signal post: true when the press shortens the cars' green.
         public bool RequestCrossing() { bool changed = Life.Signal.RequestWalk(); ShowCity(0); return changed; }
         // A fresh boulevard clock: the cars' green just started, cars and passers-by at their starting places, the test

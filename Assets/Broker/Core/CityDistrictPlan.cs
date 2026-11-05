@@ -113,8 +113,40 @@ namespace Broker.Core
             double distance = Distance(x, z, destination); if (distance <= 2) return "Вы у ориентира";
             float dx = destination.X - x, dz = destination.Z - z;
             string side = Math.Abs(dx) > Math.Abs(dz) ? dx > 0 ? "Восток" : "Запад" : dz > 0 ? "Север" : "Юг";
-            return Side(z) * Side(destination.Z) < 0 ? side + " · через переход" : side;
+            return AcrossBoulevard(z, destination) ? side + " · через переход" : side;
         }
+        // The boulevard lies between the walker and the destination: on foot the way goes over the zebra.
+        public static bool AcrossBoulevard(float z, CityDestination destination)
+        {
+            if (destination == null) throw new ArgumentException("Invalid destination.");
+            return Side(z) * Side(destination.Z) < 0;
+        }
+        // Where to head for on foot (the HUD's arrow): the destination itself, or across the boulevard first the zebra's
+        // near kerb and, once there, its far kerb.
+        public const float CrossingReach = 2.5f;
+        public static void NextLeg(float x, float z, CityDestination destination, out float toX, out float toZ)
+        {
+            if (!Finite(x) || !Finite(z)) throw new ArgumentException("Invalid map position.");
+            if (!AcrossBoulevard(z, destination)) { toX = destination.X; toZ = destination.Z; return; }
+            float near = NearKerb(z), far = NearKerb(destination.Z);
+            toX = 0; toZ = Length(x, z - near) <= CrossingReach ? far : near;
+        }
+        // The length of that way: straight, or by the zebra from kerb to kerb.
+        public static double WalkDistance(float x, float z, CityDestination destination)
+        {
+            if (!AcrossBoulevard(z, destination)) return Distance(x, z, destination);
+            float near = NearKerb(z), far = NearKerb(destination.Z);
+            return Length(x, z - near) + Math.Abs(far - near) + Length(destination.X, destination.Z - far);
+        }
+        // Compass bearing from one point of the plan to another: degrees clockwise from north (+Z) toward east (+X), 0…360.
+        public static float Bearing(float x, float z, float toX, float toZ)
+        {
+            double degrees = Math.Atan2(toX - x, toZ - z) * 180 / Math.PI;
+            return (float)((degrees % 360 + 360) % 360);
+        }
+        // The zebra's gate on the given side of the boulevard, a step back on the pavement.
+        private static float NearKerb(float z) => z < SouthKerbZ ? CityCrosswalk.SouthCurbZ - 0.8f : CityCrosswalk.NorthCurbZ + 0.8f;
+        private static double Length(float dx, float dz) => Math.Sqrt((double)dx * dx + (double)dz * dz);
         // −1 south of the boulevard, +1 north of it, 0 on the road.
         private static int Side(float z) => z < SouthKerbZ ? -1 : z > NorthKerbZ ? 1 : 0;
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

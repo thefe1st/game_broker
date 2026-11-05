@@ -1,5 +1,5 @@
 // Renders still previews of the procedural office and city without the Unity editor:
-//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names...] [--fast] [--no-hud] [--at=SECONDS] [--hour=H]
+//   dotnet run --project Tools/ScenePreview -c Release -- <output folder> [shot names... | hud-icons] [--fast] [--no-hud] [--at=SECONDS] [--hour=H]
 //       [--mood=calm|smile|worry]
 //   dotnet run --project Tools/ScenePreview -c Release -- --check      (CI smoke check, no image files)
 // The real OfficeScene builders run against UnityStubs.cs; Renderer.cs approximates the built-in forward renderer.
@@ -17,13 +17,15 @@ namespace Broker.Tools.ScenePreview
 {
     public sealed class Shot
     {
-        public string Name; public Vector3 Local; public float Yaw, Pitch, Fov = 72; public bool Employee, City, Hud = true; public string Target;
-        // The crosshair rests on an interactable: the HUD shows its key and title.
-        public bool Aim;
+        public string Name; public Vector3 Local; public float Yaw, Pitch, Fov = 72; public bool Employee, City, Hud = true;
+        // The crosshair rests on an interactable (Aim): the HUD shows E, the pictogram of its Station and its Target title.
+        public bool Aim; public string Target; public OfficeStation Station;
+        // The landmark chosen on the district map (CityDistrictPlan's id): the HUD's arrow points to it; the office lift by default.
+        public string Destination = "office";
         // Seconds on the boulevard clock from a fresh start: 18–32 s is the pedestrians' green.
         public double Traffic = 1.6;
-        // Quotes: a work day with prices on the Exchange board. Crossing: the HUD shows the signal panel.
-        public bool Quotes, Crossing;
+        // Quotes: a work day with prices on the Exchange board. Near the crossing on foot the HUD shows its signal by itself.
+        public bool Quotes;
         // Chase shots: the player drives the test car from (CarX, CarZ), heading CarHeading (radians from +X toward +Z) at
         // CarSpeed m/s, holding the keys for the last DriveSeconds of the boulevard clock; the view is the game's chase
         // camera and the HUD the driving one.
@@ -43,37 +45,38 @@ namespace Broker.Tools.ScenePreview
     {
         private static readonly Shot[] Shots =
         {
-            new Shot { Name = "plaza-north", Local = new Vector3(0, CityBlockPlan.GroundY + 1.7f, 15), Yaw = 0, Pitch = -4, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "plaza-office", Local = new Vector3(3.2f, CityBlockPlan.GroundY + 1.7f, 22.6f), Yaw = 192, Pitch = -9, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 14 },
-            new Shot { Name = "sunset-west", Local = new Vector3(-12, CityBlockPlan.GroundY + 1.7f, 21), Yaw = -96, Pitch = -2, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "square-west", Local = new Vector3(-18.5f, CityBlockPlan.GroundY + 1.7f, 14f), Yaw = -40, Pitch = -6, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "east-street", Local = new Vector3(31, CityBlockPlan.GroundY + 1.7f, 13), Yaw = 200, Pitch = 2, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "street-works", Local = new Vector3(41.2f, CityBlockPlan.GroundY + 3.6f, -13.9f), Yaw = 3, Pitch = 36, City = true, Target = "Прогулка · лифт ведёт в офис" },
-            new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 1.8 },
-            new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 21, Crossing = true },
-            new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
+            new Shot { Name = "plaza-north", Local = new Vector3(0, CityBlockPlan.GroundY + 1.7f, 15), Yaw = 0, Pitch = -4, City = true },
+            new Shot { Name = "plaza-office", Local = new Vector3(3.2f, CityBlockPlan.GroundY + 1.7f, 22.6f), Yaw = 192, Pitch = -9, City = true, Traffic = 14 },
+            new Shot { Name = "sunset-west", Local = new Vector3(-12, CityBlockPlan.GroundY + 1.7f, 21), Yaw = -96, Pitch = -2, City = true },
+            new Shot { Name = "square-west", Local = new Vector3(-18.5f, CityBlockPlan.GroundY + 1.7f, 14f), Yaw = -40, Pitch = -6, City = true },
+            new Shot { Name = "east-street", Local = new Vector3(31, CityBlockPlan.GroundY + 1.7f, 13), Yaw = 200, Pitch = 2, City = true },
+            new Shot { Name = "street-works", Local = new Vector3(41.2f, CityBlockPlan.GroundY + 3.6f, -13.9f), Yaw = 3, Pitch = 36, City = true },
+            new Shot { Name = "boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Traffic = 1.8 },
+            // At the zebra on the pedestrians' green, the Exchange hall chosen on the map: the arrow leads over the zebra.
+            new Shot { Name = "crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Traffic = 21, Destination = "exchange" },
+            new Shot { Name = "exchange", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.82f, 42.5f), Yaw = 10, Pitch = -8, City = true, Traffic = 10 },
             // The west side of the Exchange square: the rostral column, the press kiosk and the bull on its cheek.
-            new Shot { Name = "exchange-square", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.7f, 42.6f), Yaw = -55, Pitch = -16, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 10 },
-            new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Quotes = true, Aim = true },
-            new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»", Aim = true },
+            new Shot { Name = "exchange-square", Local = new Vector3(-4.6f, CityBlockPlan.GroundY + 1.7f, 42.6f), Yaw = -55, Pitch = -16, City = true, Traffic = 10 },
+            new Shot { Name = "exchange-hall", Local = new Vector3(-1.5f, CityBlockPlan.GroundY + 2.8f, 62.2f), Yaw = 4, Pitch = 3, City = true, Target = "Табло котировок", Station = OfficeStation.CityExchange, Quotes = true, Aim = true },
+            new Shot { Name = "cafe", Local = new Vector3(22.5f, CityBlockPlan.GroundY + 1.65f, -2.9f), Yaw = 132, Pitch = -9, City = true, Target = "Стойка кофейни «Бык и медведь»", Station = OfficeStation.CityCafe, Aim = true },
             // Close-ups of the low-poly cars waiting at the red light (the walkers' green): the eastbound queue from the
             // zebra, then from behind with the taxi that joins it and the brake lamps on.
             new Shot { Name = "cars", Local = new Vector3(0.9f, CityBlockPlan.GroundY + 1.55f, 29.6f), Yaw = -66, Pitch = -8, Fov = 55, City = true, Hud = false, Traffic = 29 },
             new Shot { Name = "cars-rear", Local = new Vector3(-16.0f, CityBlockPlan.GroundY + 1.8f, 28.1f), Yaw = 62, Pitch = -8, Fov = 55, City = true, Hud = false, Traffic = 28 },
-            new Shot { Name = "tunnel", Local = new Vector3(36, CityBlockPlan.GroundY + 1.7f, 27.2f), Yaw = 80, Pitch = 1, City = true, Target = "Прогулка · лифт ведёт в офис", Traffic = 6 },
+            new Shot { Name = "tunnel", Local = new Vector3(36, CityBlockPlan.GroundY + 1.7f, 27.2f), Yaw = 80, Pitch = 1, City = true, Traffic = 6 },
             // The test sedan: aimed at in its lay-by, then behind the wheel on the boulevard, round the ring and back.
-            new Shot { Name = "parking", Local = new Vector3(-22.9f, CityBlockPlan.GroundY + 1.7f, 24.9f), Yaw = -38, Pitch = 20, City = true, Target = "Сесть за руль", Aim = true },
+            new Shot { Name = "parking", Local = new Vector3(-22.9f, CityBlockPlan.GroundY + 1.7f, 24.9f), Yaw = -38, Pitch = 20, City = true, Target = "Сесть за руль", Station = OfficeStation.Car, Aim = true },
             new Shot { Name = "drive-boulevard", City = true, Drive = true, CarX = -44, CarZ = 30.4f, CarHeading = 0, CarSpeed = 11, Throttle = 0.4f, DriveSeconds = 1.5, Traffic = 4 },
             new Shot { Name = "drive-south", City = true, Drive = true, CarX = -34, CarZ = -22, CarHeading = 0, CarSpeed = 13, Throttle = 0.5f, DriveSeconds = 1.6, Traffic = 8 },
             new Shot { Name = "drive-corner", City = true, Drive = true, CarX = 37, CarZ = -22, CarHeading = 0, CarSpeed = 9, Throttle = 0.15f, Steer = -0.7f, DriveSeconds = 1.7, Traffic = 8 },
             new Shot { Name = "drive-parked", City = true, Drive = true, CarX = CityRoads.ParkX, CarZ = CityRoads.ParkZ, CarHeading = CityRoads.ParkHeading, DriveSeconds = 0.5, Traffic = 12 },
-            new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Target = "Телефон — звонки" },
-            new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true, Target = "Телефон — звонки" },
+            new Shot { Name = "office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9 },
+            new Shot { Name = "office-employee", Local = new Vector3(-2.2f, 1.7f, -3.2f), Yaw = 32, Pitch = 10, Employee = true },
             new Shot { Name = "aerial", Local = new Vector3(0, 60, -32), Yaw = 0, Pitch = 42, Fov = 60, City = true, Hud = false },
             // Stage 4: the end of the work day on the city clock (Core/DayCycle); every shot above is the approved bright day.
             new Shot { Name = "golden-boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Hud = false, Traffic = 1.8, Hour = DayCycle.GoldenHour },
-            new Shot { Name = "sunset-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Crossing = true, Hour = DayCycle.SunsetHour },
-            new Shot { Name = "dusk-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Crossing = true, Hour = DayCycle.DuskHour },
+            new Shot { Name = "sunset-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Hour = DayCycle.SunsetHour },
+            new Shot { Name = "dusk-crosswalk", Local = new Vector3(2.2f, CityBlockPlan.GroundY + 1.7f, 24.4f), Yaw = -14, Pitch = -3, City = true, Hud = false, Traffic = 21, Hour = DayCycle.DuskHour },
             new Shot { Name = "night-plaza", Local = new Vector3(3.2f, CityBlockPlan.GroundY + 1.7f, 22.6f), Yaw = 192, Pitch = -9, City = true, Hud = false, Traffic = 14, Hour = 20.5f },
             new Shot { Name = "night-boulevard", Local = new Vector3(-19, CityBlockPlan.GroundY + 1.7f, 26.6f), Yaw = 66, Pitch = 1, City = true, Hud = false, Traffic = 1.8, Hour = 20.5f },
             new Shot { Name = "night-office", Local = new Vector3(-1.2f, 1.7f, -3.6f), Yaw = 8, Pitch = 9, Hud = false, Hour = 20.5f },
@@ -163,6 +166,10 @@ namespace Broker.Tools.ScenePreview
                     before = meshes;
                 }
                 scene.Mood = chosen; scene.Refresh(day);
+            }
+            if (!check && (wanted.Count == 0 || wanted.Contains("hud-icons")))
+            {
+                RenderIconSheet(Path.Combine(output, "hud-icons.png")); Console.WriteLine("hud-icons: " + HudIcons.All.Length + " pictograms");
             }
             bool employee = false;
             foreach (var shot in Shots.OrderBy(s => s.Employee))
@@ -313,84 +320,134 @@ namespace Broker.Tools.ScenePreview
         private static string Offset(float dx, float dy) =>
             (dx >= 0 ? "+" : "-") + Math.Abs(dx).ToString("0", CultureInfo.InvariantCulture) + (dy >= 0 ? "+" : "-") + Math.Abs(dy).ToString("0", CultureInfo.InvariantCulture);
 
-        // Mirrors PrototypeBootstrap.DrawWorldHUD on its 1440 × 960 canvas: plain text with a drop shadow straight over the
-        // world (no cards), the gold meter, the key of a targeted interactable, the crosshair and the start-of-day hint.
+        // The game's HUD (Core/HudPlan, as PrototypeBootstrap.DrawWorldHUD fills it) for the shot: the walker where the
+        // camera stands looking along the shot's yaw, or the car and its chase camera; the controls row of a fresh day.
         private static void AddHud(List<string> args, Shot shot, BrokerDay day, OfficeScene scene)
         {
-            var ink = Hex("#F5F0E6"); var muted = Hex("#E4DACD"); var gold = Hex("#E9B56D");
-            const string shadow = "rgba(10,6,5,0.8)", track = "rgba(20,13,10,0.45)";
-            void Rect(float x, float y, float w, float h, string fill) =>
-                args.AddRange(new[] { "-gravity", "NorthWest", "-stroke", "none", "-fill", fill, "-draw", string.Format(CultureInfo.InvariantCulture, "rectangle {0},{1} {2},{3}", x, y, x + w - 1, y + h - 1) });
-            // Text in the box from x to x + w, aligned like its GUIStyle (left, centre or right): shadow pass, then the text.
-            void Text(float x, float y, float w, string value, int size, Color color, bool bold, TextAnchor align = TextAnchor.UpperLeft)
+            bool drive = shot.Drive; float x = drive ? scene.MapX : shot.Local.x, z = drive ? scene.MapZ : shot.Local.z;
+            var frame = new HudFrame
             {
-                string gravity = align == TextAnchor.UpperCenter ? "North" : align == TextAnchor.UpperRight ? "NorthEast" : "NorthWest";
-                float anchor = align == TextAnchor.UpperCenter ? x + w / 2 - 720 : align == TextAnchor.UpperRight ? 1440 - (x + w) : x;
-                foreach (var (shift, fill) in new[] { (1f, shadow), (2f, shadow), (0f, Rgba(color, 1)) })
-                    args.AddRange(new[] { "-gravity", gravity, "-font", bold ? "Liberation-Sans-Bold" : "Liberation-Sans", "-pointsize", size.ToString(CultureInfo.InvariantCulture),
-                        "-fill", fill, "-stroke", "none", "-annotate", Offset(anchor + (align == TextAnchor.UpperRight ? -shift : shift), y + shift - size * 0.12f), value });
+                Day = day.DayNumber, Hour = scene.Hour, Employee = shot.Employee, Cash = day.Cash, Expenses = day.TotalExpenses,
+                Deals = day.DealsCount, SalesTarget = day.SalesTarget, Guidance = shot.Employee ? day.EmploymentNextAction : null,
+                InCity = shot.City, Driving = drive, Target = shot.Aim && !drive ? shot.Target : null, TargetStation = shot.Station,
+                CanLeaveCar = drive && scene.CanLeaveCar, SpeedKmh = drive ? scene.CarSpeedKmh : 0, Gear = scene.CarGear,
+                X = x, Z = z, Heading = drive ? scene.MapHeading : shot.Yaw, DestinationId = shot.Destination,
+                Crossing = !drive && shot.City && CityCrosswalk.Near(x, z) ? scene.Life.Signal : null,
+                WalkKeys = !drive, DriveKeys = drive,
+            };
+            DrawHud(args, hudPlan.Build(frame));
+        }
+        private static readonly PreviewText hudText = new PreviewText();
+        private static readonly HudPlan hudPlan = new HudPlan(hudText);
+        private const string HudShadow = "rgba(10,6,5,0.8)", HudTrack = "rgba(20,13,10,0.45)";
+        // Mirrors PrototypeBootstrap.DrawHud with ImageMagick: every item with the dark shadow one and two pixels down and
+        // right; the text in Liberation Sans at the plan's sizes; the pictograms as RGBA images of Core/HudIcons.
+        private static void DrawHud(List<string> args, IReadOnlyList<HudItem> items)
+        {
+            foreach (var item in items)
+            {
+                string tone = Rgba(Hex(HudPlan.ToneHex(item.Tone)), 1);
+                switch (item.Kind)
+                {
+                    case HudKind.Text: HudText(args, item.X, item.Y, item.W, item.H, item.Text, item.Font, item.Align, tone); break;
+                    case HudKind.Icon: HudPicture(args, item); break;
+                    case HudKind.Key:
+                        HudOutline(args, item.X + 2, item.Y + 2, item.W, item.H, HudShadow); HudOutline(args, item.X, item.Y, item.W, item.H, tone);
+                        if (!string.IsNullOrEmpty(item.Text)) HudText(args, item.X, item.Y, item.W, item.H, item.Text, item.Font, HudAlign.Middle, tone);
+                        break;
+                    case HudKind.Meter:
+                        HudRect(args, item.X + 2, item.Y + 2, item.W, item.H, HudShadow); HudRect(args, item.X, item.Y, item.W, item.H, HudTrack);
+                        if (item.Value > 0) HudRect(args, item.X, item.Y, item.W * Math.Clamp(item.Value, 0, 1), item.H, tone);
+                        break;
+                    case HudKind.Crosshair:
+                        float arm = item.Active ? 10 : 7; string cross = item.Active ? Rgba(Hex(HudPlan.ToneHex(HudTone.Gold)), 1) : "rgba(255,255,255,0.9)";
+                        const string crossShadow = "rgba(0,0,0,0.35)";
+                        HudRect(args, 720 - arm + 1, 480, arm * 2, 2, crossShadow); HudRect(args, 720, 480 - arm + 1, 2, arm * 2, crossShadow);
+                        HudRect(args, 720 - arm, 479, arm * 2, 2, cross); HudRect(args, 719, 480 - arm, 2, arm * 2, cross);
+                        break;
+                }
             }
-            void Outline(float x, float y, float size, string fill)
+        }
+        private static void HudRect(List<string> args, float x, float y, float w, float h, string fill) =>
+            args.AddRange(new[] { "-gravity", "NorthWest", "-stroke", "none", "-fill", fill, "-draw", string.Format(CultureInfo.InvariantCulture, "rectangle {0},{1} {2},{3}", x, y, x + w - 1, y + h - 1) });
+        private static void HudOutline(List<string> args, float x, float y, float w, float h, string fill)
+        {
+            const float t = 2;
+            HudRect(args, x, y, w, t, fill); HudRect(args, x, y + h - t, w, t, fill); HudRect(args, x, y + t, t, h - 2 * t, fill); HudRect(args, x + w - t, y + t, t, h - 2 * t, fill);
+        }
+        // Text in the box, placed like the game's GUIStyle by the font's metrics (Liberation Sans has Arial's): the line's
+        // top at the box's top (ascent 0.905 em down to the baseline), or the line centred in the box for Middle
+        // (TextAnchor.MiddleCenter); left, centred or right by the measured width. A line too long for its box wraps in it,
+        // as the HUD styles do (wordWrap).
+        private static void HudText(List<string> args, float x, float y, float w, float h, string value, HudFont font, HudAlign align, string fill)
+        {
+            int size = HudPlan.FontSize(font); float width = hudText.Width(value, font);
+            string face = HudPlan.Bold(font) ? "Liberation-Sans-Bold" : "Liberation-Sans", points = size.ToString(CultureInfo.InvariantCulture);
+            if (align == HudAlign.Left && width > w + 1)
             {
-                const float t = 2;
-                Rect(x, y, size, t, fill); Rect(x, y + size - t, size, t, fill); Rect(x, y + t, t, size - 2 * t, fill); Rect(x + size - t, y + t, t, size - 2 * t, fill);
+                foreach (var (shift, colour) in new[] { (1f, HudShadow), (2f, HudShadow), (0f, fill) })
+                    args.AddRange(new[] { "(", "-size", ((int)w).ToString(CultureInfo.InvariantCulture) + "x", "-background", "none", "-font", face, "-pointsize", points, "-fill", colour,
+                        "caption:" + value, ")", "-gravity", "NorthWest", "-geometry", Offset(x + shift, y + shift), "-composite" });
+                return;
             }
-            bool employee = shot.Employee;
-            Text(40, 30, 360, "МОЙКА КАПИТАЛ", 22, ink, true);
-            Text(40, 60, 360, shot.City ? "Деловой квартал" : (employee ? "Наёмный брокер · день " : "Офис · день ") + day.DayNumber, 16, muted, false);
-            // The city clock, as in the game: the hour of the shot's light.
-            Text(620, 26, 200, DayCycle.Clock(scene.Hour), 32, ink, true, TextAnchor.UpperCenter);
-            Text(1040, 30, 360, employee ? "$" + day.Cash + " · личные" : "$" + day.Cash + " / " + day.TotalExpenses, 22, ink, true, TextAnchor.UpperRight);
-            float meter = employee ? day.DealsCount / (float)Math.Max(1, day.SalesTarget) : day.Cash / (float)Math.Max(1, day.TotalExpenses);
-            Rect(1146, 70, 256, 4, shadow); Rect(1144, 68, 256, 4, track); if (meter > 0) Rect(1144, 68, 256 * Math.Clamp(meter, 0, 1), 4, Rgba(gold, 1));
-            // As in the game: the E key and a title as one centred line.
-            void KeyLine(string title)
+            float left = align == HudAlign.Left ? x : align == HudAlign.Right ? x + w - width : x + (w - width) / 2;
+            float baseline = align == HudAlign.Middle ? y + h / 2 + 0.3465f * size : y + 0.905f * size;
+            foreach (var (shift, colour) in new[] { (1f, HudShadow), (2f, HudShadow), (0f, fill) })
+                args.AddRange(new[] { "+gravity", "-font", face, "-pointsize", points, "-fill", colour, "-stroke", "none", "-annotate", Offset(left + shift, baseline + shift), value });
+        }
+        // A pictogram at its pixel size, tinted with its tone over its two shadow passes (cached as PAM files per run).
+        private static void HudPicture(List<string> args, HudItem item)
+        {
+            int size = (int)Math.Round(item.W), sector = item.Icon == HudIcon.Arrow ? HudIcons.Sector(item.Angle) : 0;
+            string path = IconImage(item.Icon, size, sector, Hex(HudPlan.ToneHex(item.Tone)), true);
+            args.AddRange(new[] { "-gravity", "NorthWest", "-draw", string.Format(CultureInfo.InvariantCulture, "image over {0},{1} 0,0 '{2}'", Math.Round(item.X), Math.Round(item.Y), path) });
+        }
+        private static string iconFolder;
+        private static string IconImage(HudIcon icon, int size, int sector, Color color, bool shadow)
+        {
+            iconFolder ??= Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "broker-hud-" + System.Environment.ProcessId)).FullName;
+            string path = Path.Combine(iconFolder, string.Format(CultureInfo.InvariantCulture, "{0}-{1}-{2}-{3:X2}{4:X2}{5:X2}-{6}.pam",
+                icon, size, sector, (int)(color.r * 255), (int)(color.g * 255), (int)(color.b * 255), shadow ? 1 : 0));
+            if (File.Exists(path)) return path;
+            var mask = HudIcons.Mask(icon, size, sector * 360f / HudIcons.Sectors); int n = size + 2;
+            var pixels = new float[n * n * 4]; // premultiplied RGBA
+            void Over(int dx, int dy, float r, float g, float b, float a)
             {
-                float width = Math.Min(560, TextWidth(title, 22, true)), left = 720 - (40 + 12 + width) / 2;
-                Outline(left + 2, 810, 40, shadow); Outline(left, 808, 40, Rgba(ink, 1));
-                Text(left, 816, 40, "E", 20, ink, true, TextAnchor.UpperCenter); Text(left + 52, 812, width + 8, title, 22, ink, true);
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float m = mask[y * size + x] * a; if (m <= 0) continue;
+                        int p = ((y + dy) * n + x + dx) * 4;
+                        pixels[p] = r * m + pixels[p] * (1 - m); pixels[p + 1] = g * m + pixels[p + 1] * (1 - m);
+                        pixels[p + 2] = b * m + pixels[p + 2] * (1 - m); pixels[p + 3] = m + pixels[p + 3] * (1 - m);
+                    }
             }
-            if (shot.Drive)
+            if (shadow) { Over(1, 1, 10 / 255f, 6 / 255f, 5 / 255f, 0.8f); Over(2, 2, 10 / 255f, 6 / 255f, 5 / 255f, 0.8f); }
+            Over(0, 0, color.r, color.g, color.b, 1);
+            var bytes = new byte[n * n * 4];
+            for (int p = 0; p < n * n; p++)
             {
-                // Behind the wheel: no crosshair; where to get out, the speed and gear bottom right, the keys of the first seconds.
-                var car = scene.Life.Car;
-                if (scene.CanLeaveCar) KeyLine("Выйти из машины");
-                else Text(420, 812, 600, "Выйти можно только на парковке", 22, ink, true, TextAnchor.UpperCenter);
-                Text(1160, 764, 240, ((int)Math.Round(car.Kmh)).ToString(), 44, ink, true, TextAnchor.UpperRight);
-                Text(1040, 818, 360, car.Gear < 0 ? "км/ч · задний ход" : "км/ч · передача " + car.GearLabel, 22, ink, true, TextAnchor.UpperRight);
-                Text(220, 900, 1000, "W/S · газ и тормоз     A/D · руль     Пробел · ручник     Мышь · обзор     Esc · пауза", 16, muted, false, TextAnchor.UpperCenter);
+                float a = pixels[p * 4 + 3];
+                for (int c = 0; c < 3; c++) bytes[p * 4 + c] = (byte)Math.Round(a > 0 ? Math.Clamp(pixels[p * 4 + c] / a, 0, 1) * 255 : 0);
+                bytes[p * 4 + 3] = (byte)Math.Round(Math.Clamp(a, 0, 1) * 255);
             }
-            else
+            using (var file = File.Create(path))
             {
-                float arm = shot.Aim ? 10 : 7; string cross = shot.Aim ? Rgba(gold, 1) : "rgba(255,255,255,0.9)", crossShadow = "rgba(0,0,0,0.35)";
-                Rect(720 - arm + 1, 480, arm * 2, 2, crossShadow); Rect(720, 480 - arm + 1, 2, arm * 2, crossShadow);
-                Rect(720 - arm, 479, arm * 2, 2, cross); Rect(719, 480 - arm, 2, arm * 2, cross);
-                if (shot.Aim) KeyLine(shot.Target);
-                else Text(420, 812, 600, shot.Target ?? "", 22, ink, true, TextAnchor.UpperCenter);
+                var header = System.Text.Encoding.ASCII.GetBytes($"P7\nWIDTH {n}\nHEIGHT {n}\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n");
+                file.Write(header, 0, header.Length); file.Write(bytes, 0, bytes.Length);
             }
-            if (employee)
+            return path;
+        }
+        // IHudText for the preview: widths measured by ImageMagick in the fonts the overlay draws, once per string and size.
+        private sealed class PreviewText : IHudText
+        {
+            private readonly Dictionary<(string, HudFont), float> widths = new Dictionary<(string, HudFont), float>();
+            public float Width(string text, HudFont font)
             {
-                Text(40, 104, 560, "ДАЛЬШЕ / ОРИЕНТИР " + day.DealsCount + "/" + day.SalesTarget, 16, gold, true);
-                foreach (var (shift, fill) in new[] { (1, shadow), (2, shadow), (0, Rgba(muted, 1)) })
-                    args.AddRange(new[] { "(", "-size", "560x", "-background", "none", "-font", "Liberation-Sans", "-pointsize", "16", "-fill", fill,
-                        "caption:" + day.EmploymentNextAction, ")", "-gravity", "NorthWest", "-geometry", Offset(40 + shift, 128 + shift), "-composite" });
-            }
-            // A fresh day: the controls hint of the first 15 seconds.
-            if (!shot.Drive) Text(320, 900, 800, "WASD · ходить     Мышь · обзор     E · действие     Esc · пауза", 16, muted, false, TextAnchor.UpperCenter);
-            if (shot.City)
-            {
-                // As in the game: the chosen landmark (the office lift by default), its distance and direction from the
-                // player or the car.
-                var destination = CityDistrictPlan.Find("office");
-                float x = shot.Drive ? scene.MapX : shot.Local.x, z = shot.Drive ? scene.MapZ : shot.Local.z;
-                Text(40, 288, 360, destination.Name, 22, ink, true);
-                Text(40, 318, 360, Math.Ceiling(CityDistrictPlan.Distance(x, z, destination)) + " м · "
-                    + CityDistrictPlan.Direction(x, z, destination) + "\nКарта — у стенда / в паузе", 16, muted, false);
-            }
-            if (shot.Crossing)
-            {
-                Text(40, 384, 360, "ПЕРЕХОД / СВЕТОФОР", 16, gold, true);
-                Text(40, 410, 360, scene.Life.Hint, 16, muted, false);
+                var key = (text ?? "", font);
+                if (!widths.TryGetValue(key, out float width))
+                    widths[key] = width = key.Item1.Length == 0 ? 0 : TextWidth(key.Item1, HudPlan.FontSize(font), HudPlan.Bold(font));
+                return width;
             }
         }
         // Width in pixels of one line of HUD text, measured by ImageMagick with the font the overlay uses.
@@ -401,6 +458,49 @@ namespace Broker.Tools.ScenePreview
                 info.ArgumentList.Add(a);
             using var process = Process.Start(info); string output = process.StandardOutput.ReadToEnd(); process.WaitForExit();
             return float.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out float width) ? width : text.Length * size * 0.55f;
+        }
+
+        // The HUD's pictograms on one sheet with what each means (`hud-icons`): white, the gold, green and red tones, and
+        // the arrow turned in eight of its steps.
+        private static readonly Dictionary<HudIcon, string> iconMeanings = new Dictionary<HudIcon, string>
+        {
+            [HudIcon.Calendar] = "день", [HudIcon.Sun] = "утро и день", [HudIcon.SunLow] = "вечер", [HudIcon.Moon] = "ночь",
+            [HudIcon.Coin] = "касса", [HudIcon.Bill] = "счета дня", [HudIcon.Contract] = "сделки", [HudIcon.Flag] = "следующий шаг",
+            [HudIcon.Monitor] = "рабочее место", [HudIcon.Talk] = "разговор", [HudIcon.Cup] = "кофе", [HudIcon.Star] = "покупка",
+            [HudIcon.Exit] = "выход", [HudIcon.Lift] = "лифт", [HudIcon.Pin] = "карта района", [HudIcon.Chart] = "компании",
+            [HudIcon.Candles] = "котировки", [HudIcon.Button] = "кнопка перехода", [HudIcon.Car] = "машина", [HudIcon.Arrow] = "куда идти",
+            [HudIcon.Check] = "на месте", [HudIcon.Crosswalk] = "через переход", [HudIcon.Parking] = "парковка", [HudIcon.Tree] = "сквер",
+            [HudIcon.Tower] = "офисная улица", [HudIcon.Column] = "Биржевая площадь", [HudIcon.Bank] = "Зал Биржи", [HudIcon.Walker] = "идти",
+            [HudIcon.Standing] = "стоять", [HudIcon.Hourglass] = "ждать", [HudIcon.Mouse] = "мышь", [HudIcon.Eye] = "обзор",
+            [HudIcon.Pointer] = "действие", [HudIcon.Pause] = "пауза", [HudIcon.Run] = "быстрее", [HudIcon.Gauge] = "газ и тормоз",
+            [HudIcon.Wheel] = "руль", [HudIcon.Handbrake] = "ручник", [HudIcon.Space] = "пробел",
+        };
+        private static void RenderIconSheet(string png)
+        {
+            const int columns = 8, cell = 168, rowHeight = 128, icon = 56;
+            int rows = (HudIcons.All.Length + columns - 1) / columns + 1, width = columns * cell, height = rows * rowHeight + 8;
+            var args = new List<string> { "-size", width + "x" + height, "xc:#2A3442" };
+            string muted = Rgba(Hex(HudPlan.ToneHex(HudTone.Muted)), 1);
+            void Picture(float x, float y, string file) =>
+                args.AddRange(new[] { "-gravity", "NorthWest", "-draw", string.Format(CultureInfo.InvariantCulture, "image over {0},{1} 0,0 '{2}'", x, y, file) });
+            // A caption centred under its pictogram on a common baseline.
+            void Caption(float centre, float baseline, string text) =>
+                args.AddRange(new[] { "+gravity", "-font", "Liberation-Sans", "-pointsize", "16", "-fill", muted, "-stroke", "none",
+                    "-annotate", Offset(centre - hudText.Width(text, HudFont.Text) / 2, baseline), text });
+            for (int k = 0; k < HudIcons.All.Length; k++)
+            {
+                var which = HudIcons.All[k]; int x = (k % columns) * cell, y = (k / columns) * rowHeight + 18;
+                Picture(x + (cell - icon) / 2, y, IconImage(which, icon, 0, Hex(HudPlan.ToneHex(HudTone.Ink)), true));
+                Caption(x + cell / 2f, y + icon + 30, iconMeanings.TryGetValue(which, out var meaning) ? meaning : which.ToString());
+            }
+            // The last row: the signal's and the money's tones, then the arrow in eight of its 32 turns.
+            int last = (rows - 1) * rowHeight + 18, step = 0;
+            foreach (var (which, tone) in new[] { (HudIcon.Walker, HudTone.Go), (HudIcon.Standing, HudTone.Stop), (HudIcon.Coin, HudTone.Gold) })
+                Picture(36 + step++ * 72, last, IconImage(which, icon, 0, Hex(HudPlan.ToneHex(tone)), true));
+            Caption(36 + 72 + icon / 2f, last + icon + 30, "зелёный · красный · золото");
+            for (int k = 0; k < 8; k++) Picture(352 + k * 72, last + 6, IconImage(HudIcon.Arrow, 44, k * HudIcons.Sectors / 8, Hex(HudPlan.ToneHex(HudTone.Gold)), true));
+            Caption(352 + 3.5f * 72 + 22, last + icon + 30, "стрелка поворачивается за взглядом");
+            args.Add(png); Run("magick", args);
         }
         private static Color Hex(string value) { ColorUtility.TryParseHtmlString(value, out var c); return c; }
         private static bool ProjectIsLinear()

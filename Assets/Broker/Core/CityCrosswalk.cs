@@ -76,7 +76,15 @@ namespace Broker.Core
         }
     }
 
-    // Geometry of the zebra between the kerb gates and the hint shown near it. Local coordinates match CityDistrictPlan.
+    // The pedestrian signal as the HUD shows it: green or red, flashing, the whole seconds to wait or to walk (0 when there is
+    // nothing to count), the button worth pressing, the cars waiting for the zebra to clear.
+    public struct CrossingCue
+    {
+        public bool Green, Flashing, Press, Holding;
+        public int Seconds;
+    }
+
+    // Geometry of the zebra between the kerb gates and the cue shown near it. Local coordinates match CityDistrictPlan.
     public static class CityCrosswalk
     {
         public const float HalfWidth = 2f, GateHalfWidth = 2.2f, CorridorX = 2.35f, EastboundStopX = -4f, WestboundStopX = 4f;
@@ -87,16 +95,19 @@ namespace Broker.Core
         // Invisible gates in the kerb gaps: open on the pedestrians' green and never closed on someone already crossing.
         public static bool GatesOpen(CrosswalkSignal signal, bool playerInZone) => playerInZone || (signal != null && signal.PedestrianGreen);
         public static bool Near(float x, float z) => Math.Abs(x) < 12 && z > 20 && z < 50;
-        public static string Hint(CrosswalkSignal signal)
+        // What the HUD shows for the signal near the crossing: the green man with the seconds of the walk (flashing at its
+        // end); the red man with the seconds until the next green once it is coming, with the button to press while the cars
+        // still have their full green, or with nothing more while the cars wait for the zebra to clear.
+        public static CrossingCue Cue(CrosswalkSignal signal)
         {
-            if (signal == null) return "";
-            if (signal.Phase == CrosswalkPhase.Walk) return "Пешеходам зелёный · " + Seconds(signal.WalkSecondsLeft) + "\nМашины стоят у стоп-линий";
-            if (signal.Phase == CrosswalkPhase.WalkEnding) return "Зелёный мигает · " + Seconds(signal.WalkSecondsLeft) + "\nНе начинайте переход";
-            if (signal.Phase == CrosswalkPhase.ClearToCars) return "Пешеходам красный\nМашины тронутся, когда зебра свободна";
-            if (signal.WalkRequested || signal.Phase != CrosswalkPhase.CarsGo)
-                return "Пешеходам красный\nЗелёный ≈ через " + Seconds(signal.SecondsUntilWalk);
-            return "Пешеходам красный\nКнопка на столбе — E";
+            var cue = new CrossingCue();
+            if (signal == null) return cue;
+            if (signal.PedestrianGreen) { cue.Green = true; cue.Flashing = signal.PedestrianFlashing; cue.Seconds = Seconds(signal.WalkSecondsLeft); }
+            else if (signal.Phase == CrosswalkPhase.ClearToCars) cue.Holding = true;
+            else if (signal.WalkRequested || signal.Phase != CrosswalkPhase.CarsGo) cue.Seconds = Seconds(signal.SecondsUntilWalk);
+            else cue.Press = true;
+            return cue;
         }
-        private static string Seconds(double value) => Math.Max(1, (int)Math.Ceiling(value - 1e-6)) + " с";
+        private static int Seconds(double value) => Math.Max(1, (int)Math.Ceiling(value - 1e-6));
     }
 }
