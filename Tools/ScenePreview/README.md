@@ -9,10 +9,12 @@ dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- previe
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk --at=24
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview crosswalk plaza-office --hour=19.75
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview people-staff-faces --mood=worry
+dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- preview hud-icons
 dotnet run --project Tools/ScenePreview/ScenePreview.csproj -c Release -- --check
 ```
 
-The first form writes every shot to `preview/*.png`; the second renders only the named shots.
+The first form writes every shot to `preview/*.png` and the sheet of the HUD's pictograms to `preview/hud-icons.png`;
+the second renders only the named shots (`hud-icons` is the sheet alone, without a scene).
 `--fast` turns off 2×2 supersampling, `--no-hud` skips the HUD, `--at=SECONDS` re-times the selected
 shots on the boulevard clock (from a fresh start; 18–32 s is the pedestrians' green). `--hour=H` shows
 the selected shots at that hour of the city clock (`Core/DayCycle`, 18.5 = 18:30); without it every shot
@@ -27,17 +29,18 @@ object's `Mood` would (stage 5: the faces are eyes with brows, everybody calm by
 | `square-west` | the western square close up: a raised bed with its tree and shrubs, a street lamp, conifers and benches |
 | `street-works` | the service works in the eastern side street from above: the striped barrier with its lamp, the cones and a refuse container |
 | `boulevard` | traffic along the railing, the Exchange quarter beyond |
-| `crosswalk` | the zebra on the pedestrians' green, cars at the stop lines, walkers crossing; the crossing HUD lines |
+| `crosswalk` | the zebra on the pedestrians' green, cars at the stop lines, walkers crossing; in the HUD the signal's green man with its seconds and the compass to the Exchange across the boulevard (its arrow leads over the zebra) |
 | `cars`, `cars-rear` | close-ups of the low-poly cars waiting at the red light: from the front off the zebra, from behind with the brake lamps on; no HUD |
-| `exchange`, `exchange-hall` | the Exchange square and steps; the hall with the quote board of a work day, aimed at it (E and its title) |
+| `exchange`, `exchange-hall` | the Exchange square and steps; the hall with the quote board of a work day, aimed at it (E, the quotes pictogram and the short title) |
 | `exchange-square` | the west side of the Exchange square: the rostral column, the press kiosk and the bull on its cheek |
-| `cafe` | the café «Бык и медведь»: counter, barista, tables, aimed at the counter |
+| `cafe` | the café «Бык и медведь»: counter, barista, tables, aimed at the counter (E, the cup and the short title) |
 | `tunnel` | the eastern tunnel portal at the end of the boulevard |
-| `parking` | the red test sedan in its lay-by by the square, aimed at (E «Сесть за руль») |
-| `drive-boulevard`, `drive-south`, `drive-corner` | behind the wheel with the chase camera: among the traffic on the boulevard, on the southern street of the ring past the office's windowed back, turning into the eastern street; speedometer, gear and the driving keys |
-| `drive-parked` | the sedan back in the lay-by: E «Выйти из машины» |
+| `parking` | the red test sedan in its lay-by by the square, aimed at (E, the car pictogram, «Сесть за руль») |
+| `drive-boulevard`, `drive-south`, `drive-corner` | behind the wheel with the chase camera: among the traffic on the boulevard, on the southern street of the ring past the office's windowed back, turning into the eastern street; the speed in big figures with km/h and the gear in its box, the parking sign with the arrow and the metres to the lay-by, the row of the driving keys |
+| `drive-parked` | the sedan back in the lay-by: E, the door and «Выйти» |
 | `drive-junction`, `drive-highway` | stage 7: down the Southern drive to the give-way line and its triangle sign, the highway traffic crossing ahead; in the eastbound outer lane of the highway beside the median barrier and the green verge |
-| `office`, `office-employee` | the office as the owner and as the hired broker |
+| `office`, `office-employee` | the office as the owner and as the hired broker (the contract and the deals towards the target under the money, the flag and the next step under the day) |
+| `hud-icons` | stage 8: the HUD's 39 pictograms (`Core/HudIcons`) on the HUD's dark ground with what each means, the tones (green, red, gold) and the arrow at eight turns; no scene |
 | `aerial` | both quarters from above, no HUD |
 | `aerial-south`, `highway`, `highway-tunnel`, `night-highway` | stage 7, no HUD: the south from above — the Southern drive, the new quarter and the highway between its tunnels; the highway from its town-side pavement by the junction; the eastern highway tunnel in its embankment; the same pavement view at 20:30 |
 | `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
@@ -57,13 +60,17 @@ the test sedan (`EnterCar`), put it at the shot's position, heading and speed, h
 and steering for its last `DriveSeconds` in 1/30 s frames through the real `PlayerCar`, kerbs and chase
 camera, and render from that camera. Every shot starts the boulevard clock
 afresh and advances signal, cars and walkers to its time, so a shot always shows the same moment. The
-HUD repeats `DrawWorldHUD`: warm white text with a 2 px drop shadow and no panels — name and place top
-left, the city clock in the middle (the hour of the shot's light), money and the gold meter top right, the controls hint of a fresh day at
-the bottom; on the street also the landmark (name, straight-line distance, direction) and, near the
-crossing, «ПЕРЕХОД / СВЕТОФОР» with the signal state; behind the wheel the speedometer with the gear
-bottom right, the exit line (E «Выйти из машины» in the lay-by, «Выйти можно только на парковке»
-elsewhere) and the driving keys instead of the walking ones. Shots marked as aimed draw the gold crosshair and the
-E key with the target's title as one centred line; the others print the shot's target line.
+HUD is the game's own layout (stage 8): `Core/HudPlan` builds it from a `HudFrame` filled as `DrawWorldHUD` fills it — the
+day on the calendar top left, the sun, low sun or moon with the city clock in the middle (the hour of the shot's light),
+the coin and the money, the gold meter and the day's bills (the hired broker's contract and deals) top right; on the
+street the compass under the clock to the shot's `Destination` (the office lift by default), turned by the view's yaw or
+the car's heading, and near the crossing on foot the signal's pictograms; on foot the controls row of a fresh day at the
+bottom, behind the wheel the speed, km/h and the gear in its box bottom right, E with the door and «Выйти» in the lay-by
+or the parking sign with its arrow and metres elsewhere, and the driving keys. `DrawHud` draws the items with ImageMagick
+as `PrototypeBootstrap.DrawHud` does in the game: no panels, a 2 px drop shadow under everything, the text in Liberation
+Sans at the plan's sizes on the GUI's baselines (widths measured by `PreviewText`), the pictograms rasterised from
+`HudIcons.Mask` and tinted. Shots marked as aimed draw the gold crosshair and E with the pictogram of the shot's
+`Station` and the short title; the others show no target.
 
 The project compiles the **actual Core, OfficeScene partials, SurfaceLibrary and
 OfficeInteractable** at C# 9 (the Unity 6 language level) against narrow engine stand-ins in
