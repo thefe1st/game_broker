@@ -51,12 +51,27 @@ namespace Broker.Core
     {
         public ReadOnlyCollection<OrientedRect> Pieces { get; }
         public ReadOnlyCollection<RoadPoint> InnerCorners { get; }
+        // A band that loops along X (the highway between its tunnels): a car past one end comes back at the other.
+        public CityRect? Loop { get; }
         public DriveArea(params CityRect[] rects) : this(Array.ConvertAll(rects ?? new CityRect[0], OrientedRect.From)) { }
-        public DriveArea(params OrientedRect[] pieces)
+        public DriveArea(params OrientedRect[] pieces) : this(null, pieces) { }
+        public DriveArea(CityRect? loop, params OrientedRect[] pieces)
         {
             if (pieces == null || pieces.Length == 0) throw new ArgumentException("A drive area needs at least one piece.");
+            if (loop.HasValue && !(loop.Value.Width > 0)) throw new ArgumentException("A loop needs a length.");
             Pieces = Array.AsReadOnly((OrientedRect[])pieces.Clone());
             InnerCorners = Array.AsReadOnly(FindInnerCorners());
+            Loop = loop;
+        }
+        // Brings a point past an end of the loop band round to the other end; false when nothing changed.
+        public bool Wrap(ref float x, float z)
+        {
+            if (!Loop.HasValue) return false;
+            var band = Loop.Value;
+            if (z < band.MinZ || z > band.MaxZ) return false;
+            if (x > band.MaxX) { x -= band.Width; return true; }
+            if (x < band.MinX) { x += band.Width; return true; }
+            return false;
         }
         public bool Contains(float x, float z)
         {
@@ -100,10 +115,13 @@ namespace Broker.Core
 
     // The ring of roads around the office quarter that the player's car may use. The boulevard between its kerbs, up to
     // the tunnel portals, is the north side of the ring; the west, south and east streets run behind the old district and
-    // the office tower; a lay-by cut into the western square holds the test car. Kerb corners at the junctions are cut at
-    // 45° and the lay-by has tapered ends, so the car turns in without catching them. Local coordinates match
-    // CityDistrictPlan. Kerbs and pavements are walls for the car (it never mounts them); the tunnels stay with the
-    // boulevard traffic, so the car stops at the portals.
+    // the office tower; a lay-by cut into the western square holds the test car. From the middle of the south street the
+    // Southern drive runs down through the new quarter to the highway: two carriageways of two lanes each side of a
+    // concrete median with a gap at the junction, between two tunnels. Kerb corners at the junctions are cut at 45° and
+    // the lay-by has tapered ends, so the car turns in without catching them. Local coordinates match CityDistrictPlan.
+    // Kerbs and pavements are walls for the car (it never mounts them). The boulevard tunnels stay with its traffic, so
+    // the car stops at their portals; the highway goes on through its tunnels: past HighwayLoopX the car comes out of
+    // the other one, like the highway traffic.
     public static class CityRoads
     {
         // Centre lines and half-width of the two-lane streets; the kerb faces of the boulevard as the car meets them.
@@ -119,18 +137,36 @@ namespace Broker.Core
         public const float ParkingMaxZ = 29.1f, ExitZ = 25.35f;
         // The railing between the lay-by and the square (pedestrians stay behind it).
         public const float BayRailZ = 25.95f;
-        // Legs of the 45° cuts at the junction corners: short beside the district boundary, longer elsewhere.
-        public const float InnerCut = 1.4f, OuterCut = 3f;
+        // Legs of the 45° cuts at the junction corners: short beside the district boundary, longer elsewhere; at the top of
+        // the Southern drive the towers of the corners stand close.
+        public const float InnerCut = 1.4f, OuterCut = 3f, DriveCut = 2f;
+        // The Southern drive: a two-lane street on the office's axis from the south street to the highway.
+        public const float DriveHalfWidth = StreetHalfWidth;
+        // The highway: its median's centre line and half-width, a carriageway of two 3.5 m lanes with half a metre to spare
+        // on each side, the gap in the median at the junction, and where the car loops inside the tunnels (the tubes'
+        // asphalt reaches a little further).
+        public const float HighwayZ = -92, MedianHalf = 0.5f, CarriagewayWidth = 8, LaneWidth = 3.5f, MedianGapHalf = 10;
+        public const float HighwayNorthZ = HighwayZ + MedianHalf + CarriagewayWidth, HighwaySouthZ = HighwayZ - MedianHalf - CarriagewayWidth;
+        public const float HighwayLoopX = 90, HighwayEndX = HighwayLoopX + 4;
         public static readonly CityRect Boulevard = new CityRect(-BoulevardEndX, BoulevardMinZ, BoulevardEndX, BoulevardMaxZ);
         public static readonly CityRect WestStreet = new CityRect(WestX - StreetHalfWidth, SouthZ - StreetHalfWidth, WestX + StreetHalfWidth, BoulevardMinZ);
         public static readonly CityRect EastStreet = new CityRect(EastX - StreetHalfWidth, SouthZ - StreetHalfWidth, EastX + StreetHalfWidth, BoulevardMinZ);
         public static readonly CityRect SouthStreet = new CityRect(WestX - StreetHalfWidth, SouthZ - StreetHalfWidth, EastX + StreetHalfWidth, SouthZ + StreetHalfWidth);
         public static readonly CityRect Bay = new CityRect(BayMinX, BayMinZ, BayMaxX, BoulevardMinZ);
+        public static readonly CityRect SouthernDrive = new CityRect(-DriveHalfWidth, HighwayNorthZ, DriveHalfWidth, SouthZ - StreetHalfWidth);
+        // The carriageways: westbound north of the median, eastbound south of it; the gap joins them at the junction.
+        public static readonly CityRect HighwayWestbound = new CityRect(-HighwayEndX, HighwayZ + MedianHalf, HighwayEndX, HighwayNorthZ);
+        public static readonly CityRect HighwayEastbound = new CityRect(-HighwayEndX, HighwaySouthZ, HighwayEndX, HighwayZ - MedianHalf);
+        public static readonly CityRect MedianGap = new CityRect(-MedianGapHalf, HighwayZ - MedianHalf, MedianGapHalf, HighwayZ + MedianHalf);
+        // The stretch of the highway the car goes round: out of one tunnel when it drives deep into the other.
+        public static readonly CityRect HighwayLoop = new CityRect(-HighwayLoopX, HighwaySouthZ, HighwayLoopX, HighwayNorthZ);
         public static readonly CityRect ParkingZone = new CityRect(BayMinX - 1.5f, BayMinZ, BayMaxX + 1.5f, ParkingMaxZ);
         // The office block behind the plaza, its top floor the player's office.
         public static readonly CityRect OfficeBlock = new CityRect(-15.5f, -12.1f, 15.5f, 7.4f);
-        // The straight pieces, west to east and north to south: the boulevard, the three streets and the lay-by.
-        public static ReadOnlyCollection<CityRect> Drivable { get; } = Array.AsReadOnly(new[] { Boulevard, WestStreet, SouthStreet, EastStreet, Bay });
+        // The straight pieces, west to east and north to south: the boulevard, the three streets and the lay-by, then the
+        // Southern drive and the highway.
+        public static ReadOnlyCollection<CityRect> Drivable { get; } = Array.AsReadOnly(new[]
+            { Boulevard, WestStreet, SouthStreet, EastStreet, Bay, SouthernDrive, HighwayWestbound, MedianGap, HighwayEastbound });
         // Openings in the boulevard's south kerb, west to east: the west street, the lay-by and the east street, each
         // with its corner cuts.
         public static ReadOnlyCollection<CityRect> SouthKerbCuts { get; } = Array.AsReadOnly(new[]
@@ -140,13 +176,15 @@ namespace Broker.Core
             new CityRect(EastStreet.MinX - InnerCut, EastStreet.MaxZ, EastStreet.MaxX + OuterCut, EastStreet.MaxZ),
         });
         // The 45° kerb cuts: the four corners where the streets meet the boulevard, the two inner corners of the south
-        // street and the tapers of the lay-by.
+        // street, the tapers of the lay-by, then both ends of the Southern drive.
         private static readonly KerbCut[] kerbCuts =
         {
             new KerbCut(WestStreet.MinX, BoulevardMinZ, -1, -1, OuterCut), new KerbCut(WestStreet.MaxX, BoulevardMinZ, 1, -1, InnerCut),
             new KerbCut(EastStreet.MinX, BoulevardMinZ, -1, -1, InnerCut), new KerbCut(EastStreet.MaxX, BoulevardMinZ, 1, -1, OuterCut),
             new KerbCut(WestStreet.MaxX, SouthStreet.MaxZ, 1, 1, OuterCut), new KerbCut(EastStreet.MinX, SouthStreet.MaxZ, -1, 1, OuterCut),
             new KerbCut(BayMinX, BoulevardMinZ, -1, -1, BayTaper), new KerbCut(BayMaxX, BoulevardMinZ, 1, -1, BayTaper),
+            new KerbCut(SouthernDrive.MinX, SouthernDrive.MaxZ, -1, -1, DriveCut), new KerbCut(SouthernDrive.MaxX, SouthernDrive.MaxZ, 1, -1, DriveCut),
+            new KerbCut(SouthernDrive.MinX, SouthernDrive.MinZ, -1, 1, OuterCut), new KerbCut(SouthernDrive.MaxX, SouthernDrive.MinZ, 1, 1, OuterCut),
         };
         public static ReadOnlyCollection<KerbCut> KerbCuts { get; } = Array.AsReadOnly(kerbCuts);
         // The same cuts as pieces of road, each standing on its slanted kerb face.
@@ -157,15 +195,19 @@ namespace Broker.Core
         public const float OuterPavementWestX = WestX - StreetHalfWidth - 2 * KerbHalf - PavementWidth;
         public const float OuterPavementSouthZ = SouthZ - StreetHalfWidth - 2 * KerbHalf - PavementWidth;
         public const float FrontageWestX = OuterPavementWestX - FrontageGap, FrontageSouthZ = OuterPavementSouthZ - FrontageGap;
+        // The pavements of the Southern drive and the north side of the highway, and the building lines behind them.
+        public const float DrivePavementX = DriveHalfWidth + 2 * KerbHalf + PavementWidth, HighwayPavementZ = HighwayNorthZ + 2 * KerbHalf + PavementWidth;
+        public const float FrontageDriveX = DrivePavementX + FrontageGap, FrontageHighwayZ = HighwayPavementZ + FrontageGap;
         // Towers along the south street (fronts north), then along the west and east streets (fronts toward the road); the
-        // corners by the boulevard stay open for the grass verges and their trees.
+        // corners by the boulevard stay open for the grass verges and their trees. The new quarter follows: a tower on each
+        // side of the Southern drive, then the glassy row along the north side of the highway (fronts south).
         public static ReadOnlyCollection<RoadsideBuilding> Frontage { get; } = Array.AsReadOnly(BuildFrontage());
         public static ReadOnlyCollection<RoadsideLamp> Lamps { get; } = Array.AsReadOnly(BuildLamps());
         // What the chase camera stays out of: the towers along the ring, the office block, the closed buildings of the
         // district, the towers north of the boulevard and the tunnel mouths.
         public static ReadOnlyCollection<CityRect> Solids { get; } = Array.AsReadOnly(BuildSolids());
-        // The whole ring the car may use.
-        public static DriveArea Ring { get; } = new DriveArea(Pieces());
+        // The whole ring the car may use, with the highway that loops through its tunnels.
+        public static DriveArea Ring { get; } = new DriveArea(HighwayLoop, Pieces());
         public static bool IsDrivable(float x, float z) => Ring.Contains(x, z);
         // The part of the way from (x0, z0) to (x1, z1) that keeps `margin` clear of every solid, as a fraction: 1 when
         // nothing stands in the way. A solid round the start is skipped, so the camera never collapses onto the car.
@@ -208,7 +250,8 @@ namespace Broker.Core
         {
             var list = new List<RoadsideBuilding>();
             // Centre along the street, facade length, depth, height, style.
-            float[,] south = { { -46.5f, 17, 13, 14, 0 }, { -28, 16, 12, 22, 2 }, { -9.5f, 17, 14, 12, 1 }, { 9.5f, 17, 12, 18, 0 }, { 28, 16, 13, 26, 1 }, { 46.5f, 17, 12, 13, 2 } };
+            // The two in the middle make room for the Southern drive: narrower, they keep clear of its corner cuts.
+            float[,] south = { { -46.5f, 17, 13, 14, 0 }, { -28, 16, 12, 22, 2 }, { -15, 9, 14, 12, 1 }, { 15, 9, 12, 18, 0 }, { 28, 16, 13, 26, 1 }, { 46.5f, 17, 12, 13, 2 } };
             for (int i = 0; i < south.GetLength(0); i++)
                 list.Add(new RoadsideBuilding(south[i, 0], FrontageSouthZ - south[i, 2] / 2, south[i, 1], south[i, 2], south[i, 3], (int)south[i, 4], 180));
             float[,] side = { { -19.5f, 13, 12, 16, 2 }, { -5.5f, 12, 12, 24, 0 }, { 8, 12, 13, 12, 1 } };
@@ -216,6 +259,17 @@ namespace Broker.Core
                 for (int i = 0; i < side.GetLength(0); i++)
                     list.Add(new RoadsideBuilding(sign * (-FrontageWestX + side[i, 2] / 2), side[i, 0], side[i, 1], side[i, 2], side[i, 3] + (sign > 0 ? 2 : 0),
                         ((int)side[i, 4] + (sign > 0 ? 1 : 0)) % 3, sign < 0 ? -90 : 90));
+            // The Southern drive: an office tower on each side, fronts toward the drive.
+            list.Add(new RoadsideBuilding(-FrontageDriveX - 6.5f, -54, 17, 13, 30, (int)TowerStyle.Glass, -90));
+            list.Add(new RoadsideBuilding(FrontageDriveX + 6, -54, 17, 12, 18, (int)TowerStyle.Brick, 90));
+            // The highway row from the junction outward, west then east: centre, facade, depth, height, style.
+            float[,] row =
+            {
+                { -19, 15, 12, 22, 1 }, { -35, 15, 13, 32, 1 }, { -51, 15, 12, 16, 2 }, { -67, 14, 13, 26, 1 },
+                { 19, 15, 12, 18, 2 }, { 35, 15, 13, 34, 1 }, { 51, 15, 12, 20, 0 }, { 67, 14, 13, 28, 1 },
+            };
+            for (int i = 0; i < row.GetLength(0); i++)
+                list.Add(new RoadsideBuilding(row[i, 0], FrontageHighwayZ + row[i, 2] / 2, row[i, 1], row[i, 2], row[i, 3], (int)row[i, 4], 0));
             return list.ToArray();
         }
         private static RoadsideLamp[] BuildLamps()
@@ -227,7 +281,11 @@ namespace Broker.Core
                 list.Add(new RoadsideLamp(WestStreet.MinX - offset, z, 90));
                 list.Add(new RoadsideLamp(EastStreet.MaxX + offset, z, -90));
             }
-            foreach (float x in new[] { -40f, -20f, 0f, 20f, 40f }) list.Add(new RoadsideLamp(x, SouthStreet.MinZ - offset, 0));
+            foreach (float x in new[] { -40f, -20f, 20f, 40f }) list.Add(new RoadsideLamp(x, SouthStreet.MinZ - offset, 0));
+            // Down the Southern drive, staggered, and along the north pavement of the highway.
+            foreach (float z in new[] { -36f, -68f }) list.Add(new RoadsideLamp(SouthernDrive.MinX - offset, z, 90));
+            list.Add(new RoadsideLamp(SouthernDrive.MaxX + offset, -52, -90));
+            foreach (float x in new[] { -70f, -52f, -34f, -16f, 16f, 34f, 52f, 70f }) list.Add(new RoadsideLamp(x, HighwayNorthZ + offset, 180));
             return list.ToArray();
         }
         private static CityRect[] BuildSolids()
@@ -240,6 +298,11 @@ namespace Broker.Core
             foreach (int sign in new[] { -1, 1 })
                 list.Add(sign < 0 ? new CityRect(-CityScenery.TunnelEndX, CityScenery.TunnelMinZ, -CityScenery.TunnelPortalX, CityScenery.TunnelMaxZ)
                     : new CityRect(CityScenery.TunnelPortalX, CityScenery.TunnelMinZ, CityScenery.TunnelEndX, CityScenery.TunnelMaxZ));
+            // The highway runs on into its tunnels; the embankments beside the mouths stop the camera.
+            foreach (int sign in new[] { -1, 1 })
+                foreach (var (minZ, maxZ) in new[] { (CityScenery.HighwayBankMinZ, CityScenery.HighwayTunnelMinZ), (CityScenery.HighwayTunnelMaxZ, CityScenery.HighwayBankMaxZ) })
+                    list.Add(sign < 0 ? new CityRect(-CityScenery.EmbankmentEndX, minZ, -CityScenery.TunnelPortalX, maxZ)
+                        : new CityRect(CityScenery.TunnelPortalX, minZ, CityScenery.EmbankmentEndX, maxZ));
             return list.ToArray();
         }
         private static OrientedRect[] Pieces()

@@ -58,7 +58,7 @@ namespace Broker.FlowChecks
             Call("PauseGameplay"); Click("Карта района"); Click("Ориентир / Парковка у сквера");
             Assert.That(Get<string>("cityDestinationId"), Is.EqualTo("parking"));
             string text = NotebookText();
-            Assert.That(text, Does.Contain("В машине — только по кольцу")); Assert.That(text, Does.Contain("КОЛЬЦО"));
+            Assert.That(text, Does.Contain("В машине — по кольцу и трассе")); Assert.That(text, Does.Contain("КОЛЬЦО")); Assert.That(text, Does.Contain("ТРАССА"));
             Assert.That(text, Does.Contain(CityDistrictPlan.Find("parking").Description));
             OfficeInput.Escape = true; Call("Update"); Assert.That(Get<OfficeNavigation>("navigation").View, Is.EqualTo(OfficeView.Pause));
             Call("Restart"); Assert.That(office.Driving, Is.False);

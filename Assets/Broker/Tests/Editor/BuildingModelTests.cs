@@ -332,7 +332,7 @@ namespace Broker.Tests
                 var shop = BuildingModels.Shop(style, 0, true); Assert.That(shop.TriangleCount, Is.LessThan(1000), style.ToString()); total += shop.TriangleCount;
             }
             var cafe = BuildingModels.Cafe(); Assert.That(cafe.TriangleCount, Is.LessThan(1200), "café"); total += cafe.TriangleCount;
-            Assert.That(total, Is.LessThan(100000), "all the buildings of the scene");
+            Assert.That(total, Is.LessThan(130000), "all the buildings of the scene, the new quarter's too");
         }
         [Test] public void WallLooksFloorsAndSizes()
         {

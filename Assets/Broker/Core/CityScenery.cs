@@ -33,7 +33,7 @@ namespace Broker.Core
     }
 
     // Voxel dressing of both quarters: trees, lamps, street furniture, the Exchange square and colonnade, the café
-    // interior, the tunnels at the ends of the boulevard and a hazy boxy skyline. Local coordinates match CityBlockPlan
+    // interior, the tunnels at the ends of the boulevard and of the highway and a hazy boxy skyline. Local coordinates match CityBlockPlan
     // and CityDistrictPlan; the scene builds every prop and collider from this list.
     public static class CityScenery
     {
@@ -42,6 +42,10 @@ namespace Broker.Core
         // Boulevard tunnels: portal faces at ±TunnelPortalX, dark mouths over the road, embankments around them.
         public const float TunnelPortalX = 80f, TunnelEndX = 97f, TunnelMinZ = 28f, TunnelMaxZ = 42f, TunnelHeight = 6.5f;
         public const float EmbankmentEndX = 100f, EmbankmentMinZ = 16f, EmbankmentMaxZ = 54f, EmbankmentHeight = 10f;
+        // Highway tunnels on the same portal line: one wide mouth over both carriageways and the median, embankments of
+        // their own around it.
+        public const float HighwayTunnelMinZ = CityRoads.HighwaySouthZ - 0.5f, HighwayTunnelMaxZ = CityRoads.HighwayNorthZ + 0.5f;
+        public const float HighwayBankMinZ = HighwayTunnelMinZ - 12, HighwayBankMaxZ = HighwayTunnelMaxZ + 12;
         // Front edge of the Exchange roof over the colonnade; the hall walls start at the podium's hall footprint.
         public const float ExchangeRoofZ = 57.25f;
         private const float Terrain = CityBlockPlan.TerrainTopY - CityBlockPlan.GroundY;
@@ -143,12 +147,12 @@ namespace Broker.Core
         private static SkylineBlock[] BuildSkyline()
         {
             var blocks = new List<SkylineBlock>();
-            Ring(blocks, 92, -72, 172, 10, 30, 18, 1, true);
-            Ring(blocks, 205, -150, 250, 18, 78, 22, 2, false);
+            Ring(blocks, 92, -134, 172, 10, 30, 18, 1, true);
+            Ring(blocks, 205, -190, 250, 18, 78, 22, 2, false);
             return blocks.ToArray();
         }
         // Blocks along a rectangle: half-width in X, south and north edges in Z. The inner ring leaves the
-        // tunnel embankments free on its east and west edges.
+        // embankments of both tunnels free on its east and west edges.
         private static void Ring(List<SkylineBlock> blocks, float halfX, float south, float north, float minH, float maxH, float step, int seed, bool tunnelGap)
         {
             int index = 0;
@@ -163,7 +167,8 @@ namespace Broker.Core
                     float k = (t + width / 2) / length;
                     float x = x0 + (x1 - x0) * k + (alongX ? 0 : jitter), z = z0 + (z1 - z0) * k + (alongX ? jitter : 0);
                     float height = minH + (maxH - minH) * r3 * r3 + (r3 > 0.92f ? maxH * 0.35f : 0);
-                    bool gap = tunnelGap && !alongX && z + width / 2 > EmbankmentMinZ - 2 && z - width / 2 < EmbankmentMaxZ + 2;
+                    bool gap = tunnelGap && !alongX && (z + width / 2 > EmbankmentMinZ - 2 && z - width / 2 < EmbankmentMaxZ + 2
+                        || z + width / 2 > HighwayBankMinZ - 2 && z - width / 2 < HighwayBankMaxZ + 2);
                     if (!gap) blocks.Add(alongX ? new SkylineBlock(x, z, width, depth, height, index % 3) : new SkylineBlock(x, z, depth, width, height, index % 3));
                     t += width + 2 + r1 * step * 0.35f;
                 }

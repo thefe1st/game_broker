@@ -19,12 +19,19 @@ namespace Broker.Core
         public float Speed { get; internal set; }
         // Brake lamps: on while the car slows down noticeably or stands.
         public bool Braking { get; internal set; }
-        public float X => CityTraffic.Eastbound(Lane) ? S - CityTraffic.RoadHalf : CityTraffic.RoadHalf - S;
-        public float Z => CityTraffic.LaneZ(Lane);
+        public float X => Eastbound ? S - roadHalf : roadHalf - S;
+        public float Z { get; }
+        public bool Eastbound { get; }
         // Yaw of a car model whose front faces +X.
-        public float Yaw => CityTraffic.Eastbound(Lane) ? 0 : 180;
+        public float Yaw => Eastbound ? 0 : 180;
         internal bool Committed;
-        internal CityCar(int lane, CarStyle style, int seed, float cruise, float s) { Lane = lane; Style = style; Seed = seed; Cruise = cruise; S = s; }
+        private readonly float roadHalf;
+        // A boulevard car.
+        internal CityCar(int lane, CarStyle style, int seed, float cruise, float s)
+            : this(lane, style, seed, cruise, s, CityTraffic.LaneZ(lane), CityTraffic.RoadHalf, CityTraffic.Eastbound(lane)) { }
+        // A car on any looped road: the lane's centre line, the half-length of the loop and the direction.
+        internal CityCar(int lane, CarStyle style, int seed, float cruise, float s, float laneZ, float roadHalf, bool eastbound)
+        { Lane = lane; Style = style; Seed = seed; Cruise = cruise; S = s; Z = laneZ; this.roadHalf = roadHalf; Eastbound = eastbound; }
     }
 
     // Visual boulevard traffic: 12 cars in four lanes (sedans, hatchbacks, two taxis, two pickups and a van, each keeping

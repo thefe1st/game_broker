@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 
 namespace Broker.Core
 {
@@ -117,7 +118,7 @@ namespace Broker.Core
         // Stops the car where it stands (the driver got out).
         public void Stop() { Forward = Lateral = YawRate = 0; Braking = HandbrakeOn = false; accelX = accelY = 0; Pitch = Roll = 0; Rpm = IdleRpm; }
 
-        public void Advance(double seconds, DriveInput input, CityTraffic traffic = null, CityCrowd crowd = null)
+        public void Advance(double seconds, DriveInput input, CityTraffic traffic = null, CityCrowd crowd = null, HighwayTraffic highway = null)
         {
             if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
             Contacts = 0;
@@ -133,7 +134,10 @@ namespace Broker.Core
                     continue;
                 }
                 Integrate(dt, input, walkerAhead);
-                Collide(traffic, crowd);
+                Collide(traffic?.Cars, highway?.Cars, crowd);
+                // Deep in a highway tunnel: on through the other one.
+                float x = X;
+                if (Area.Wrap(ref x, Z)) X = x;
             }
         }
 
@@ -277,8 +281,8 @@ namespace Broker.Core
             }
             return false;
         }
-        // Kerbs, the inner kerb corners, the boulevard cars and the walkers, deepest first, a few passes.
-        private void Collide(CityTraffic traffic, CityCrowd crowd)
+        // Kerbs, the inner kerb corners, the boulevard and highway cars and the walkers, deepest first, a few passes.
+        private void Collide(ReadOnlyCollection<CityCar> traffic, ReadOnlyCollection<CityCar> highway, CityCrowd crowd)
         {
             for (int pass = 0; pass < 4; pass++)
             {
@@ -306,21 +310,29 @@ namespace Broker.Core
                 }
                 foreach (var corner in Area.InnerCorners)
                     if (PushOffPoint(footprint, corner.X, corner.Z, 0, WallBounce, WallFriction)) { touched = true; footprint = Footprint; }
-                if (traffic != null)
-                    foreach (var car in traffic.Cars)
-                    {
-                        if (Math.Abs(car.X - X) > 6 || Math.Abs(car.Z - Z) > 6) continue;
-                        var other = car.Footprint;
-                        float depth = footprint.Penetration(other, out float cnx, out float cnz);
-                        if (depth <= 0) continue;
-                        ContactPoint(footprint, other, cnx, cnz, out float cx, out float cz);
-                        Resolve(cx, cz, cnx, cnz, depth, CarBounce, WallFriction, ImpactInertia); touched = true; footprint = Footprint;
-                    }
+                if (CollideCars(traffic, ref footprint)) touched = true;
+                if (CollideCars(highway, ref footprint)) touched = true;
                 if (crowd != null)
                     foreach (var walker in crowd.Walkers)
                         if (PushOffPoint(footprint, walker.X, walker.Z, CityCrowd.BodyRadius, 0, 0.5f)) { touched = true; footprint = Footprint; }
                 if (!touched) break;
             }
+        }
+        // The cars of one road that the footprint reaches into.
+        private bool CollideCars(ReadOnlyCollection<CityCar> cars, ref OrientedRect footprint)
+        {
+            if (cars == null) return false;
+            bool touched = false;
+            foreach (var car in cars)
+            {
+                if (Math.Abs(car.X - X) > 6 || Math.Abs(car.Z - Z) > 6) continue;
+                var other = car.Footprint;
+                float depth = footprint.Penetration(other, out float cnx, out float cnz);
+                if (depth <= 0) continue;
+                ContactPoint(footprint, other, cnx, cnz, out float cx, out float cz);
+                Resolve(cx, cz, cnx, cnz, depth, CarBounce, WallFriction, ImpactInertia); touched = true; footprint = Footprint;
+            }
+            return touched;
         }
         // A post of the given radius (0 for a kerb corner) against the car's rectangle.
         private bool PushOffPoint(OrientedRect footprint, float x, float z, float radius, float bounce, float friction)

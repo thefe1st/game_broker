@@ -12,17 +12,19 @@ namespace Broker.Tests
 
         [TestCase(0, 35)] [TestCase(-78, 30)] [TestCase(78, 40)] [TestCase(-50, 0)] [TestCase(50, 0)] [TestCase(0, -20)]
         [TestCase(-24.75f, 27.35f)] [TestCase(-31.5f, 27.9f)] [TestCase(-17.8f, 27.9f)] [TestCase(-56, 28)] [TestCase(-45.2f, 28.3f)]
-        [TestCase(-45, -15)] [TestCase(53.9f, -23.9f)]
+        [TestCase(-45, -15)] [TestCase(53.9f, -23.9f)] [TestCase(0, -24.5f)] [TestCase(-2, -50)] [TestCase(0, -92)] [TestCase(60, -98.25f)]
+        [TestCase(-60, -85.75f)] [TestCase(88, -90)] [TestCase(-5.2f, -24.6f)] [TestCase(5.5f, -82.5f)]
         public void RingRoadsAreDrivable(float x, float z) { Assert.That(CityRoads.IsDrivable(x, z), Is.True); }
         [TestCase(0, 0)] [TestCase(0, 28.5f)] [TestCase(0, 41.5f)] [TestCase(85, 35)] [TestCase(-33, 27)] [TestCase(-18, 26.5f)]
-        [TestCase(-24.75f, 25.9f)] [TestCase(-45, 27)] [TestCase(-57.5f, 28)] [TestCase(-58, 0)] [TestCase(0, -24.5f)] [TestCase(-44, -14)]
-        [TestCase(0, -15.5f)] [TestCase(30, 20)]
+        [TestCase(-24.75f, 25.9f)] [TestCase(-45, 27)] [TestCase(-57.5f, 28)] [TestCase(-58, 0)] [TestCase(-8, -24.5f)] [TestCase(-44, -14)]
+        [TestCase(0, -15.5f)] [TestCase(30, 20)] [TestCase(5, -50)] [TestCase(20, -92)] [TestCase(0, -101)] [TestCase(20, -83.3f)] [TestCase(-96, -90)]
+        [TestCase(-6.5f, -25.5f)]
         public void SquaresKerbsTunnelsAndTheOfficeAreNot(float x, float z) { Assert.That(CityRoads.IsDrivable(x, z), Is.False); }
 
         [Test] public void TheRingIsOneConnectedRoadFromTheLayBy()
         {
-            const float cell = 0.25f, minX = -81, minZ = -26;
-            int nx = (int)(162 / cell), nz = (int)(70 / cell), total = 0, reached = 0;
+            const float cell = 0.25f, minX = -96, minZ = -102;
+            int nx = (int)(192 / cell), nz = (int)(146 / cell), total = 0, reached = 0;
             var road = new bool[nx, nz]; var seen = new bool[nx, nz];
             for (int i = 0; i < nx; i++)
                 for (int j = 0; j < nz; j++)
@@ -43,15 +45,15 @@ namespace Broker.Tests
                     }
             }
             Assert.That(reached, Is.EqualTo(total));
-            // A loop round the office quarter: every side of the ring is part of it.
+            // A loop round the office quarter with the Southern drive and the highway: every piece is part of it.
             foreach (var rect in CityRoads.Drivable)
                 Assert.That(seen[(int)((rect.CenterX - minX) / cell), (int)((rect.CenterZ - minZ) / cell)], Is.True);
         }
         [Test] public void RoadsKeepClearOfWalkwaysExceptTheZebra()
         {
             // The asphalt and a strip round it, for the kerb, never reach the walkable plan; walkers cross only on the zebra.
-            for (float x = -81; x <= 81; x += 0.2f)
-                for (float z = -26; z <= 43; z += 0.2f)
+            for (float x = -95; x <= 95; x += 0.2f)
+                for (float z = -102; z <= 43; z += 0.2f)
                 {
                     if (Math.Abs(x) <= CityLife.ZebraZone.MaxX || CityRoads.Ring.Outside(x, z, out _, out _) > 0.25f) continue;
                     Assert.That(CityDistrictPlan.CanWalk(x, z), Is.False, $"({x:F1}, {z:F1})");
@@ -78,7 +80,7 @@ namespace Broker.Tests
         {
             const float behind = 2 * CityRoads.KerbHalf + CityRoads.PavementWidth + CityRoads.FrontageGap - 0.01f;
             var frontage = CityRoads.Frontage;
-            Assert.That(frontage.Count, Is.EqualTo(12));
+            Assert.That(frontage.Count, Is.EqualTo(22));
             var others = new List<CityRect>();
             foreach (var block in CityScenery.Skyline) others.Add(CityRect.Around(block.X, block.Z, block.Width / 2, block.Depth / 2));
             foreach (var tower in new CityBlockPlan().Buildings) others.Add(CityRect.Around(tower.X, tower.Z, tower.Width / 2, tower.Depth / 2));
@@ -121,11 +123,14 @@ namespace Broker.Tests
             Assert.That(CityRoads.ClearFraction(-37.5f, 38, -37.5f, 48, margin), Is.EqualTo((44.5f - margin - 38) / 10).Within(1e-4f));
             Assert.That(CityRoads.ClearFraction(0, 0, 0, -6, margin), Is.EqualTo(1));
             Assert.That(CityRoads.ClearFraction(70, 35, 90, 35, margin), Is.EqualTo((CityScenery.TunnelPortalX - margin - 70) / 20).Within(1e-4f));
+            // The highway runs on into its tube; the embankments beside the mouth stop the camera.
+            Assert.That(CityRoads.ClearFraction(70, CityRoads.HighwayZ, 90, CityRoads.HighwayZ, margin), Is.EqualTo(1));
+            Assert.That(CityRoads.ClearFraction(70, -76, 90, -76, margin), Is.EqualTo((CityScenery.TunnelPortalX - margin - 70) / 20).Within(1e-4f));
             Assert.Throws<ArgumentException>(() => CityRoads.ClearFraction(float.NaN, 0, 0, 0, margin));
         }
         [Test] public void RoadsideLampsStandOnTheOuterPavementsWithArmsOverTheRoad()
         {
-            Assert.That(CityRoads.Lamps.Count, Is.EqualTo(11));
+            Assert.That(CityRoads.Lamps.Count, Is.EqualTo(21));
             foreach (var lamp in CityRoads.Lamps)
             {
                 float off = CityRoads.Ring.Outside(lamp.X, lamp.Z, out _, out _);
@@ -141,6 +146,8 @@ namespace Broker.Tests
             {
                 (-54f, 25.675f), (-57f, 28.675f), (-44.6f, 28.675f), (-46f, 27.275f), (46f, 27.275f), (44.6f, 28.675f), (57f, 28.675f), (54f, 25.675f),
                 (-46f, -13f), (-43f, -16f), (43f, -16f), (46f, -13f), (-32.575f, 28.675f), (-16.925f, 28.675f),
+                (-4f, -26f), (-6f, -24f), (6f, -24f), (4f, -26f), (-7f, -83.5f), (-4f, -80.5f), (4f, -80.5f), (7f, -83.5f),
+                (-10f, -92.5f), (-10f, -91.5f), (10f, -92.5f), (10f, -91.5f),
             };
             var corners = CityRoads.Ring.InnerCorners;
             Assert.That(corners.Count, Is.EqualTo(expected.Length));
@@ -152,7 +159,7 @@ namespace Broker.Tests
         }
         [Test] public void CutsAreSlantedAtFortyFiveDegreesOnTheKerbOpenings()
         {
-            Assert.That(CityRoads.Cuts.Count, Is.EqualTo(8));
+            Assert.That(CityRoads.Cuts.Count, Is.EqualTo(12));
             foreach (var cut in CityRoads.Cuts)
                 Assert.That(Math.Abs(Math.Abs(Math.Sin(2 * cut.Heading)) - 1), Is.LessThan(1e-4), $"{cut.Heading}");
             // The scene paves each cut triangle and sets its kerb on the hypotenuse: road up to it, kerb beyond.

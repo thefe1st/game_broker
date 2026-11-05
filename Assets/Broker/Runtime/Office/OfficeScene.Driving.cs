@@ -27,7 +27,7 @@ namespace Broker.Runtime.Office
             var shape = CarModels.Sedan;
             var hitbox = playerCar.Root.gameObject.AddComponent<BoxCollider>();
             hitbox.center = new Vector3(0, shape.Height / 2, 0); hitbox.size = new Vector3(shape.Length, shape.Height, shape.Width);
-            Interactable(playerCar.Root.gameObject, OfficeStation.Car, "Сесть за руль / тестовый седан", "Сесть в машину и проехать по кольцу");
+            Interactable(playerCar.Root.gameObject, OfficeStation.Car, "Сесть за руль / тестовый седан", "Сесть в машину: кольцо и трасса");
             ShowPlayerCar(0);
         }
         // Behind the wheel: the walker sits down (no capsule, no aim) and the keys go to the car.
