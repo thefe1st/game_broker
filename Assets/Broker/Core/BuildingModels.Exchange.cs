@@ -205,7 +205,7 @@ namespace Broker.Core
 
         // ---------- Roof ----------
         // Entablature and pediments over the hall and the colonnade, 25 × 15.75 m: a stone architrave, a stucco frieze
-        // with triglyphs (the plain middle of the front carries the scene's «БИРЖА»), a bed moulding and the cornice, a
+        // with triglyphs (plain in the middle of the front), a bed moulding and the cornice, a
         // low gable roof in sage with a ridge cap, framed pediments with recessed tympana and a brass medallion in front.
         // Pivot at the middle of the front edge, on the column tops.
         public const float RoofWidth = 25, RoofDepth = 15.75f, RoofEave = 1.25f, RoofRidge = 4.4f;
@@ -217,7 +217,7 @@ namespace Broker.Core
             b.Box(new V3(-x + frieze, 0.5f, frieze), new V3(x - frieze, 0.95f, d - frieze), 0, WallPart, 0);
             b.Box(new V3(-x + 0.12f, 0.92f, 0.12f), new V3(x - 0.12f, 1.0f, d - 0.12f), 0, TrimPart, VoxelPalette.StoneLight);
             b.Box(new V3(-x, 1.0f, 0), new V3(x, RoofEave, d), 0.02f, TrimPart, VoxelPalette.StoneLight);
-            // Triglyphs: either side of the name in front, along the back and the sides, wrapping the corners.
+            // Triglyphs: either side of the plain middle in front, along the back and the sides, wrapping the corners.
             float fl = 2 * (x - frieze), sl = d - 2 * frieze;
             var fronts = new[]
             {
@@ -318,7 +318,7 @@ namespace Broker.Core
         }
 
         // ---------- Quote board ----------
-        // 8.4 × 3.4 m on the back wall: a brass body and rim, six dark rows for the scene's text under a navy header, a
+        // 8.4 × 3.4 m on the back wall: a brass body and rim, six dark rows for the scene's quotes under a navy header, a
         // dot-matrix ticker glowing along the bottom. Front −Z; pivot at the bottom centre of the 0.2 m slab, the face
         // 0.1 m in front of it and the rim 0.115 m.
         public const float BoardWidth = 8.4f, BoardHeight = 3.4f, BoardFace = -0.1f, BoardRim = -0.115f;

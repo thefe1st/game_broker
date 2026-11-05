@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Broker.Runtime.Office
 {
     // Café «Бык и медведь» on the corner of the business street: the open low-poly shell, the walls of its room around the
-    // door, a wooden floor, a warm lamp, the coffee machine on the counter and the name over the awning. Furniture comes
+    // door, a wooden floor, a warm lamp, the coffee machine on the counter and a cup over the awning. Furniture comes
     // from CityScenery; the counter collider opens the café panel.
     public sealed partial class OfficeScene
     {
@@ -23,8 +23,9 @@ namespace Broker.Runtime.Office
             PlaceBuilding("coffee machine", InteriorModels.CoffeeMachine, StreetModels.FurnitureLook, "Cafe / coffee machine",
                 new Vector3(24.2f, g + InteriorModels.CounterTop, -7.45f), 180);
             PointLight("Cafe / warm light", new Vector3(24, g + 2.55f, -6), 7, 1.1f, new Color(1, 0.84f, 0.62f));
-            var sign = Text("Cafe / name", "БЫК И МЕДВЕДЬ", new Vector3(24, g + 3.22f, -1.93f), 48, 0.065f, new Color(0.98f, 0.86f, 0.6f));
-            sign.transform.localEulerAngles = new Vector3(0, 180, 0);
+            // A cup on the name band instead of the name.
+            PlaceModel("pictogram/cup", () => InteriorModels.PictogramSign(Pictogram.Cup, 0.5f, VoxelPalette.Cream, VoxelPalette.Cream), "Cafe / sign",
+                new Vector3(24, g + 3.22f, -1.94f), 180);
         }
     }
 }

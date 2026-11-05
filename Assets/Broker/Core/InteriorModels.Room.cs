@@ -8,11 +8,11 @@ namespace Broker.Core
     public static partial class InteriorModels
     {
         public const float CabinetTop = 1.0f, PotTop = 0.6f, PotRadius = 0.29f, PedestalTop = 1.1f, PedestalHalf = 0.425f;
-        public const float DoorHalfWidth = 0.825f, DoorHeight = 2.6f, DoorLeafHalf = 0.7f, DoorLeafTop = 2.45f, DoorDepth = 0.26f, DoorSignZ = -0.33f,
+        public const float DoorHalfWidth = 0.825f, DoorHeight = 2.6f, DoorLeafHalf = 0.7f, DoorLeafTop = 2.45f, DoorDepth = 0.26f, DoorFrontZ = -0.33f,
             DoorHandleX = 0.48f, DoorHandleY = 1.1f;
         public const float WindowHalf = 1.455f, WindowInnerHalf = 1.385f, WindowFrameHeight = 2.03f, WindowRail = 0.07f, WindowSillFront = -0.445f;
         public const float CeilingLightDrop = 0.1f, PlaqueFront = -0.062f;
-        public const float ElevatorHalf = 0.65f, ElevatorJamb = 0.76f, ElevatorHeight = 2.75f, ElevatorDepth = 0.23f, ElevatorLabelZ = -0.28f;
+        public const float ElevatorHalf = 0.65f, ElevatorJamb = 0.76f, ElevatorHeight = 2.75f, ElevatorDepth = 0.23f, ElevatorFrontZ = -0.28f, ElevatorArrowTop = 2.565f;
         public const float SkirtingHeight = 0.1f, SkirtingDepth = 0.018f;
 
         // Cabinet of the coffee corner, 1.1 × 1.0 × 0.8 m: a dark carcass on a plinth, two panelled doors with brass knobs
@@ -73,9 +73,9 @@ namespace Broker.Core
             return b.Build(BuildingModels.PaletteUv);
         }
 
-        // The exit door, 1.65 × 2.6 m: a brass casing DoorDepth deep round a navy leaf with a wide upper panel (the sign hangs
-        // on it) and two lower ones, a brass kick plate, a lever handle on a backplate at DoorHandle and a keyhole. Nothing
-        // comes forward of DoorSignZ.
+        // The exit door, 1.65 × 2.6 m: a brass casing DoorDepth deep round a navy leaf with a wide upper panel and two lower
+        // ones, a brass kick plate, a lever handle on a backplate at DoorHandle and a keyhole. Nothing comes forward of
+        // DoorFrontZ; the exit sign hangs on the wall over it (ExitSign).
         public static PolyMesh Door()
         {
             var b = NewBuilder();
@@ -135,8 +135,9 @@ namespace Broker.Core
         }
 
         // The street elevator, 1.52 × 2.75 m: brass jambs and head ElevatorDepth deep, two navy leaves meeting at a chrome
-        // seam, a dark transom with the glowing indicator bar and a threshold; a brass call plate with a lit and an unlit
-        // button on the wall to the right. The label hangs at ElevatorLabelZ.
+        // seam, a dark transom with the glowing indicator bar broken by an amber arrow pointing down (the lift goes down to
+        // the street) and a threshold; a brass call plate with a lit and an unlit button on the wall to the right. Nothing
+        // comes forward of ElevatorFrontZ.
         public static PolyMesh ElevatorDoor()
         {
             var b = NewBuilder();
@@ -144,7 +145,10 @@ namespace Broker.Core
                 b.Box(new V3(s < 0 ? -ElevatorJamb : ElevatorHalf, 0, -ElevatorDepth), new V3(s < 0 ? -ElevatorHalf : ElevatorJamb, ElevatorHeight, 0), 0.012f, MetalPart, VoxelPalette.Brass);
             b.Box(new V3(-ElevatorJamb, 2.6f, -ElevatorDepth), new V3(ElevatorJamb, ElevatorHeight, 0), 0.012f, MetalPart, VoxelPalette.Brass);
             b.Box(new V3(-ElevatorHalf, 2.42f, -0.2f), new V3(ElevatorHalf, 2.6f, -0.1f), 0, TrimPart, VoxelPalette.Ink);
-            b.Box(new V3(-0.575f, 2.47f, -0.245f), new V3(0.575f, 2.53f, -0.2f), 0.006f, GlowPart, VoxelPalette.WindowLit);
+            foreach (float s in new[] { -1f, 1f })
+                b.Box(new V3(s < 0 ? -0.575f : 0.1f, 2.47f, -0.245f), new V3(s < 0 ? -0.1f : 0.575f, 2.53f, -0.2f), 0.006f, GlowPart, VoxelPalette.WindowLit);
+            b.Triangle(new V3(-0.065f, ElevatorArrowTop, -0.202f), new V3(0.065f, ElevatorArrowTop, -0.202f), new V3(0, ElevatorArrowTop - 0.11f, -0.202f), new V3(0, 0, -1),
+                GlowPart, VoxelPalette.SignalAmber);
             foreach (float s in new[] { -1f, 1f })
                 b.Box(new V3(s < 0 ? -ElevatorHalf : 0.005f, 0.01f, -0.2f), new V3(s < 0 ? -0.005f : ElevatorHalf, 2.42f, -0.17f), 0.005f, TrimPart, VoxelPalette.Navy);
             b.Box(new V3(-0.005f, 0.01f, -0.192f), new V3(0.005f, 2.42f, -0.17f), 0, MetalPart, VoxelPalette.Chrome);

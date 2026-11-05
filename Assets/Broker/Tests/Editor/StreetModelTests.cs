@@ -551,8 +551,7 @@ namespace Broker.Tests
             float hw = StreetModels.StandHalfWidth, face = StreetModels.StandFace; var ahead = new V3(0, 0, 1);
             byte[] content = { VoxelPalette.StoneLight, VoxelPalette.Stone, VoxelPalette.GrassMid, VoxelPalette.GlassSky, VoxelPalette.CarWhite, VoxelPalette.SignalRed,
                 VoxelPalette.GrassLight, VoxelPalette.CarRed };
-            Assert.That(StreetModels.StandLabelY, Is.InRange(StreetModels.StandLabelBottom + 0.15f, StreetModels.StandLabelTop - 0.15f), "the label inside its band");
-            Assert.That(StreetModels.StandLabelZ, Is.LessThan(StreetModels.StandFrameFront), "the label in front of the frame");
+            Assert.That(StreetModels.StandLabelY, Is.InRange(StreetModels.StandLabelBottom + 0.15f, StreetModels.StandLabelTop - 0.15f), "the sign inside its band");
             foreach (var style in Stands)
             {
                 var stand = StreetModels.InfoStand(style); var tris = Tris(stand); string name = StandName(style);

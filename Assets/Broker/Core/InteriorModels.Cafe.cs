@@ -186,32 +186,16 @@ namespace Broker.Core
             return b.Build(BuildingModels.PaletteUv);
         }
 
-        // Chalk menu 1.2 × 0.9 m, its pivot in the middle of its depth: a wooden frame, a dark board, «МЕНЮ» in chalk over four
-        // lines of dishes with their prices in amber. Front −Z.
+        // Chalk menu 1.2 × 0.9 m, its pivot in the middle of its depth: a wooden frame, a dark board, a cup drawn in chalk over
+        // four lines of dishes with their prices in amber. Front −Z.
         public static PolyMesh MenuBoard()
         {
             var b = NewBuilder(0);
             Frame(b, -0.6f, 0, 0.6f, 0.9f, -0.54f, 0.06f, 0.54f, 0.84f, -0.05f, 0.05f, 0.012f, TrimPart, VoxelPalette.Wood, back: true);
-            const float board = -0.03f, chalk = board - 0.0008f, stroke = 0.014f;
+            const float board = -0.03f, chalk = board - 0.0008f;
             b.Box(new V3(-0.54f, 0.06f, board), new V3(0.54f, 0.84f, 0.05f), 0, TrimPart, VoxelPalette.Ink);
-            void Stroke(float x0, float y0, float x1, float y1)
-            {
-                float dx = x1 - x0, dy = y1 - y0, len = (float)Math.Sqrt(dx * dx + dy * dy);
-                float ux = dx / len * stroke / 2, uy = dy / len * stroke / 2;
-                b.Quad(new V3(x0 - ux + uy, y0 - uy - ux, chalk), new V3(x0 - ux - uy, y0 - uy + ux, chalk), new V3(x1 + ux - uy, y1 + uy + ux, chalk),
-                    new V3(x1 + ux + uy, y1 + uy - ux, chalk), new V3(0, 0, -1), TrimPart, VoxelPalette.Cream);
-            }
-            // «МЕНЮ», 0.09 high.
-            const float y0 = 0.68f, y1 = 0.77f, ym = 0.725f;
-            float m = -0.191f, e = m + 0.1f, n = e + 0.1f, yu = n + 0.1f;
-            Stroke(m, y0, m, y1); Stroke(m + 0.07f, y0, m + 0.07f, y1); Stroke(m, y1, m + 0.035f, y0 + 0.035f); Stroke(m + 0.035f, y0 + 0.035f, m + 0.07f, y1);
-            Stroke(e, y0, e, y1); Stroke(e, y1, e + 0.06f, y1); Stroke(e, ym, e + 0.05f, ym); Stroke(e, y0, e + 0.06f, y0);
-            Stroke(n, y0, n, y1); Stroke(n + 0.06f, y0, n + 0.06f, y1); Stroke(n, ym, n + 0.06f, ym);
-            // Ю: the stem, its bar and a rounded O clear of the stem.
-            float o0 = yu + 0.032f, o1 = yu + 0.082f, c = 0.012f;
-            Stroke(yu, y0, yu, y1); Stroke(yu, ym, o0, ym);
-            Stroke(o0, y0 + c, o0, y1 - c); Stroke(o1, y0 + c, o1, y1 - c); Stroke(o0 + c, y1, o1 - c, y1); Stroke(o0 + c, y0, o1 - c, y0);
-            Stroke(o0, y1 - c, o0 + c, y1); Stroke(o1 - c, y1, o1, y1 - c); Stroke(o1, y0 + c, o1 - c, y0); Stroke(o0 + c, y0, o0, y0 + c);
+            // The cup instead of «МЕНЮ», 0.15 high with its steam.
+            CupGlyph(b, 0.01f, 0.705f, 0.15f, chalk, TrimPart, VoxelPalette.Cream);
             // Dishes in words of chalk, prices in amber.
             for (int line = 0; line < 4; line++)
             {

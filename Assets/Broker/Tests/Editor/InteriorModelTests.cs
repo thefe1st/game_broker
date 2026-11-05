@@ -6,10 +6,10 @@ using NUnit.Framework;
 
 namespace Broker.Tests
 {
-    // The low-poly office and café that replace the voxel furniture and the primitive boxes: sound meshes inside the models
-    // they replace, desk tops, seats, the counter and the pedestal at the heights the scene and its people expect, the
-    // screens' openings, the door's sign, the elevator's label and the espresso machine's spot left clear, every key, lamp,
-    // drawer and price where it belongs, and the whole interior within its triangle budget.
+    // The low-poly office, its executive wing and the café that replace the voxel furniture and the primitive boxes: sound
+    // meshes inside the models they replace, desk tops, seats, the counter and the pedestal at the heights the scene and its
+    // people expect, the screens' openings and the espresso machine's spot left clear, every key, lamp, drawer and price
+    // where it belongs, the signs that say it without words, and the whole interior within its triangle budget.
     public sealed class InteriorModelTests
     {
         private const int Wall = (int)BuildingPart.Wall, Trim = (int)BuildingPart.Trim, Glass = (int)BuildingPart.Glass, Night = (int)BuildingPart.Night,
@@ -26,9 +26,17 @@ namespace Broker.Tests
         // The monitors round the director's screen and the employees'.
         private static readonly (string name, float width, float height, float centre)[] Monitors =
             { ("director monitor", 0.86f, 0.5f, 0.4f), ("employee monitor", 0.58f, 0.39f, 0.27f) };
-        // The models with a glowing part: power lights, displays, lamps, the diffuser, the indicator and the till's screen.
+        // The models with a glowing part: power lights, displays, lamps, the diffuser, the indicator and the till's screen, the
+        // badges' discs, the exit sign, the trading screen and the aquarium's water.
         private static readonly string[] Lit = { "director monitor", "employee monitor", "phone", "golden phone", "coffee machine", "ceiling light", "elevator",
-            "cafe counter", "pendant lamp" };
+            "cafe counter", "pendant lamp", "badge Talk", "badge Calls", "badge Dossier", "badge Break", "exit sign", "wall screen", "aquarium", "floor lamp",
+            "bankers lamp" };
+        // The pictograms as the city places them: size, colour and ink.
+        private static readonly (Pictogram kind, float size, byte color, byte ink)[] Pictograms =
+        {
+            (Pictogram.Cup, 0.5f, VoxelPalette.Cream, VoxelPalette.Cream), (Pictogram.Newspaper, 0.26f, VoxelPalette.Cream, VoxelPalette.Navy),
+            (Pictogram.Pin, 0.4f, VoxelPalette.CarWhite, VoxelPalette.Navy), (Pictogram.Chart, 0.4f, VoxelPalette.CarWhite, VoxelPalette.Amber),
+        };
 
         private static IEnumerable<(string name, PolyMesh mesh)> Models()
         {
@@ -58,6 +66,25 @@ namespace Broker.Tests
             yield return ("cafe chair", InteriorModels.CafeChair());
             yield return ("menu board", InteriorModels.MenuBoard());
             yield return ("pendant lamp", InteriorModels.PendantLamp());
+            foreach (BadgeKind kind in Enum.GetValues(typeof(BadgeKind))) yield return ("badge " + kind, InteriorModels.Badge(kind));
+            yield return ("exit sign", InteriorModels.ExitSign());
+            yield return ("company logo", InteriorModels.CompanyLogo(0.3f));
+            foreach (var p in Pictograms) yield return ("pictogram " + p.kind, InteriorModels.PictogramSign(p.kind, p.size, p.color, p.ink));
+            yield return ("conference table", InteriorModels.ConferenceTable(3, 1.2f));
+            yield return ("credenza", InteriorModels.Credenza(1.8f));
+            yield return ("decanter", InteriorModels.Decanter());
+            yield return ("bull figure", InteriorModels.BullFigure());
+            yield return ("wall screen", InteriorModels.WallScreen(1.7f, 1));
+            yield return ("sofa", InteriorModels.Sofa(2.2f));
+            yield return ("armchair", InteriorModels.Sofa(1.05f));
+            yield return ("coffee table", InteriorModels.CoffeeTable(1.2f, 0.65f));
+            yield return ("aquarium", InteriorModels.Aquarium(1.6f));
+            yield return ("floor lamp", InteriorModels.FloorLamp());
+            yield return ("painting", InteriorModels.Painting(1.5f, 1));
+            yield return ("rug", InteriorModels.Rug(3.2f, 2.4f));
+            yield return ("door casing", InteriorModels.DoorCasing(1.4f, 2.4f));
+            yield return ("bankers lamp", InteriorModels.BankersLamp());
+            yield return ("wall panels", InteriorModels.WallPanels(4.4f, 3.8f));
         }
 
         private struct Tri { public V3 A, B, C; public int Part, Vertex; }
@@ -490,12 +517,12 @@ namespace Broker.Tests
             Assert.That(InteriorModels.PottedPlant(4).Positions, Is.Not.EqualTo(InteriorModels.PottedPlant(5).Positions), "seeded clumps");
         }
 
-        [Test] public void TheDoorKeepsItsSignClearOnTheUpperPanelAndItsHandleOnTheLeaf()
+        [Test] public void TheDoorKeepsItsUpperPanelFlatAndItsHandleOnTheLeaf()
         {
             var door = InteriorModels.Door(); var tris = Tris(door); const string name = "door";
-            AssertInside(door, new V3(-InteriorModels.DoorHalfWidth, 0, InteriorModels.DoorSignZ), new V3(InteriorModels.DoorHalfWidth, InteriorModels.DoorHeight, 0), name);
-            Assert.That(Bounds(door).min.Z, Is.GreaterThan(InteriorModels.DoorSignZ + 0.005f), name + ": nothing reaches the sign");
-            // The sign hangs on the upper panel: flat and navy all over its area.
+            AssertInside(door, new V3(-InteriorModels.DoorHalfWidth, 0, InteriorModels.DoorFrontZ), new V3(InteriorModels.DoorHalfWidth, InteriorModels.DoorHeight, 0), name);
+            Assert.That(Bounds(door).min.Z, Is.GreaterThan(InteriorModels.DoorFrontZ + 0.005f), name + ": nothing comes forward of its front");
+            // The wide upper panel: flat and navy all over its area.
             float face = float.NaN;
             foreach (float x in new[] { -0.4f, 0, 0.4f })
                 foreach (float y in new[] { 1.7f, 1.95f, 2.2f })
@@ -562,8 +589,8 @@ namespace Broker.Tests
 
             // The elevator: the call plate stands on the wall within 12 cm of the right jamb.
             var lift = InteriorModels.ElevatorDoor(); var shaft = Tris(lift); const string e = "elevator";
-            AssertInside(lift, new V3(-InteriorModels.ElevatorJamb, 0, InteriorModels.ElevatorLabelZ), new V3(InteriorModels.ElevatorJamb + 0.12f, InteriorModels.ElevatorHeight, 0), e);
-            Assert.That(Bounds(lift).min.Z, Is.GreaterThan(InteriorModels.ElevatorLabelZ + 0.01f), e + ": nothing reaches the label");
+            AssertInside(lift, new V3(-InteriorModels.ElevatorJamb, 0, InteriorModels.ElevatorFrontZ), new V3(InteriorModels.ElevatorJamb + 0.12f, InteriorModels.ElevatorHeight, 0), e);
+            Assert.That(Bounds(lift).min.Z, Is.GreaterThan(InteriorModels.ElevatorFrontZ + 0.01f), e + ": nothing comes forward of its front");
             foreach (float s in new[] { -1f, 1f })
             {
                 Assert.That(Sees(lift, shaft, new V3(s * 0.3f, 1.2f, -5), Ahead, Trim, VoxelPalette.Navy, e), e + ": a navy leaf at " + s);
@@ -572,7 +599,11 @@ namespace Broker.Tests
                 Assert.That(d - 5, Is.EqualTo(-InteriorModels.ElevatorDepth).Within(1e-3f), e + ": the jamb's face");
             }
             Assert.That(Sees(lift, shaft, new V3(0, 1.2f, -5), Ahead, Metal, VoxelPalette.Chrome, e), e + ": the chrome seam");
-            Assert.That(Sees(lift, shaft, new V3(0.2f, 2.5f, -5), Ahead, Glow, VoxelPalette.WindowLit, e), e + ": the lit indicator over the leaves");
+            foreach (float x in new[] { -0.3f, 0.3f })
+                Assert.That(Sees(lift, shaft, new V3(x, 2.5f, -5), Ahead, Glow, VoxelPalette.WindowLit, e), e + ": the lit indicator over the leaves at " + x);
+            Assert.That(Sees(lift, shaft, new V3(0, InteriorModels.ElevatorArrowTop - 0.03f, -5), Ahead, Glow, VoxelPalette.SignalAmber, e), e + ": the amber arrow between its bars");
+            Assert.That(Sees(lift, shaft, new V3(0.05f, InteriorModels.ElevatorArrowTop - 0.01f, -5), Ahead, Glow, VoxelPalette.SignalAmber, e)
+                && Sees(lift, shaft, new V3(0.05f, InteriorModels.ElevatorArrowTop - 0.095f, -5), Ahead, Trim, VoxelPalette.Ink, e), e + ": pointing down");
             Assert.That(Sees(lift, shaft, new V3(0.84f, 1.185f, -5), Ahead, Glow, VoxelPalette.SignalAmber, e), e + ": the lit call button");
             Assert.That(Sees(lift, shaft, new V3(0.84f, 1.095f, -5), Ahead, Trim, VoxelPalette.Cream, e), e + ": the unlit one");
 
@@ -678,7 +709,7 @@ namespace Broker.Tests
             Assert.That(IsColour(chair, back.Vertex, VoxelPalette.Wood), s + ": a wooden back"); Assert.That(b - 5, Is.GreaterThan(0.12f), s + ": towards +Z");
         }
 
-        [Test] public void TheMenuWritesItsTitleDishesAndPricesInChalkInsideItsFrame()
+        [Test] public void TheMenuDrawsItsCupOverDishesAndPricesInChalkInsideItsFrame()
         {
             var menu = InteriorModels.MenuBoard(); var tris = Tris(menu); const string name = "menu board";
             AssertInside(menu, new V3(-0.6f, 0, -0.05f), new V3(0.6f, 0.9f, 0.05f), name);
@@ -687,7 +718,7 @@ namespace Broker.Tests
             Assert.That(lo.X >= -0.54f && hi.X <= 0.54f && lo.Y >= 0.06f && hi.Y <= 0.84f, name + ": the writing on the board inside the frame");
             Assert.That(title.Concat(dishes).Concat(prices).All(t => menu.Normal(t.Vertex).Z < -0.999f) && hi.Z < -0.03f, name + ": on the board's face");
             var (titleMin, titleMax) = Bounds(title);
-            Assert.That(titleMin.Y, Is.GreaterThan(Bounds(dishes).max.Y), name + ": «МЕНЮ» over the dishes");
+            Assert.That(titleMin.Y, Is.GreaterThan(Bounds(dishes).max.Y), name + ": the cup over the dishes");
             Assert.That(Math.Abs(titleMin.X + titleMax.X) / 2, Is.LessThan(0.03f), name + ": a centred title");
             var tags = Pieces(prices);
             Assert.That(tags.Count, Is.EqualTo(4), name + ": four prices");
@@ -708,6 +739,170 @@ namespace Broker.Tests
             Assert.That(Sees(lamp, tris, new V3(0.004f, -2, 0.12f), Up, VoxelPalette.Cream, name), name + ": cream inside the shade");
         }
 
+        [Test] public void TheBadgesSayWhatThePersonDoesWithAGlyphOnALitDisc()
+        {
+            float r = InteriorModels.BadgeRadius;
+            var faces = new Dictionary<BadgeKind, byte> { [BadgeKind.Talk] = VoxelPalette.Cream, [BadgeKind.Calls] = VoxelPalette.SignalGreen,
+                [BadgeKind.Dossier] = VoxelPalette.SignalGreen, [BadgeKind.Break] = VoxelPalette.SignalAmber };
+            var seen = new List<float[]>();
+            foreach (BadgeKind kind in Enum.GetValues(typeof(BadgeKind)))
+            {
+                var badge = InteriorModels.Badge(kind); var tris = Tris(badge); string name = "badge " + kind;
+                AssertWithin(badge, new V3(-r - 0.02f, -r - 0.08f, -0.01f), new V3(r + 0.02f, r + 0.02f, 0.005f), name);
+                Assert.That(Sees(badge, tris, new V3(0.13f, 0.08f, -5), Ahead, Glow, faces[kind], name), name + ": its lit disc");
+                Assert.That(Sees(badge, tris, new V3(0, -r - 0.04f, -5), Ahead, Trim, VoxelPalette.Ink, name), name + ": the pointer down to the head");
+                foreach (var (x, y) in new[] { (0f, 0f), (0.13f, 0.08f), (-0.1f, -0.1f) })
+                    Assert.That(Sees(badge, tris, new V3(x, y, 5), new V3(0, 0, -1), Trim, VoxelPalette.Ink, name), name + ": a closed back at " + x + ", " + y);
+                // The glyph lies on the disc's face, inside it.
+                var glyph = Tris(badge, Trim).Where(t => t.A.Z < -0.002f).ToList();
+                Assert.That(glyph.Count, Is.GreaterThan(4), name + ": a glyph");
+                Assert.That(glyph.SelectMany(t => new[] { t.A, t.B, t.C }).All(q => q.X * q.X + q.Y * q.Y < r * r), name + ": the glyph inside the disc");
+                Assert.That(glyph.All(t => badge.Normal(t.Vertex).Z < -0.999f), name + ": facing out");
+                seen.Add(badge.Positions);
+            }
+            for (int i = 0; i < seen.Count; i++)
+                for (int j = i + 1; j < seen.Count; j++) Assert.That(seen[i], Is.Not.EqualTo(seen[j]), "badges " + i + " and " + j + " differ");
+        }
+
+        [Test] public void TheSignsSayItWithoutWords()
+        {
+            // The exit sign: a lit green face with the white door and its arrow, on the wall.
+            var exit = InteriorModels.ExitSign(); var sign = Tris(exit); const string e = "exit sign";
+            float hw = InteriorModels.ExitSignWidth / 2, hh = InteriorModels.ExitSignHeight / 2, s = InteriorModels.ExitSignHeight * 0.72f;
+            AssertWithin(exit, new V3(-hw, -hh, -InteriorModels.ExitSignDepth - 0.005f), new V3(hw, hh, 0), e);
+            Assert.That(Bounds(exit).max.Z, Is.EqualTo(0).Within(1e-4f), e + ": on the wall");
+            Assert.That(Sees(exit, sign, new V3(-0.17f, 0.06f, -5), Ahead, Glow, VoxelPalette.SignalGreen, e), e + ": a lit green face");
+            Assert.That(Sees(exit, sign, new V3(-0.03f, 0, -5), Ahead, Glow, VoxelPalette.Headlight, e), e + ": the white arrow");
+            Assert.That(Sees(exit, sign, new V3(0.02f + 0.42f * s, 0, -5), Ahead, Glow, VoxelPalette.Headlight, e), e + ": into the white door");
+            Assert.That(Sees(exit, sign, new V3(0, 0, 5), new V3(0, 0, -1), Trim, VoxelPalette.MetalLight, e), e + ": a pale housing behind");
+
+            // The company's mark: three brass bars rising under a cream arrow, flat, wider than high.
+            const float h = 0.3f; var logo = InteriorModels.CompanyLogo(h); const string l = "company logo";
+            AssertWithin(logo, new V3(-0.75f * h, -0.45f * h, -0.002f), new V3(0.75f * h, 0.45f * h, 0), l);
+            var (lo, hi) = Bounds(logo);
+            Assert.That((hi.X - lo.X) / (hi.Y - lo.Y), Is.InRange(1.4f, 1.9f), l + ": wider than high");
+            Assert.That(Tris(logo).All(t => logo.Normal(t.Vertex).Z < -0.999f), l + ": flat, facing out");
+            Assert.That(Tris(logo, Trim).Count > 0 && Tris(logo, Trim).All(t => IsColour(logo, t.Vertex, VoxelPalette.Cream)), l + ": a cream arrow");
+            var bars = Pieces(Tris(logo, Metal)).OrderBy(p => p.min.X).ToList();
+            Assert.That(Tris(logo, Metal).All(t => IsColour(logo, t.Vertex, VoxelPalette.Brass)), l + ": brass bars");
+            Assert.That(bars.Count, Is.EqualTo(3), l + ": three bars");
+            Assert.That(bars[0].max.Y < bars[1].max.Y && bars[1].max.Y < bars[2].max.Y, l + ": rising");
+
+            // The city's pictograms: flat on their boards, inside their size, in their colours.
+            foreach (var p in Pictograms)
+            {
+                var pict = InteriorModels.PictogramSign(p.kind, p.size, p.color, p.ink); string n = "pictogram " + p.kind;
+                AssertWithin(pict, new V3(-p.size / 2, -p.size / 2, -0.003f), new V3(p.size / 2, p.size / 2, 0), n);
+                Assert.That(Tris(pict).All(t => t.Part == Trim && pict.Normal(t.Vertex).Z < -0.999f), n + ": flat on its board, facing out");
+                Assert.That(Coloured(pict, p.color).Count, Is.GreaterThanOrEqualTo(4), n + ": in its colour");
+                if (p.ink != p.color) Assert.That(Coloured(pict, p.ink).Count, Is.GreaterThan(0), n + ": with its ink");
+            }
+            foreach (float bad in new[] { 0.05f, 3.5f, float.NaN })
+            {
+                Assert.Throws<ArgumentOutOfRangeException>(() => InteriorModels.PictogramSign(Pictogram.Cup, bad, VoxelPalette.Cream, VoxelPalette.Ink), "pictogram " + bad);
+                Assert.Throws<ArgumentOutOfRangeException>(() => InteriorModels.CompanyLogo(bad), "logo " + bad);
+            }
+        }
+
+        [Test] public void TheWingKeepsItsFurnitureAtTheHeightsOfItsGuests()
+        {
+            // The boardroom table: a dark top at desk height with rounded ends and a brass line along it.
+            var table = InteriorModels.ConferenceTable(3, 1.2f); var tt = Tris(table); const string t = "conference table";
+            AssertInside(table, new V3(-1.5f, 0, -0.6f), new V3(1.5f, InteriorModels.DeskHeight + 0.002f, 0.6f), t);
+            var top = Hit(tt, new V3(0.4f, 50, 0.35f), Down3, out float d, t);
+            Assert.That(50 - d, Is.EqualTo(InteriorModels.DeskHeight).Within(1e-3f), t + ": its top");
+            Assert.That(IsColour(table, top.Vertex, VoxelPalette.WoodDark), t + ": dark wood");
+            Assert.That(Sees(table, tt, new V3(0.4f, 50, 0), Down3, Metal, VoxelPalette.Brass, t), t + ": the brass inlay");
+            Assert.That(Down(tt, 1.45f, 0, t), Is.EqualTo(InteriorModels.DeskHeight).Within(1e-3f), t + ": the rounded end");
+            Assert.That(Misses(tt, new V3(1.48f, 50, 0.55f), Down3), t + ": no corner");
+
+            // The chesterfield and its armchair: cushions at SofaSeat, rolled arms at SofaArmTop, the rolled back at SofaBackTop.
+            foreach (float width in new[] { 2.2f, 1.05f })
+            {
+                var sofa = InteriorModels.Sofa(width); var st = Tris(sofa); string s = "sofa " + width;
+                float hw = width / 2, hd = InteriorModels.SofaDepth / 2;
+                AssertInside(sofa, new V3(-hw, 0, -hd), new V3(hw, InteriorModels.SofaBackTop, hd), s);
+                Assert.That(Bounds(sofa).max.Y, Is.GreaterThan(InteriorModels.SofaBackTop - 0.01f), s + ": the back's roll");
+                var seat = Hit(st, new V3(0.02f, 50, -0.15f), Down3, out d, s);
+                Assert.That(50 - d, Is.EqualTo(InteriorModels.SofaSeat).Within(2e-3f), s + ": the cushion");
+                Assert.That(IsColour(sofa, seat.Vertex, VoxelPalette.BrickDark), s + ": oxblood leather");
+                foreach (float side in new[] { -1f, 1f })
+                    Assert.That(Down(st, side * (hw - 0.085f), 0, s), Is.EqualTo(InteriorModels.SofaArmTop).Within(6e-3f), s + ": the arm at " + side);
+            }
+
+            // The coffee table and the credenza: flat tops for what stands on them.
+            var coffee = InteriorModels.CoffeeTable(1.2f, 0.65f); const string c = "coffee table";
+            AssertInside(coffee, new V3(-0.6f, 0, -0.33f), new V3(0.6f, InteriorModels.CoffeeTableHeight + 0.07f, 0.33f), c);
+            Assert.That(Down(Tris(coffee), 0.05f, -0.22f, c), Is.EqualTo(InteriorModels.CoffeeTableHeight).Within(1e-3f), c + ": its top");
+            var credenza = InteriorModels.Credenza(1.8f); var cr = Tris(credenza); const string k = "credenza";
+            float chd = InteriorModels.CredenzaDepth / 2;
+            AssertInside(credenza, new V3(-0.9f, 0, -chd - 0.03f), new V3(0.9f, InteriorModels.CredenzaHeight, chd), k);
+            foreach (var (x, z) in new[] { (-0.45f, 0f), (0.45f, 0f), (0f, 0.1f) })
+                Assert.That(Down(cr, x, z, k), Is.EqualTo(InteriorModels.CredenzaHeight).Within(1e-3f), k + ": its top at " + x + ", " + z);
+            AssertInside(InteriorModels.Decanter(), new V3(-0.21f, 0, -0.13f), new V3(0.21f, 0.32f, 0.13f), "decanter");
+            AssertInside(InteriorModels.BullFigure(), new V3(-0.11f, 0, -0.225f), new V3(0.11f, 0.32f, 0.225f), "bull figure");
+
+            // The aquarium: lit water behind the open front, fish inside the tank, a dark lid, the stand's doors.
+            var tank = InteriorModels.Aquarium(1.6f); var at = Tris(tank); const string a = "aquarium";
+            float stand = InteriorModels.AquariumStand, ahd = InteriorModels.AquariumDepth / 2, lid = stand + InteriorModels.AquariumTank;
+            AssertInside(tank, new V3(-0.81f, 0, -ahd - 0.045f), new V3(0.81f, lid + 0.05f, ahd + 0.01f), a);
+            Assert.That(Sees(tank, at, new V3(0.2f, stand + 0.1f, -5), Ahead, Glow, VoxelPalette.ScreenGreen, a), a + ": the water through the open front");
+            Assert.That(Sees(tank, at, new V3(0.2f, 50, -0.1f), Down3, VoxelPalette.Ink, a), a + ": a dark lid");
+            Assert.That(Sees(tank, at, new V3(-0.5f, 0.4f, -5), Ahead, VoxelPalette.WoodDark, a), a + ": the stand's doors");
+            var (flo, fhi) = Bounds(Coloured(tank, VoxelPalette.CarRed).Concat(Coloured(tank, VoxelPalette.CarYellow)));
+            Assert.That(flo.Y > stand && fhi.Y < stand + InteriorModels.AquariumWater && flo.X > -0.77f && fhi.X < 0.77f && flo.Z > -ahd && fhi.Z < ahd, a + ": fish in the water");
+
+            // The lamps: the floor lamp's bulb inside its open drum, the banker's green shade over its bulb.
+            var lamp = InteriorModels.FloorLamp(); var lt = Tris(lamp); const string f = "floor lamp";
+            AssertInside(lamp, new V3(-0.25f, 0, -0.25f), new V3(0.25f, InteriorModels.FloorLampHeight, 0.25f), f);
+            Assert.That(Hit(lt, new V3(0.004f, 50, 0.004f), Down3, out _, f).Part, Is.EqualTo(Glow), f + ": the bulb from above, through the open drum");
+            var (glo, ghi) = Bounds(lamp, Glow);
+            Assert.That(Sees(lamp, lt, new V3(-2, (glo.Y + ghi.Y) / 2, 0.004f), new V3(1, 0, 0), Trim, VoxelPalette.Cream, f), f + ": a cream shade round the bulb");
+            var desk = InteriorModels.BankersLamp(); const string bl = "bankers lamp";
+            AssertInside(desk, new V3(-0.2f, 0, -0.1f), new V3(0.2f, InteriorModels.BankersLampHeight, 0.1f), bl);
+            Assert.That(Sees(desk, Tris(desk), new V3(0.1f, 50, 0.004f), Down3, Trim, VoxelPalette.PineDark, bl), bl + ": a green shade");
+            Assert.That(Tris(desk, Glow).All(q => IsColour(desk, q.Vertex, VoxelPalette.LampWarm)), bl + ": a warm bulb");
+            Assert.That(Bounds(desk, Glow).max.Y, Is.LessThan(Bounds(Coloured(desk, VoxelPalette.PineDark)).max.Y), bl + ": under the shade");
+
+            // On the walls and the floor: the trading screen's candles inside its bezel, the yacht in its gilt frame, the rug.
+            var screen = InteriorModels.WallScreen(1.7f, 1); const string w = "wall screen";
+            AssertWithin(screen, new V3(-0.85f, -0.5f, -InteriorModels.WallScreenDepth - 0.006f), new V3(0.85f, 0.5f, 0), w);
+            var lit = Tris(screen, Glow); var (slo, shi) = Bounds(lit);
+            Assert.That(lit.Any(q => IsColour(screen, q.Vertex, VoxelPalette.SignalGreen)) && lit.Any(q => IsColour(screen, q.Vertex, VoxelPalette.SignalRed)), w + ": green and red candles");
+            Assert.That(slo.X > -0.81f && shi.X < 0.81f && slo.Y > -0.46f && shi.Y < 0.46f, w + ": the chart inside the bezel");
+            var art = InteriorModels.Painting(1.5f, 1); var pt = Tris(art); const string pn = "painting";
+            AssertWithin(art, new V3(-0.75f, -0.5f, -InteriorModels.PaintingDepth), new V3(0.75f, 0.5f, 0), pn);
+            Assert.That(Sees(art, pt, new V3(-0.72f, 0, -5), Ahead, Metal, VoxelPalette.Brass, pn), pn + ": a gilt frame");
+            Assert.That(Sees(art, pt, new V3(-0.6f, 0.35f, -5), Ahead, VoxelPalette.GlassSky, pn) && Sees(art, pt, new V3(0.5f, -0.3f, -5), Ahead, VoxelPalette.Awning, pn), pn + ": sky over the sea");
+            var rug = InteriorModels.Rug(3.2f, 2.4f); var rt = Tris(rug); const string rg = "rug";
+            AssertInside(rug, new V3(-1.6f, 0, -1.2f), new V3(1.6f, InteriorModels.RugHeight + 0.001f, 1.2f), rg);
+            Assert.That(Sees(rug, rt, new V3(0.6f, 50, 0.3f), Down3, VoxelPalette.BrickDark, rg) && Sees(rug, rt, new V3(0, 50, -1.05f), Down3, VoxelPalette.Cream, rg), rg + ": an oxblood field in a cream border");
+
+            // The doorways' brass casings leave the opening clear.
+            var casing = InteriorModels.DoorCasing(1.4f, 2.4f); var dc = Tris(casing); const string g = "door casing"; float cw = InteriorModels.CasingWidth;
+            AssertInside(casing, new V3(-0.7f - cw, 0, -InteriorModels.CasingProud), new V3(0.7f + cw, 2.4f + cw, 0), g);
+            foreach (var (x, y) in new[] { (0f, 1.2f), (-0.65f, 0.1f), (0.65f, 2.35f) }) Assert.That(Misses(dc, new V3(x, y, -5), Ahead), g + ": the opening clear at " + x + ", " + y);
+            foreach (var (x, y) in new[] { (-0.7f - cw / 2, 1.2f), (0.7f + cw / 2, 1.2f), (0f, 2.4f + cw / 2) })
+                Assert.That(Sees(casing, dc, new V3(x, y, -5), Ahead, Metal, VoxelPalette.Brass, g), g + ": brass at " + x + ", " + y);
+
+            // The panelling: dark raised panels under and over a wooden chair rail with its brass bead, the wall's own wood
+            // between them, nothing standing off the wall further than the crown rail.
+            var panels = InteriorModels.WallPanels(4.4f, 3.8f); var wp = Tris(panels); const string pl = "wall panels"; float rail = InteriorModels.PanelRail;
+            AssertWithin(panels, new V3(-2.2f, 0.15f, -0.04f), new V3(2.2f, 3.8f, 0), pl);
+            foreach (float y in new[] { 0.5f, 2.2f }) Assert.That(Sees(panels, wp, new V3(-1.85f, y, -5), Ahead, Trim, VoxelPalette.WoodDark, pl), pl + ": a raised panel at " + y);
+            Assert.That(Sees(panels, wp, new V3(0.4f, rail, -5), Ahead, Trim, VoxelPalette.Wood, pl), pl + ": the chair rail at " + rail);
+            Assert.That(Sees(panels, wp, new V3(0.4f, 3.6f, -5), Ahead, Trim, VoxelPalette.Wood, pl), pl + ": the crown rail under the ceiling");
+            Assert.That(Sees(panels, wp, new V3(0.4f, -50, -0.018f), Up, Metal, VoxelPalette.Brass, pl), pl + ": the brass bead under the chair rail");
+            Assert.That(Misses(wp, new V3(-2.2f + 4.4f / 6, 1.5f, -5), Ahead), pl + ": the wall's own wood between two panels");
+            Assert.That(Bounds(Coloured(panels, VoxelPalette.WoodDark)).min.Z, Is.EqualTo(-InteriorModels.PanelProud).Within(1e-4f), pl + ": the panels just proud of the wall");
+
+            var bad = new TestDelegate[] { () => InteriorModels.ConferenceTable(1, 1), () => InteriorModels.ConferenceTable(3, 2.5f), () => InteriorModels.Credenza(0.5f),
+                () => InteriorModels.Sofa(0.5f), () => InteriorModels.Sofa(4), () => InteriorModels.CoffeeTable(3, 1), () => InteriorModels.Aquarium(5),
+                () => InteriorModels.WallScreen(0.3f, 1), () => InteriorModels.Painting(5, 1), () => InteriorModels.Rug(0.2f, 1), () => InteriorModels.DoorCasing(1.4f, 1),
+                () => InteriorModels.Sofa(float.NaN), () => InteriorModels.WallPanels(0.2f, 3), () => InteriorModels.WallPanels(4, 2) };
+            for (int i = 0; i < bad.Length; i++) Assert.Throws<ArgumentOutOfRangeException>(bad[i], "bad size " + i);
+        }
+
         [Test] public void TheInteriorStaysWithinItsTriangleBudget()
         {
             var budgets = new Dictionary<string, int>
@@ -715,12 +910,18 @@ namespace Broker.Tests
                 ["director desk"] = 800, ["employee desk"] = 550, ["supervisor desk"] = 550, ["office chair"] = 700, ["director monitor"] = 200,
                 ["employee monitor"] = 200, ["keyboard"] = 900, ["mouse"] = 100, ["phone"] = 800, ["golden phone"] = 800, ["papers 1"] = 150, ["papers 2"] = 150,
                 ["coffee machine"] = 1000, ["coffee cup"] = 250, ["coffee cabinet"] = 400, ["potted plant"] = 800, ["display pedestal"] = 320, ["door"] = 450,
-                ["window frame"] = 150, ["ceiling light"] = 100, ["plaque"] = 100, ["elevator"] = 400, ["skirting"] = 50, ["cafe counter"] = 1100,
+                ["window frame"] = 150, ["ceiling light"] = 100, ["plaque"] = 100, ["elevator"] = 450, ["skirting"] = 50, ["cafe counter"] = 1100,
                 ["cafe shelf 0"] = 2800, ["cafe shelf 1"] = 2800, ["cafe table"] = 500, ["cafe chair"] = 320, ["menu board"] = 150, ["pendant lamp"] = 400,
+                ["badge Talk"] = 200, ["badge Calls"] = 200, ["badge Dossier"] = 200, ["badge Break"] = 200, ["exit sign"] = 100, ["company logo"] = 60,
+                ["pictogram Cup"] = 80, ["pictogram Newspaper"] = 80, ["pictogram Pin"] = 80, ["pictogram Chart"] = 80,
+                ["conference table"] = 300, ["credenza"] = 500, ["decanter"] = 400, ["bull figure"] = 600, ["wall screen"] = 150, ["sofa"] = 750,
+                ["armchair"] = 600, ["coffee table"] = 400, ["aquarium"] = 700, ["floor lamp"] = 300, ["painting"] = 100, ["rug"] = 80, ["door casing"] = 150,
+                ["bankers lamp"] = 250, ["wall panels"] = 1000,
             };
             foreach (var (name, mesh) in Models()) Assert.That(mesh.TriangleCount, Is.LessThan(budgets[name]), name);
-            // Everything the office places (one of the two desk telephones shows at a time; the supervisor's desk once one is
-            // hired) and the café's furniture from the district plan with its espresso machine.
+            // Everything the office and its wing place (one of the two desk telephones shows at a time, one badge of each
+            // person's four; the supervisor's desk once one is hired) and the café's furniture from the district plan with its
+            // espresso machine.
             long total = 0; int placed = 0;
             void Add(PolyMesh mesh, int count) { total += (long)mesh.TriangleCount * count; placed += count; }
             Add(InteriorModels.Desk(DeskStyle.Executive, 3.6f, 1.25f, VoxelPalette.Wood, VoxelPalette.WoodDark), 1);
@@ -728,12 +929,18 @@ namespace Broker.Tests
             Add(InteriorModels.Desk(DeskStyle.Staff, 2, 0.8f, VoxelPalette.Wood, VoxelPalette.Navy), 1);
             Add(InteriorModels.OfficeChair(VoxelPalette.Navy), 3);
             Add(InteriorModels.Monitor(0.86f, 0.5f, 0.4f), 1); Add(InteriorModels.Monitor(0.58f, 0.39f, 0.27f), 2);
-            Add(InteriorModels.Keyboard(), 1); Add(InteriorModels.Mouse(), 1);
+            Add(InteriorModels.Keyboard(), 3); Add(InteriorModels.Mouse(), 3); Add(InteriorModels.BankersLamp(), 1);
             Add(InteriorModels.Papers(0.48f, 0.35f, 1), 1); Add(InteriorModels.Papers(0.4f, 0.3f, 2), 2);
             Add(InteriorModels.Phone(false), 1); Add(InteriorModels.Phone(true), 1); Add(InteriorModels.DisplayPedestal(), 1);
-            Add(InteriorModels.CoffeeCabinet(), 1); Add(InteriorModels.CoffeeMachine(), 1); Add(InteriorModels.CoffeeCup(), 1); Add(InteriorModels.PottedPlant(4), 1);
-            Add(InteriorModels.Door(), 1); Add(InteriorModels.WindowFrame(), 3); Add(InteriorModels.CeilingLight(), 3); Add(InteriorModels.Plaque(6, 0.45f), 1);
-            Add(InteriorModels.ElevatorDoor(), 1); Add(InteriorModels.Skirting(12), 6);
+            Add(InteriorModels.CoffeeCabinet(), 1); Add(InteriorModels.CoffeeMachine(), 1); Add(InteriorModels.CoffeeCup(), 1); Add(InteriorModels.PottedPlant(4), 2);
+            Add(InteriorModels.Door(), 1); Add(InteriorModels.ExitSign(), 1); Add(InteriorModels.WindowFrame(), 4); Add(InteriorModels.CeilingLight(), 5);
+            Add(InteriorModels.Plaque(1.3f, 0.45f), 1); Add(InteriorModels.CompanyLogo(0.3f), 1); Add(InteriorModels.ElevatorDoor(), 1); Add(InteriorModels.Skirting(6), 18);
+            Add(Enum.GetValues(typeof(BadgeKind)).Cast<BadgeKind>().Select(InteriorModels.Badge).OrderByDescending(m => m.TriangleCount).First(), 3);
+            Add(InteriorModels.ConferenceTable(3, 1.2f), 1); Add(InteriorModels.OfficeChair(VoxelPalette.BrickDark), 5); Add(InteriorModels.WallScreen(1.7f, 1), 1);
+            Add(InteriorModels.Credenza(1.8f), 1); Add(InteriorModels.Decanter(), 1); Add(InteriorModels.BullFigure(), 1); Add(InteriorModels.Rug(3.2f, 2.4f), 1);
+            Add(InteriorModels.Sofa(2.2f), 1); Add(InteriorModels.Sofa(1.05f), 2); Add(InteriorModels.CoffeeTable(1.2f, 0.65f), 1); Add(InteriorModels.Painting(1.5f, 1), 1);
+            Add(InteriorModels.Aquarium(1.6f), 1); Add(InteriorModels.FloorLamp(), 1); Add(InteriorModels.DoorCasing(1.4f, 2.4f), 4);
+            Add(InteriorModels.WallPanels(4.4f, 3.8f), 2); Add(InteriorModels.WallPanels(6, 3.8f), 2);
             foreach (var item in CityScenery.Props)
                 switch (item.Kind)
                 {
@@ -744,8 +951,10 @@ namespace Broker.Tests
                     case SceneryKind.MenuBoard: Add(InteriorModels.MenuBoard(), 1); break;
                     case SceneryKind.PendantLamp: Add(InteriorModels.PendantLamp(), 1); break;
                 }
-            Assert.That(placed, Is.GreaterThan(45));
-            Assert.That(total, Is.LessThan(21000), "the low-poly interior: " + total + " triangles");
+            // Stage 6 adds the wing (about 12 000 triangles: the five leather chairs and the panelling are half of them) and the
+            // employees' keyboards.
+            Assert.That(placed, Is.GreaterThan(90));
+            Assert.That(total, Is.LessThan(37000), "the low-poly interior: " + total + " triangles, " + placed + " models");
         }
     }
 }
