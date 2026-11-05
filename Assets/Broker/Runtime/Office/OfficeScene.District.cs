@@ -4,9 +4,9 @@ using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    // The old district south of the boulevard: closed street facades, the information stands of the plaza, area signs,
-    // and the dressing of both quarters from CityScenery with the colliders the plan marks as solid: low-poly greenery,
-    // lamps, benches, bins, bollards, cones, works and stands (StreetModels); only the café's furniture is still voxel.
+    // The old district south of the boulevard: closed street facades, the information stands of the plaza with their
+    // pictograms, and the dressing of both quarters from CityScenery with the colliders the plan marks as solid: low-poly greenery,
+    // lamps, benches, bins, bollards, cones, works and stands (StreetModels), the café's furniture (InteriorModels).
     public sealed partial class OfficeScene
     {
         private void BuildDistrict(Material[] facades)
@@ -26,18 +26,10 @@ namespace Broker.Runtime.Office
                     PlaceBuilding("shop/" + seed, () => BuildingModels.Shop(style, seed, true), BuildingModels.Wall(style), "District / street building",
                         new Vector3(buildingX, ground, -6), 180);
                 }
-                var sign = Text("District / address", x < 0 ? "ЗАПАДНАЯ УЛИЦА / 4" : "ОФИСНАЯ УЛИЦА / 8", new Vector3(x, ground + 3.1f, -1.9f), 48, 0.035f, Color.white);
-                sign.transform.localEulerAngles = new Vector3(0, 180, 0);
             }
             // Separate interactive information stands; hidden errand stations remain unbuilt.
-            BuildCityStand(-3, 19, OfficeStation.CityMap, "Карта района", "Выбрать пеший ориентир", "КАРТА РАЙОНА", StandStyle.Map);
-            BuildCityStand(4, 19, OfficeStation.CityCompanies, "Стенд компаний", "Посмотреть компании и риски", "КОМПАНИИ / АКЦИИ", StandStyle.Companies);
-            foreach (string id in new[] { "park", "business" })
-            {
-                var destination = CityDistrictPlan.Find(id);
-                var label = Text("District / area sign", destination.Name.ToUpperInvariant(), new Vector3(destination.X, ground + 2.5f, 12), 48, 0.04f, Color.white);
-                label.transform.localEulerAngles = new Vector3(0, 180, 0);
-            }
+            BuildCityStand(-3, 19, OfficeStation.CityMap, "Карта района", "Выбрать пеший ориентир", Pictogram.Pin, StandStyle.Map);
+            BuildCityStand(4, 19, OfficeStation.CityCompanies, "Стенд компаний", "Посмотреть компании и риски", Pictogram.Chart, StandStyle.Companies);
         }
         // Every prop of the plan; solid ones get an invisible collider over their footprint, the café counter is the
         // café's interactable.
@@ -68,15 +60,16 @@ namespace Broker.Runtime.Office
                     case SceneryKind.RostralColumn: PlaceBuilding("rostral column", BuildingModels.RostralColumn, BuildingModels.ExchangeGranite, "Exchange / rostral column", position, yaw); break;
                     case SceneryKind.Kiosk:
                         PlaceBuilding("kiosk", BuildingModels.Kiosk, BuildingModels.KioskWall, "Exchange / press kiosk", position, yaw);
-                        Text("Exchange / kiosk sign", "ПРЕССА", position + new Vector3(0, 2.25f, -item.HalfZ - 0.02f), 48, 0.05f, new Color(0.98f, 0.93f, 0.82f)); break;
+                        PlaceModel("pictogram/newspaper", () => InteriorModels.PictogramSign(Pictogram.Newspaper, 0.26f, VoxelPalette.Cream, VoxelPalette.Navy),
+                            "Exchange / kiosk sign", position + new Vector3(0, 2.25f, -item.HalfZ - 0.005f)); break;
                     case SceneryKind.ExchangeColumn: PlaceBuilding("exchange column", BuildingModels.ExchangeColumn, BuildingModels.ExchangeStone, "Exchange / column", position, yaw); break;
-                    case SceneryKind.CafeCounter: PlaceVoxel("cafe counter", VoxelProps.CafeCounter, "Cafe / counter", transform, position, yaw); break;
-                    case SceneryKind.CafeShelf: PlaceVoxel("cafe shelf/" + seed % 2, () => VoxelProps.CafeShelf(seed % 2), "Cafe / shelf", transform, position, yaw); break;
-                    case SceneryKind.CafeTable: PlaceVoxel("cafe table", VoxelProps.CafeTable, "Cafe / table", transform, position, yaw); break;
-                    case SceneryKind.CafeChair: PlaceVoxel("cafe chair", VoxelProps.CafeChair, "Cafe / chair", transform, position, yaw); break;
+                    case SceneryKind.CafeCounter: PlaceBuilding("cafe counter", InteriorModels.CafeCounter, StreetModels.FurnitureLook, "Cafe / counter", position, yaw); break;
+                    case SceneryKind.CafeShelf: PlaceBuilding("cafe shelf/" + seed % 2, () => InteriorModels.CafeShelf(seed % 2), StreetModels.FurnitureLook, "Cafe / shelf", position, yaw); break;
+                    case SceneryKind.CafeTable: PlaceBuilding("cafe table", InteriorModels.CafeTable, StreetModels.FurnitureLook, "Cafe / table", position, yaw); break;
+                    case SceneryKind.CafeChair: PlaceBuilding("cafe chair", InteriorModels.CafeChair, StreetModels.FurnitureLook, "Cafe / chair", position, yaw); break;
                     // Wall-mounted and hanging props: the menu at 1.5 m on the back wall, the lamps from the 3 m ceiling.
-                    case SceneryKind.MenuBoard: PlaceVoxel("menu board", VoxelProps.MenuBoard, "Cafe / menu board", transform, position + new Vector3(0, 1.5f, 0), yaw); break;
-                    case SceneryKind.PendantLamp: PlaceVoxel("pendant lamp", VoxelProps.PendantLamp, "Cafe / pendant lamp", transform, position + new Vector3(0, 3, 0), yaw); break;
+                    case SceneryKind.MenuBoard: PlaceBuilding("menu board", InteriorModels.MenuBoard, StreetModels.FurnitureLook, "Cafe / menu board", position + new Vector3(0, 1.5f, 0), yaw); break;
+                    case SceneryKind.PendantLamp: PlaceBuilding("pendant lamp", InteriorModels.PendantLamp, StreetModels.FurnitureLook, "Cafe / pendant lamp", position + new Vector3(0, 3, 0), yaw); break;
                     default: throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "Scenery kind without a model.");
                 }
                 if (!item.Solid) continue;
@@ -120,16 +113,17 @@ namespace Broker.Runtime.Office
                 PlaceBuilding("bed shrub/" + seed, () => StreetModels.Shrub(2, 1, 1.25f, seed, true), StreetModels.ShrubLook, "Park / shrub", new Vector3(x, y + 0.31f, z + dz),
                     dz > 0 ? 180 : 0);
         }
-        private void BuildCityStand(float x, float z, OfficeStation station, string title, string action, string label, StandStyle style)
+        private void BuildCityStand(float x, float z, OfficeStation station, string title, string action, Pictogram sign, StandStyle style)
         {
             float ground = CityBlockPlan.GroundY;
-            // The box over the panel stays as the interactable collider; the low-poly stand carries the look and the label
-            // hangs over the plain band of its panel.
+            // The box over the panel stays as the interactable collider; the low-poly stand carries the look and its
+            // pictogram lies on the plain band of its panel.
             var stand = Box("District / " + title, new Vector3(x, ground + 1.5f, z), new Vector3(2.1f, 1.4f, 0.16f), navy);
             stand.GetComponent<Renderer>().enabled = false;
             Interactable(stand, station, title, action);
             PlaceBuilding("stand/" + style, () => StreetModels.InfoStand(style), StreetModels.FurnitureLook, "District / information stand", new Vector3(x, ground, z));
-            Text("District / stand title", label, new Vector3(x, ground + StreetModels.StandLabelY, z + StreetModels.StandLabelZ), 48, 0.026f, Color.white);
+            PlaceModel("pictogram/" + sign, () => InteriorModels.PictogramSign(sign, 0.4f, VoxelPalette.CarWhite, sign == Pictogram.Pin ? VoxelPalette.Navy : VoxelPalette.Amber),
+                "District / stand sign", new Vector3(x, ground + StreetModels.StandLabelY, z + StreetModels.StandFace - 0.004f));
         }
     }
 }

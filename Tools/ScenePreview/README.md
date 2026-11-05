@@ -45,6 +45,9 @@ object's `Mood` would (stage 5: the faces are eyes with brows, everybody calm by
 | `people-staff`, `people-staff-faces` | Lena, Max and Orlov — the three the player talks to, built finer — side by side on the plaza, staged like the rows above; then their faces close up; no HUD |
 | `people-office`, `people-supervisor` | Lena behind her desk; Orlov as the hired broker sees him; no HUD |
 | `people-cafe` | the seated café guest with the forearms on the table by the cup, the barista at the counter; no HUD |
+| `office-desk`, `office-entrance`, `office-door`, `office-coffee` | the low-poly office (stage 6) close up: the director's desk from his chair; the room from the windows towards the door; the door, the display stand and the street elevator; the coffee corner; no HUD |
+| `cafe-counter` | the café's counter with the espresso machine between the pastry case and the till, the stocked shelf, the menu and the pendant lamps; no HUD |
+| `office-meeting`, `office-lounge`, `office-aquarium`, `office-staff` | the executive wing west of the office (stage 6, after the author's answer): the meeting room from its doorway, the lounge with the chesterfield under the yacht, the aquarium seen from the lamp's corner; the staff at their turned desks with their badges, from the side; no HUD |
 
 Street shots with a HUD enter the city like the elevator does (`VisitCity`) and put the player at the
 camera, so walkers stop for it and the signal counts it on the zebra. Driving shots seat the player in
@@ -62,7 +65,9 @@ E key with the target's title as one centred line; the others print the shot's t
 
 The project compiles the **actual Core, OfficeScene partials, SurfaceLibrary and
 OfficeInteractable** at C# 9 (the Unity 6 language level) against narrow engine stand-ins in
-`UnityStubs.cs` and `PreviewFakes.cs`. The builders run as in Play: same voxel meshes,
+`UnityStubs.cs` and `PreviewFakes.cs`. As in Unity, a component's `name` is its game object's (before stage 6 the stand-in kept its
+own, so `HidePrimitiveVisuals` hid nothing and the office's primitive boxes showed through its furniture in the stills).
+The builders run as in Play: same low-poly meshes,
 pixel textures, low-poly car meshes, lights, sky and fog values, same traffic positions for a given time.
 `Renderer.cs` is a small CPU rasteriser that approximates the built-in forward path of the
 project's **linear colour space with HDR cameras**: sRGB colours and textures are decoded before

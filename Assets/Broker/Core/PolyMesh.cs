@@ -50,6 +50,9 @@ namespace Broker.Core
         public int Group { get; set; }
         // Corner shade as a function of position (contact darkening near the ground); multiplied by each face's own shade.
         public Func<V3, float> Ambient { get; set; } = p => 1;
+        // Optional rigid placement of every triangle as it comes in: a part built round the origin comes out turned, tilted
+        // and moved (a reclined backrest, a sheet askew, keys on a slope). Null leaves the points as given.
+        public Func<V3, V3> Place { get; set; }
         public PolyBuilder(int parts, float smoothAngleDegrees, int boxMappedPart, float tileMetres)
         {
             this.parts = parts; cosSmooth = (float)Math.Cos(smoothAngleDegrees * Math.PI / 180); uvPart = boxMappedPart; tile = tileMetres;
@@ -58,6 +61,12 @@ namespace Broker.Core
 
         public void Triangle(V3 a, V3 b, V3 c, V3 outward, int part, byte color, float shade = 1)
         {
+            if (Place != null)
+            {
+                var mid = (a + b + c) * (1f / 3);
+                outward = Place(mid + outward) - Place(mid);
+                a = Place(a); b = Place(b); c = Place(c);
+            }
             var n = V3.Cross(b - a, c - a); float area2 = n.Length;
             if (area2 < 1e-9f) return;
             if (V3.Dot(n, outward) < 0) { var t = b; b = c; c = t; n = n * -1; }

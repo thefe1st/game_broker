@@ -104,14 +104,13 @@ namespace Broker.Runtime.Office
             var entry = Box("City / office elevator", new Vector3(0, ground + 1.35f, 8.2f), new Vector3(2.5f, 2.7f, 0.35f), navy);
             Interactable(entry, OfficeStation.ReturnOffice, "Лифт в офис", "Вернуться в Мойка Капитал");
             Box("Elevator / city indicator", new Vector3(0, ground + 2.95f, 8.12f), new Vector3(2.5f, 0.12f, 0.2f), cityLight, false);
-            var sign = Text("City / elevator sign", "ОФИС", new Vector3(0, ground + 2.05f, 8.43f), 48, 0.048f, new Color(0.98f, 0.93f, 0.82f));
-            sign.transform.localEulerAngles = new Vector3(0, 180, 0);
+            // The company's mark over the lift instead of «ОФИС»: the same plaque and logo as in the office, facing the plaza.
+            PlaceModel("plaque/1.3", () => InteriorModels.Plaque(1.3f, 0.45f), "City / elevator plaque", new Vector3(0, ground + 2.05f, 8.375f + 0.05f), 180);
+            PlaceModel("logo/0.3", () => InteriorModels.CompanyLogo(0.3f), "City / elevator logo", new Vector3(0, ground + 2.05f, 8.375f + 0.1005f), 180);
             NightLight("City / office door light", transform, new Vector3(0, ground + 3.3f, 9.1f), DayCycle.DoorRange, DayCycle.DoorIntensity);
             var portal = Box("Office / street elevator", new Vector3(5.85f, 1.3f, -0.2f), new Vector3(0.14f, 2.6f, 1.3f), navy);
             Interactable(portal, OfficeStation.Street, "Лифт в квартал", "Выйти на площадь");
             Box("Office / elevator light", new Vector3(5.74f, 2.5f, -0.2f), new Vector3(0.05f, 0.06f, 1.15f), cityLight, false);
-            var label = Text("Office / street sign", "КВАРТАЛ", new Vector3(5.72f, 1.8f, -0.2f), 48, 0.03f, new Color(0.98f, 0.93f, 0.82f));
-            label.transform.localEulerAngles = new Vector3(0, 90, 0);
             ShowCity(1);
         }
         // The east and west ends of the walkable streets: a clipped hedge on a stone kerb instead of a bare wall.

@@ -11,7 +11,7 @@ namespace UnityEngine
 {
     public class Object
     {
-        public string name { get; set; } = "";
+        public virtual string name { get; set; } = "";
         public HideFlags hideFlags { get; set; }
         public static void Destroy(Object obj)
         {
@@ -30,6 +30,12 @@ namespace UnityEngine
     public class Component : Object
     {
         public GameObject gameObject { get; internal set; }
+        // As in Unity, a component shares its game object's name (lookups such as `child.name` on a Transform).
+        public override string name
+        {
+            get => gameObject != null ? gameObject.name : base.name;
+            set { if (gameObject != null) gameObject.name = value; else base.name = value; }
+        }
         public Transform transform => gameObject.transform;
         public T GetComponent<T>() => gameObject.GetComponent<T>();
         public T GetComponentInParent<T>()

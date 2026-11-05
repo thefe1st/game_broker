@@ -232,15 +232,15 @@ namespace Broker.Tests
             Assert.That(Hit(hall, new V3(0, 6.6f, 6), new V3(1, 0, 0), out _, out float side), Is.True);
             Assert.That(side, Is.InRange(BuildingModels.HallWidth / 2 - BuildingModels.HallWall - 0.2f, BuildingModels.HallWidth / 2 - BuildingModels.HallWall + 1e-3f), "inner side wall");
         }
-        [Test] public void TheRoofLeavesThePlainFriezeForTheName()
+        [Test] public void TheRoofKeepsAPlainFriezeOverTheColumns()
         {
             var roof = Tris(BuildingModels.ExchangeRoof());
-            // The scene's «БИРЖА» stands 0.2 m behind the front edge at 0.75 m: the frieze is behind it, clear of triglyphs.
+            // A plain band 0.2 m behind the front edge at 0.75 m (the name came off it in stage 6), triglyphs only further out.
             foreach (float x in new[] { -4.5f, -2f, 0f, 2f, 4.5f })
             {
                 Assert.That(Hit(roof, new V3(x, 0.75f, -1), new V3(0, 0, 1), out var frieze, out float d), Is.True);
                 Assert.That(frieze.Part, Is.EqualTo(Wall), "plain frieze at " + x);
-                Assert.That(d - 1, Is.GreaterThan(0.2f), "the name stands in front of the frieze at " + x);
+                Assert.That(d - 1, Is.GreaterThan(0.2f), "the frieze set back at " + x);
             }
             Assert.That(Hit(roof, new V3(BuildingModels.RoofWidth / 2 - 2.2f, 0.75f, -1), new V3(0, 0, 1), out var glyph, out _), Is.True);
             Assert.That(glyph.Part, Is.EqualTo(Trim), "triglyphs further out");
@@ -255,7 +255,7 @@ namespace Broker.Tests
             Assert.That(Hit(board, new V3(0, 1.6f, -1), new V3(0, 0, 1), out _, out float face), Is.True);
             Assert.That(face - 1, Is.EqualTo(BuildingModels.BoardFace).Within(1e-3f));
             Assert.That(Bounds(BuildingModels.QuoteBoard(), Glow).max.Y, Is.LessThan(0.6f), "ticker along the bottom");
-            // The kiosk's sign band faces the square 0.8 m in front of its pivot, under «ПРЕССА».
+            // The kiosk's sign band faces the square 0.8 m in front of its pivot, under its newspaper pictogram.
             var kiosk = Tris(BuildingModels.Kiosk());
             Assert.That(Hit(kiosk, new V3(0, 2.25f, -2), new V3(0, 0, 1), out var band, out float k), Is.True);
             Assert.That(k - 2, Is.EqualTo(-BuildingModels.KioskHalfZ).Within(0.01f), "sign band");

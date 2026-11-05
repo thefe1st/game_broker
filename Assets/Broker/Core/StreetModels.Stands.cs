@@ -7,12 +7,11 @@ namespace Broker.Core
     public static partial class StreetModels
     {
         public const float StandHalfWidth = 1.1f, StandHeight = 2.5f, StandHalfDepth = 0.3f;
-        // The panel's face 5 cm behind the front of the frame, its bands from the foot up: the content, the plain band the
-        // label is written on and the brass strip. BuildCityStand hangs the label at (0, StandLabelY, StandLabelZ), in front
-        // of the frame.
+        // The panel's face 5 cm behind the front of the frame, its bands from the foot up: the content, the plain band for the
+        // stand's sign and the brass strip. BuildCityStand lays the sign's pictogram on that band's face at height StandLabelY.
         public const float StandFace = -0.05f, StandFrameFront = -0.1f, StandPanelBottom = 0.8f, StandPanelTop = 2.2f;
         public const float StandContentBottom = 0.9f, StandContentTop = 1.4f, StandLabelBottom = 1.45f, StandLabelTop = 1.95f, StandBrassBottom = 2.03f;
-        public const float StandLabelY = 1.65f, StandLabelZ = -0.15f;
+        public const float StandLabelY = 1.65f;
         // «You are here» on the map: the square of the plaza in the middle of the upper row of blocks.
         public const float StandMarkerX = -0.12f, StandMarkerY = 1.28f, StandMarkerRadius = 0.03f;
         private const float StandPanelHalf = 1.0f, StandBack = 0.06f, StandPostX = 0.8f, StandRoofY = 2.3f;

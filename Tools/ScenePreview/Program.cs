@@ -94,6 +94,20 @@ namespace Broker.Tools.ScenePreview
                 Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f) },
             new Shot { Name = "people-staff-faces", Local = new Vector3(0, CityBlockPlan.GroundY + 1.64f, 16.4f), Yaw = 0, Pitch = 1, Fov = 28, City = true, Hud = false, Traffic = 14,
                 Lineup = new WalkerStyle[0], Staff = new[] { PersonStyle.Lena, PersonStyle.Max, PersonStyle.Orlov }, LineupAt = new Vector3(0, 0, 18.6f), LineupGap = 0.52f },
+            // Stage 6: the office and the café close up — the director's desk from his chair, the room towards the door from
+            // the windows, the door with the display stand and the street elevator, the coffee corner, the café's counter and
+            // shelf.
+            new Shot { Name = "office-desk", Local = new Vector3(1.0f, 1.62f, 0.45f), Yaw = 180, Pitch = 30, Fov = 56, Hud = false },
+            new Shot { Name = "office-entrance", Local = new Vector3(1.5f, 2.3f, 4.1f), Yaw = 200, Pitch = 14, Fov = 72, Hud = false },
+            new Shot { Name = "office-door", Local = new Vector3(-1.6f, 1.75f, 0.4f), Yaw = 128, Pitch = 10, Fov = 66, Hud = false },
+            new Shot { Name = "office-coffee", Local = new Vector3(-3.75f, 1.75f, -2.85f), Yaw = -42, Pitch = 22, Fov = 50, Hud = false },
+            new Shot { Name = "cafe-counter", Local = new Vector3(25.6f, CityBlockPlan.GroundY + 1.6f, -4.4f), Yaw = 192, Pitch = 8, Fov = 64, City = true, Hud = false },
+            // After the author's answer: the executive wing west of the office — the meeting room from its doorway, the lounge
+            // with the chesterfield under the yacht, the aquarium from the sofa's corner — and the turned workstations.
+            new Shot { Name = "office-meeting", Local = new Vector3(-6.75f, 1.75f, 0.75f), Yaw = -62, Pitch = 10, Fov = 72, Hud = false },
+            new Shot { Name = "office-lounge", Local = new Vector3(-6.75f, 1.7f, -0.6f), Yaw = -118, Pitch = 12, Fov = 72, Hud = false },
+            new Shot { Name = "office-aquarium", Local = new Vector3(-11.3f, 1.65f, -3.7f), Yaw = 55, Pitch = 8, Fov = 66, Hud = false },
+            new Shot { Name = "office-staff", Local = new Vector3(5.3f, 1.8f, 0.2f), Yaw = -50, Pitch = 8, Fov = 70, Hud = false },
         };
 
         public static int Main(string[] args)
@@ -208,9 +222,9 @@ namespace Broker.Tools.ScenePreview
                 camera.Position = root.transform.TransformPoint(shot.Local);
                 camera.Right = rotation * Vector3.right; camera.Up = rotation * Vector3.up; camera.Forward = rotation * Vector3.forward; camera.Fov = shot.Fov;
             }
-            // Labels turn toward the active camera in Refresh; aim them at the preview camera instead.
-            foreach (var label in GameObject.All.Select(g => g.GetComponent<TextMesh>()).Where(t => t != null && t.name == "Employee label"))
-                label.transform.rotation = rotation;
+            // Badges turn toward the active camera in Refresh; aim them at the preview camera instead.
+            foreach (var badge in GameObject.All.Where(g => g.name == "Office / badge"))
+                badge.transform.rotation = rotation;
             return camera;
         }
 

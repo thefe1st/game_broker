@@ -233,11 +233,8 @@ namespace Broker.Runtime.Office
             foreach (float side in new[] { -1f, 1f })
             {
                 Box("Lay-by / sign board", new Vector3(x, g + 2.35f, z + side * 0.06f), new Vector3(0.62f, 0.62f, 0.04f), blue, false);
-                Box("Lay-by / sign plate", new Vector3(x, g + 1.92f, z + side * 0.06f), new Vector3(0.62f, 0.16f, 0.04f), blue, false);
                 var letter = Text("Lay-by / sign letter", "P", new Vector3(x, g + 2.35f, z + side * 0.085f), 96, 0.05f, Color.white);
-                var label = Text("Lay-by / sign label", "ПАРКОВКА", new Vector3(x, g + 1.92f, z + side * 0.085f), 48, 0.02f, Color.white);
-                if (side < 0) continue;
-                letter.transform.localEulerAngles = new Vector3(0, 180, 0); label.transform.localEulerAngles = new Vector3(0, 180, 0);
+                if (side > 0) letter.transform.localEulerAngles = new Vector3(0, 180, 0);
             }
         }
     }
