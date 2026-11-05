@@ -5,28 +5,25 @@ using UnityEngine.Rendering;
 
 namespace Broker.Runtime.Office
 {
-    // Low-poly people of PeopleModels (stage 5, a prototype) in place of the voxel ones: the passers-by, the four figures in
-    // the city and the office staff, their parts on PersonModel's joints. Every head carries a face of its own; Faces in the
-    // Inspector of the office scene object switches all of them between the variants under discussion, Moods gives everybody
-    // one expression instead of their own. Colliders, places and animation are those of the voxel people.
+    // Low-poly people of PeopleModels (stage 5) in place of the voxel ones: the passers-by, the four figures in the city and
+    // the office staff, their parts on PersonModel's joints. Every head carries a face — small eyes, brows and a mouth —
+    // with everybody's expression, Mood in the Inspector of the office scene object. Colliders, places and animation are
+    // those of the voxel people.
     public sealed partial class OfficeScene
     {
-        public enum FaceMoodChoice { Own, Calm, Smile, Worry }
-        // None, Dots (eyes as dots and a mouth), Brows (small eyes, brows and a mouth: the AI's advice), Whites (eyes with
-        // whites and pupils under the brows: closest to Schedule I).
-        public FaceStyle Faces = FaceStyle.Brows;
-        // Own: everybody's own expression (calm, smiling or worried); otherwise one for all.
-        public FaceMoodChoice Moods = FaceMoodChoice.Own;
+        // Calm for everybody (the author's answer); the smile and the worry wait for a link with the market that may come
+        // later — not decided yet.
+        public FaceMood Mood = FaceMood.Calm;
         // The seated guest's forearms turn in towards the cup.
         public const float TableArmYaw = 16;
 
         private sealed class PersonParts { public Transform Head, LeftArm, RightArm, LeftLeg, RightLeg; }
-        private sealed class FaceView { public MeshFilter Filter; public MeshRenderer Renderer; public FaceMood Mood; public byte Brows; }
+        private sealed class FaceView { public MeshFilter Filter; public MeshRenderer Renderer; public byte Brows; }
         private readonly List<FaceView> faceViews = new List<FaceView>();
         private readonly Dictionary<WalkerStyle, PersonModel> walkerModels = new Dictionary<WalkerStyle, PersonModel>();
         private readonly Dictionary<PersonStyle, PersonModel> staffModels = new Dictionary<PersonStyle, PersonModel>();
         // Nothing yet: the first Refresh applies the Inspector's choice even when it was changed after the people were built.
-        private FaceStyle? shownFaces; private FaceMoodChoice? shownMoods;
+        private FaceMood? shownMood;
 
         private PersonModel WalkerModel(WalkerStyle style)
         {
@@ -64,24 +61,22 @@ namespace Broker.Runtime.Office
             }
             // The face lies on the head; it casts no shadow of its own.
             var face = new GameObject("Person / face"); face.transform.SetParent(parts.Head, false);
-            var view = new FaceView { Filter = face.AddComponent<MeshFilter>(), Renderer = face.AddComponent<MeshRenderer>(), Mood = model.Mood, Brows = model.Brows };
+            var view = new FaceView { Filter = face.AddComponent<MeshFilter>(), Renderer = face.AddComponent<MeshRenderer>(), Brows = model.Brows };
             view.Renderer.shadowCastingMode = ShadowCastingMode.Off;
             faceViews.Add(view); ShowFace(view);
             return parts;
         }
         private void ShowFace(FaceView view)
         {
-            view.Renderer.enabled = Faces != FaceStyle.None;
-            if (Faces == FaceStyle.None) return;
-            FaceStyle style = Faces; FaceMood mood = Moods == FaceMoodChoice.Own ? view.Mood : (FaceMood)(Moods - 1); byte brows = view.Brows;
-            var asset = BuildingMesh("face/" + style + "/" + mood + "/" + brows, () => PeopleModels.Face(style, mood, brows));
+            FaceMood mood = Mood; byte brows = view.Brows;
+            var asset = BuildingMesh("face/" + mood + "/" + brows, () => PeopleModels.Face(mood, brows));
             view.Filter.sharedMesh = asset.Mesh; view.Renderer.sharedMaterials = BuildingMaterials(asset, StreetModels.FurnitureLook, null);
         }
-        // The Inspector's choice of faces, applied when it changes (Refresh, every frame).
+        // The Inspector's expression, applied when it changes (Refresh, every frame).
         private void RefreshFaces()
         {
-            if (shownFaces == Faces && shownMoods == Moods) return;
-            shownFaces = Faces; shownMoods = Moods;
+            if (shownMood == Mood) return;
+            shownMood = Mood;
             foreach (var view in faceViews) ShowFace(view);
         }
     }

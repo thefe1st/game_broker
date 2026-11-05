@@ -6,16 +6,17 @@ using NUnit.Framework;
 
 namespace Broker.Tests
 {
-    // The low-poly people of stage 5 (a prototype) in place of the voxel passers-by, café figures and office staff: sound
-    // palette meshes inside the voxel people's boxes, about 1.8 m tall on the ground, the hands where the arms end, the
-    // seated guest's forearms on the café table, faces lying on the front of the head in every style and mood, the moods
-    // in the brows and the mouth, people told apart by their clothes, and every person within its triangle budget.
+    // The low-poly people of stage 5 in place of the voxel passers-by, café figures and office staff: sound palette meshes
+    // inside the voxel people's boxes, about 1.8 m tall on the ground, round shoulders over the arms, the hands where the
+    // arms end (with fingers for the three the player talks to), the seated guest's forearms on the café table, the face —
+    // small dark eyes, brows and a mouth — on the front of the head in every mood, the moods in the brows and the mouth,
+    // people told apart by their clothes, Lena, Max and Orlov finer than the passers-by, and every person within its
+    // triangle budget.
     public sealed class PeopleModelTests
     {
         private const int Wall = (int)BuildingPart.Wall, Trim = (int)BuildingPart.Trim, Glass = (int)BuildingPart.Glass, Night = (int)BuildingPart.Night,
             Glow = (int)BuildingPart.Glow, Metal = (int)BuildingPart.Metal;
         private static readonly int[] All = { Wall, Trim, Glass, Night, Glow, Metal };
-        private static readonly FaceStyle[] Drawn = { FaceStyle.Dots, FaceStyle.Brows, FaceStyle.Whites };
         private static readonly FaceMood[] Moods = { FaceMood.Calm, FaceMood.Smile, FaceMood.Worry };
         private static readonly V3 Ahead = new V3(0, 0, 1);
 
@@ -31,8 +32,7 @@ namespace Broker.Tests
         }
         private static IEnumerable<(string name, PolyMesh mesh)> Faces()
         {
-            foreach (var style in Drawn)
-                foreach (var mood in Moods) yield return (style + " " + mood, PeopleModels.Face(style, mood, VoxelPalette.HairDark));
+            foreach (var mood in Moods) yield return (mood.ToString(), PeopleModels.Face(mood, VoxelPalette.HairDark));
         }
 
         private struct Tri { public V3 A, B, C; public int Part, Vertex; }
@@ -168,7 +168,6 @@ namespace Broker.Tests
                 AssertWellFormed(face, "face " + name); Assert.That(face.Triangles[Metal], Is.Empty, "face " + name + ": palette only");
                 AssertSame(face, faces[f++].mesh, "face " + name + " is deterministic");
             }
-            foreach (var mood in Moods) Assert.That(PeopleModels.Face(FaceStyle.None, mood, VoxelPalette.HairDark).TriangleCount, Is.Zero, "no face: nothing drawn");
         }
 
         [Test] public void PeopleStandOnTheGroundInsideTheVoxelPeople()
@@ -231,6 +230,64 @@ namespace Broker.Tests
             }
         }
 
+        [Test] public void ShouldersRoundOverTheArms()
+        {
+            // Looking down on the shoulder joints, the torso's rounded shoulder covers the top of the arm: no cap stands out.
+            List<Tri> Placed(PolyMesh mesh, V3 joint) => Tris(mesh).Select(t => new Tri { A = t.A + joint, B = t.B + joint, C = t.C + joint }).ToList();
+            float Nearest(List<Tri> tris, V3 origin, V3 dir)
+            {
+                float best = float.MaxValue;
+                foreach (var t in tris) if (Meets(t, origin, dir, out float d) && d < best) best = d;
+                return best;
+            }
+            foreach (var (name, m) in People())
+            {
+                var torso = Placed(m.Torso, new V3(0, m.HipY, 0));
+                foreach (int sx in new[] { -1, 1 })
+                {
+                    var arm = Placed(m.Arm, new V3(sx * m.ShoulderX, m.ShoulderY(false), 0));
+                    foreach (float dx in new[] { -0.01f, 0, 0.01f })
+                        foreach (float z in new[] { -0.03f, 0, 0.03f })
+                        {
+                            var origin = new V3(sx * (m.ShoulderX + dx), 3, z); var down = new V3(0, -1, 0);
+                            float onTorso = Nearest(torso, origin, down), onArm = Nearest(arm, origin, down);
+                            Assert.That(onTorso, Is.LessThan(float.MaxValue), name + ": the shoulder over the joint at " + (sx * (m.ShoulderX + dx)) + ", " + z);
+                            Assert.That(onTorso, Is.LessThan(onArm), name + ": the torso over the arm at " + (sx * (m.ShoulderX + dx)) + ", " + z);
+                        }
+                }
+            }
+        }
+
+        [Test] public void TheStaffAreFinerAndHaveFingers()
+        {
+            // Lena, Max and Orlov, seen close up in the office, are built finer than any passer-by.
+            var walkers = Enum.GetValues(typeof(WalkerStyle)).Cast<WalkerStyle>().Select(PeopleModels.Walker).ToList();
+            foreach (PersonStyle style in Enum.GetValues(typeof(PersonStyle)))
+            {
+                var m = PeopleModels.Staff(style); string name = style.ToString();
+                Assert.That(m.Torso.VertexCount, Is.GreaterThan(walkers.Max(w => w.Torso.VertexCount)), name + ": a finer torso");
+                Assert.That(m.Head.VertexCount, Is.GreaterThan(walkers.Max(w => w.Head.VertexCount)), name + ": a finer head");
+                Assert.That(m.Arm.VertexCount, Is.GreaterThan(walkers.Max(w => w.Arm.VertexCount)), name + ": finer arms");
+            }
+            // Across the hanging hand a little above its end, from the side: four fingers apart for the staff, one mitten for
+            // the passers-by.
+            int Fingers(PersonModel m, float above)
+            {
+                var hand = Tris(m.Arm).Where(t => Math.Min(t.A.Y, Math.Min(t.B.Y, t.C.Y)) < -m.ArmLength + 0.06f).ToList();
+                int runs = 0; bool before = false;
+                for (float z = -0.08f; z <= 0.08f; z += 0.0005f)
+                {
+                    bool meets = hand.Any(t => Meets(t, new V3(-1, -m.ArmLength + above, z), new V3(1, 0, 0), out _));
+                    if (meets && !before) runs++;
+                    before = meets;
+                }
+                return runs;
+            }
+            foreach (var (name, m) in People())
+                foreach (float above in new[] { 0.02f, 0.025f })
+                    Assert.That(Fingers(m, above), Is.EqualTo(Enum.IsDefined(typeof(PersonStyle), name) ? 4 : 1), name + ": fingers " + above + " above the hand's end");
+        }
+
         [Test] public void FacesLieOnTheFrontOfTheHead()
         {
             foreach (var (name, face) in Faces())
@@ -247,17 +304,12 @@ namespace Broker.Tests
                 foreach (int sx in new[] { -1, 1 })
                     Assert.That(Coloured(face, VoxelPalette.Ink).Any(p => Math.Abs(p.X - sx * PeopleModels.EyeX) < 0.004f && Math.Abs(p.Y - PeopleModels.EyeY) < 0.004f), name + ": an eye");
             }
+            // Brows over the eyes in the colour given; small dark eyes without whites.
             foreach (var mood in Moods)
             {
-                var dots = PeopleModels.Face(FaceStyle.Dots, mood, VoxelPalette.HairBrown);
-                Assert.That(Bounds(dots).max.Y, Is.LessThan(PeopleModels.EyeY + 0.015f), "dots: no brows");
-                foreach (var style in new[] { FaceStyle.Brows, FaceStyle.Whites })
-                {
-                    var face = PeopleModels.Face(style, mood, VoxelPalette.HairBrown);
-                    Assert.That(Coloured(face, VoxelPalette.HairBrown).Count(p => p.Y > PeopleModels.EyeY + 0.015f), Is.GreaterThan(8), style + ": brows in the hair's colour");
-                }
-                Assert.That(Coloured(PeopleModels.Face(FaceStyle.Whites, mood, VoxelPalette.HairBrown), VoxelPalette.CarWhite), Is.Not.Empty, "whites: the whites of the eyes");
-                Assert.That(Coloured(PeopleModels.Face(FaceStyle.Brows, mood, VoxelPalette.HairBrown), VoxelPalette.CarWhite), Is.Empty, "brows: small dark eyes");
+                var face = PeopleModels.Face(mood, VoxelPalette.HairBrown);
+                Assert.That(Coloured(face, VoxelPalette.HairBrown).Count(p => p.Y > PeopleModels.EyeY + 0.015f), Is.GreaterThan(8), mood + ": brows in the hair's colour");
+                Assert.That(Coloured(face, VoxelPalette.CarWhite), Is.Empty, mood + ": small dark eyes");
             }
             // Nothing on the head hides the face: from in front the eyes and the mouth are on skin (the analyst's glasses are
             // a thin frame round the eyes).
@@ -285,25 +337,16 @@ namespace Broker.Tests
                 float inner = brow.Min(p => p.X), outer = brow.Max(p => p.X);
                 return (brow.Where(p => p.X < inner + 0.003f).Average(p => p.Y) - brow.Where(p => p.X > outer - 0.003f).Average(p => p.Y), brow.Average(p => p.Y));
             }
-            foreach (var style in Drawn)
-            {
-                var calm = Mouth(PeopleModels.Face(style, FaceMood.Calm, VoxelPalette.HairDark));
-                var smile = Mouth(PeopleModels.Face(style, FaceMood.Smile, VoxelPalette.HairDark));
-                var worry = Mouth(PeopleModels.Face(style, FaceMood.Worry, VoxelPalette.HairDark));
-                Assert.That(calm.corners, Is.InRange(0f, 0.005f), style + ": a calm mouth, the corners a little up");
-                Assert.That(smile.corners, Is.GreaterThan(0.006f), style + ": a smile"); Assert.That(smile.width, Is.GreaterThan(calm.width), style + ": a wide smile");
-                Assert.That(worry.corners, Is.LessThan(-0.003f), style + ": a worried mouth turns down"); Assert.That(worry.width, Is.LessThan(calm.width), style + ": a narrow worried mouth");
-                if (style == FaceStyle.Dots) continue;
-                var calmBrow = Brow(PeopleModels.Face(style, FaceMood.Calm, VoxelPalette.HairDark));
-                var smileBrow = Brow(PeopleModels.Face(style, FaceMood.Smile, VoxelPalette.HairDark));
-                var worryBrow = Brow(PeopleModels.Face(style, FaceMood.Worry, VoxelPalette.HairDark));
-                Assert.That(Math.Abs(calmBrow.tilt), Is.LessThan(0.004f), style + ": calm brows level"); Assert.That(Math.Abs(smileBrow.tilt), Is.LessThan(0.004f), style + ": smiling brows level");
-                Assert.That(smileBrow.height, Is.GreaterThan(calmBrow.height), style + ": a smile lifts the brows");
-                Assert.That(worryBrow.tilt, Is.GreaterThan(0.008f), style + ": worried brows, the inner ends up");
-            }
-            // People have moods of their own; grey hair keeps dark brows.
-            var moods = People().Select(p => p.model.Mood).ToList();
-            foreach (var mood in Moods) Assert.That(moods.Count(m => m == mood), Is.GreaterThanOrEqualTo(3), mood + " people");
+            PolyMesh Face(FaceMood mood) => PeopleModels.Face(mood, VoxelPalette.HairDark);
+            var calm = Mouth(Face(FaceMood.Calm)); var smile = Mouth(Face(FaceMood.Smile)); var worry = Mouth(Face(FaceMood.Worry));
+            Assert.That(calm.corners, Is.InRange(0f, 0.005f), "a calm mouth, the corners a little up");
+            Assert.That(smile.corners, Is.GreaterThan(0.006f), "a smile"); Assert.That(smile.width, Is.GreaterThan(calm.width), "a wide smile");
+            Assert.That(worry.corners, Is.LessThan(-0.003f), "a worried mouth turns down"); Assert.That(worry.width, Is.LessThan(calm.width), "a narrow worried mouth");
+            var calmBrow = Brow(Face(FaceMood.Calm)); var smileBrow = Brow(Face(FaceMood.Smile)); var worryBrow = Brow(Face(FaceMood.Worry));
+            Assert.That(Math.Abs(calmBrow.tilt), Is.LessThan(0.004f), "calm brows level"); Assert.That(Math.Abs(smileBrow.tilt), Is.LessThan(0.004f), "smiling brows level");
+            Assert.That(smileBrow.height, Is.GreaterThan(calmBrow.height), "a smile lifts the brows");
+            Assert.That(worryBrow.tilt, Is.GreaterThan(0.008f), "worried brows, the inner ends up");
+            // Brows in the hair's colour; grey hair keeps dark brows.
             Assert.That(PeopleModels.Walker(WalkerStyle.Elder).Brows, Is.EqualTo(VoxelPalette.StoneDark), "the elder's brows");
             Assert.That(PeopleModels.Walker(WalkerStyle.Clerk).Brows, Is.EqualTo(VoxelPalette.HairBrown), "brows in the hair's colour");
         }
@@ -395,13 +438,20 @@ namespace Broker.Tests
 
         [Test] public void EveryPersonKeepsItsTriangleBudget()
         {
-            int Face(PersonModel m) => PeopleModels.Face(FaceStyle.Whites, m.Mood, m.Brows).TriangleCount;
+            int Face(PersonModel m) => PeopleModels.Face(FaceMood.Calm, m.Brows).TriangleCount;
             int StandingTris(PersonModel m) => m.Torso.TriangleCount + m.Head.TriangleCount + Face(m) + 2 * m.Arm.TriangleCount + 2 * m.Leg.TriangleCount;
             int SeatedTris(PersonModel m) => m.Torso.TriangleCount + m.Head.TriangleCount + Face(m) + 2 * m.TableArm.TriangleCount + m.SeatedLegs.TriangleCount;
-            foreach (var (name, m) in People())
+            // The passers-by stay light; Lena, Max and Orlov, seen close up, may cost about twice as much.
+            foreach (WalkerStyle style in Enum.GetValues(typeof(WalkerStyle)))
             {
-                Assert.That(StandingTris(m), Is.LessThan(3200), name + " standing"); Assert.That(SeatedTris(m), Is.LessThan(3200), name + " seated");
+                var m = PeopleModels.Walker(style); string name = style.ToString();
+                Assert.That(StandingTris(m), Is.LessThan(3600), name + " standing"); Assert.That(SeatedTris(m), Is.LessThan(3600), name + " seated");
                 Assert.That(m.Head.TriangleCount, Is.LessThan(1000), name + " head");
+            }
+            foreach (PersonStyle style in Enum.GetValues(typeof(PersonStyle)))
+            {
+                var m = PeopleModels.Staff(style); string name = style.ToString();
+                Assert.That(StandingTris(m), Is.LessThan(7000), name + " standing"); Assert.That(m.Head.TriangleCount, Is.LessThan(2500), name + " head");
             }
             // Everybody the scene places: the passers-by, the four figures and the office staff.
             long total = 0; int placed = 0;
@@ -409,7 +459,7 @@ namespace Broker.Tests
             foreach (var figure in CityCrowd.Figures) { var m = PeopleModels.Walker(figure.Style); total += figure.Seated ? SeatedTris(m) : StandingTris(m); placed++; }
             foreach (PersonStyle style in Enum.GetValues(typeof(PersonStyle))) { total += StandingTris(PeopleModels.Staff(style)); placed++; }
             Assert.That(placed, Is.EqualTo(21));
-            Assert.That(total, Is.LessThan(60000), "all the people of the scene: " + total);
+            Assert.That(total, Is.LessThan(76000), "all the people of the scene: " + total);
         }
     }
 }

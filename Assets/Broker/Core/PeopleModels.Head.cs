@@ -4,16 +4,16 @@ using System.Collections.Generic;
 namespace Broker.Core
 {
     // The head of a low-poly person on its neck joint: a rounded skull, narrower at the jaw and flatter in front, with a
-    // nose and ears; hair as a shell over the skull down to a hairline (short, long to the shoulders, messy, a bun, grey
-    // temples); a cap, a flat cap and a guard's peaked cap; glasses. The face — eyes, brows and a mouth — is a mesh of its
-    // own (Face) lying on the skull's front, so the scene can switch its style and mood.
+    // nose and ears; hair as a shell over the skull down to a hairline, fuller on top (short, long to the shoulders, messy,
+    // a bun, grey temples; the staff's with a fringe, tufts or a parting of their own); a cap, a flat cap and a guard's
+    // peaked cap; glasses. The face — small dark eyes, brows and a mouth — is a mesh of its own (Face) lying on the skull's
+    // front, so the scene can switch its mood.
     public static partial class PeopleModels
     {
         // The skull: an ellipsoid round (0, SkullY, SkullZ) above the neck joint with radii SkullRx, SkullRy, SkullRz; below
         // the middle it narrows to JawTaper at the chin, in front it is flattened to FrontFlat.
-        public const float SkullY = 0.165f, SkullZ = 0, SkullRx = 0.1f, SkullRy = 0.124f, SkullRz = 0.11f;
+        public const float SkullY = 0.155f, SkullZ = 0, SkullRx = 0.1f, SkullRy = 0.124f, SkullRz = 0.11f;
         private const float JawTaper = 0.8f, FrontFlat = 0.93f;
-        private const int SkullSides = 16, SkullRings = 10;
         // The features: the eyes EyeX either side of the middle at EyeY, the nose at NoseY, the mouth at MouthY.
         public const float EyeX = 0.035f, EyeY = SkullY + 0.004f, NoseY = SkullY - 0.026f, MouthY = SkullY - 0.07f;
         private static readonly V3 SkullCentre = new V3(0, SkullY, SkullZ);
@@ -53,19 +53,20 @@ namespace Broker.Core
         {
             var b = NewBuilder();
             int group = b.Group; b.Group = b.NextGroup();
-            for (int i = 0; i < SkullRings; i++)
-                for (int k = 0; k < SkullSides; k++)
+            int rings = o.SkullRings, sides = o.SkullSides;
+            for (int i = 0; i < rings; i++)
+                for (int k = 0; k < sides; k++)
                 {
-                    double p0 = Math.PI * i / SkullRings, p1 = Math.PI * (i + 1) / SkullRings;
-                    double a0 = 2 * Math.PI * k / SkullSides, a1 = 2 * Math.PI * (k + 1) / SkullSides;
+                    double p0 = Math.PI * i / rings, p1 = Math.PI * (i + 1) / rings;
+                    double a0 = 2 * Math.PI * k / sides, a1 = 2 * Math.PI * (k + 1) / sides;
                     V3 q00 = SkullPoint(p0, a0), q01 = SkullPoint(p0, a1), q11 = SkullPoint(p1, a1), q10 = SkullPoint(p1, a0);
                     b.Quad(q00, q01, q11, q10, (q00 + q01 + q11 + q10) * 0.25f - SkullCentre, TrimPart, o.Skin);
                 }
             b.Group = group;
-            PolyShapes.Limb(b, new V3(0, -0.05f, 0.012f), new V3(0, 0.07f, 0.008f), 0.056f, 0.052f, 8, TrimPart, o.Skin, 0.86f);
-            PolyShapes.Blob(b, new V3(0, NoseY, FaceZ(0, NoseY) + 0.004f), 0.012f, 0.017f, 0.012f, 8, 5, TrimPart, o.Skin, 0.97f);
+            PolyShapes.Limb(b, new V3(0, -0.05f, 0.012f), new V3(0, 0.07f, 0.008f), 0.059f, 0.054f, o.LimbSides, TrimPart, o.Skin, 0.86f);
+            PolyShapes.Blob(b, new V3(0, NoseY, FaceZ(0, NoseY) + 0.004f), 0.012f, 0.017f, 0.012f, o.Round(8), o.Round(5), TrimPart, o.Skin, 0.97f);
             foreach (int sx in new[] { -1, 1 })
-                PolyShapes.Blob(b, new V3(sx * (SkullRx - 0.004f), SkullY - 0.014f, SkullZ + 0.01f), 0.014f, 0.027f, 0.019f, 6, 4, TrimPart, o.Skin, 0.9f);
+                PolyShapes.Blob(b, new V3(sx * (SkullRx - 0.004f), SkullY - 0.014f, SkullZ + 0.01f), 0.014f, 0.027f, 0.019f, o.Round(6), o.Round(4), TrimPart, o.Skin, 0.9f);
             HairOn(b, o);
             HatOn(b, o);
             if (o.Glasses) Glasses(b);
@@ -79,63 +80,151 @@ namespace Broker.Core
             double s = Math.Sin(azimuth);
             return side + (s < 0 ? front - side : back - side) * s * s;
         }
+        // A bump of `height` round azimuth `at`, `width` wide (a fringe over the forehead, a parting's groove).
+        private static double Bump(double azimuth, double at, double width, double height)
+        {
+            double d = Math.IEEERemainder(azimuth - at, 2 * Math.PI) / width;
+            return height * Math.Exp(-d * d);
+        }
+        // The azimuth of the face (−Z).
+        private const double Ahead = -Math.PI / 2;
         private static void HairOn(PolyBuilder b, Outfit o)
         {
-            byte hair = o.HairColor;
+            byte hair = o.HairColor; int sides = o.SkullSides, rows = o.HairRows;
+            // Under a hat the hair lies flat; bare, it rises over the crown.
+            float crown = o.Hat == Hat.None ? 1 : 0;
             switch (o.Hair)
             {
                 case Hair.Short:
-                    Shell(b, 0.87, 1.4, 2.06, 0.011f, 0, 0, (i, k) => hair);
+                    Shell(b, sides, rows, a => Hairline(a, 0.87, 1.4, 2.06), 0.011f, 0.013f * crown, 0, 0, (i, a) => hair);
                     break;
                 case Hair.Messy:
-                    Shell(b, 1.0, 1.36, 2.02, 0.014f, 0.45f, 11, (i, k) => hair);
+                    Shell(b, sides, rows, a => Hairline(a, 1.0, 1.36, 2.02), 0.014f, 0.012f * crown, o.Fine ? 0.3f : 0.45f, 11, (i, a) => hair);
+                    if (o.Fine) Tufts(b, o, hair);
                     break;
                 case Hair.Temples:
-                    Shell(b, 0.84, 1.4, 2.06, 0.011f, 0, 0, (i, k) => i == 4 && Math.Abs(Math.Cos(2 * Math.PI * (k + 0.5) / SkullSides)) > 0.9 ? VoxelPalette.Stone : hair);
+                {
+                    // Neat and short, parted on one side and fuller on the other, grey at the temples.
+                    double part = Ahead - 0.52;
+                    Func<double, double, float> parted = (t, a) => o.Fine
+                        ? (float)(1 - (t > 0.12 && t < 0.97 ? Bump(a, part, 0.1, 0.4) : 0) + 0.18 * Math.Min(1, t / 0.4) * Bump(a, Ahead + 0.35, 0.7, 1)) : 1;
+                    Shell(b, sides, rows, a => Hairline(a, 0.84, 1.4, 2.06) + (o.Fine ? Bump(a, part, 0.08, -0.035) : 0), 0.011f, 0.011f * crown, 0, 0,
+                        (i, a) => Grey(i, rows, a) ? VoxelPalette.Stone : hair, growth: parted);
                     break;
+                }
                 case Hair.Bun:
-                    Shell(b, 0.84, 1.38, 2.1, 0.01f, 0, 0, (i, k) => hair);
-                    PolyShapes.Blob(b, new V3(0, SkullY + 0.1f, SkullZ + 0.072f), 0.042f, 0.038f, 0.04f, 8, 6, TrimPart, hair);
+                    Shell(b, sides, rows, a => Hairline(a, 0.84, 1.38, 2.1), 0.01f, 0.006f * crown, 0, 0, (i, a) => hair);
+                    PolyShapes.Blob(b, new V3(0, SkullY + 0.1f, SkullZ + 0.072f), 0.042f, 0.038f, 0.04f, o.Round(8), o.Round(6), TrimPart, hair);
                     break;
                 case Hair.Long:
+                    if (o.Fine) { LongHair(b, o, hair); break; }
                     // To the shoulders behind, framing the face at the sides.
-                    Shell(b, 0.87, 1.42, 2.3, 0.012f, 0, 0, (i, k) => hair);
+                    Shell(b, sides, rows, a => Hairline(a, 0.87, 1.42, 2.3), 0.012f, 0.012f * crown, 0, 0, (i, a) => hair);
                     PolyShapes.Lump(b, new V3(0, SkullY - 0.105f, SkullZ + 0.05f), 0.086f, 0.112f, 0.056f, 10, 6, 0.04f, 3, TrimPart, hair);
                     foreach (int sx in new[] { -1, 1 })
                         PolyShapes.Blob(b, new V3(sx * (SkullRx - 0.002f), SkullY - 0.042f, SkullZ + 0.014f), 0.023f, 0.086f, 0.054f, 8, 6, TrimPart, hair);
                     break;
             }
         }
-        // A shell `grow` over the skull from the crown to the hairline, the hairline (and with `bumps`, the shell) roughened
-        // from the seed; its rim runs down to the skull, so the edge has a thickness. Colour per row (from the crown) and
-        // column.
-        private static void Shell(PolyBuilder b, double front, double side, double back, float grow, float bumps, int seed, Func<int, int, byte> color, float shade = 1)
+        // Grey temples: the lowest row at the sides, just over the ears.
+        private static bool Grey(int row, int rows, double azimuth) => row == rows - 1 && Math.Abs(Math.Cos(azimuth)) > 0.84;
+        // Lena's hair: parted on one side, the fringe swept across the forehead above the brows, full over the crown, down
+        // to the shoulders behind and in locks either side of the face.
+        private static void LongHair(PolyBuilder b, Outfit o, byte hair)
         {
-            const int rows = 5;
-            int group = b.Group; b.Group = b.NextGroup();
-            var edge = new double[SkullSides + 1];
-            for (int k = 0; k <= SkullSides; k++)
+            double part = Ahead - 0.45, fringe = Ahead + 0.32;
+            Func<double, double, float> volume = (t, a) =>
+                (float)(1 - (t > 0.12 && t < 0.97 ? Bump(a, part, 0.09, 0.5) : 0) + 0.22 * Math.Min(1, t / 0.4) * Bump(a, fringe, 0.6, 1));
+            Shell(b, o.SkullSides, o.HairRows, a => Hairline(a, 0.9, 1.5, 2.3) + Bump(a, fringe, 0.38, 0.22) + Bump(a, part, 0.07, -0.05), 0.013f, 0.014f, 0, 0,
+                (i, a) => hair, growth: volume);
+            PolyShapes.Lump(b, new V3(0, SkullY - 0.1f, SkullZ + 0.052f), 0.092f, 0.114f, 0.058f, 16, 10, 0.03f, 3, TrimPart, hair);
+            foreach (int sx in new[] { -1, 1 })
+                PolyShapes.Lump(b, new V3(sx * (SkullRx - 0.003f), SkullY - 0.05f, SkullZ + 0.004f), 0.024f, 0.096f, 0.058f, 12, 10, 0.03f, 5 + sx, TrimPart, hair);
+        }
+        // Max's tousled hair: flat locks lying along the head from the crown towards their tips, which stand a little off
+        // it — forward over the fringe, back over the crown, down at the sides.
+        private static void Tufts(PolyBuilder b, Outfit o, byte hair)
+        {
+            // Root from the crown (radians) and round from the face, length.
+            var locks = new (double polar, double azimuth, float length)[]
             {
-                double rough = bumps > 0 ? 1 + 0.06 * (2 * VoxelNoise.Value(k % SkullSides, 1, 7, seed) - 1) : 1;
-                edge[k] = Hairline(2 * Math.PI * k / SkullSides, front, side, back) * rough;
+                (0.62, Ahead, 0.05f), (0.6, Ahead - 0.42, 0.048f), (0.6, Ahead + 0.44, 0.047f), (0.66, Ahead - 0.85, 0.042f), (0.66, Ahead + 0.86, 0.043f),
+                (0.25, Ahead - 0.25, 0.055f), (0.27, Ahead + 0.5, 0.05f), (0.3, Ahead - 1.1, 0.05f),
+                (0.8, Ahead - 1.45, 0.04f), (0.8, Ahead + 1.45, 0.04f), (0.45, Math.PI / 2 - 0.4, 0.05f), (0.45, Math.PI / 2 + 0.45, 0.05f),
+            };
+            foreach (var (polar, azimuth, length) in locks)
+            {
+                var root = SkullPoint(polar, azimuth, 0.02f);
+                var along = (SkullPoint(polar + 0.05, azimuth, 0.02f) - root).Normalized;
+                var outward = (root - SkullCentre).Normalized;
+                Lock(b, root - along * 0.012f - outward * 0.004f, (along + outward * 0.42f).Normalized, outward, length, 0.036f, 0.016f, hair);
             }
+        }
+        // A lock of hair from `root` along `dir`: an ellipse `width` across and `thick` off the head (towards `up`), tapering
+        // to a point.
+        private static void Lock(PolyBuilder b, V3 root, V3 dir, V3 up, float length, float width, float thick, byte color)
+        {
+            var across = V3.Cross(dir, up).Normalized; var off = V3.Cross(across, dir).Normalized;
+            const int sides = 6;
+            var rings = new (float t, float size)[] { (0, 1), (0.4f, 0.88f), (0.75f, 0.52f) };
+            int group = b.Group; b.Group = b.NextGroup();
+            V3 P(int r, int k)
+            {
+                double a = 2 * Math.PI * k / sides; var (t, size) = rings[r];
+                return root + dir * (length * t) + across * (0.5f * width * size * (float)Math.Cos(a)) + off * (0.5f * thick * size * (float)Math.Sin(a));
+            }
+            for (int r = 0; r + 1 < rings.Length; r++)
+            {
+                var axis = root + dir * (length * (rings[r].t + rings[r + 1].t) / 2);
+                for (int k = 0; k < sides; k++)
+                {
+                    V3 a0 = P(r, k), a1 = P(r, k + 1), b1 = P(r + 1, k + 1), b0 = P(r + 1, k);
+                    b.Quad(a0, a1, b1, b0, (a0 + a1 + b1 + b0) * 0.25f - axis, TrimPart, color);
+                }
+            }
+            var tip = root + dir * length; var last = rings.Length - 1;
+            for (int k = 0; k < sides; k++)
+            {
+                V3 a0 = P(last, k), a1 = P(last, k + 1);
+                b.Triangle(a0, a1, tip, (a0 + a1 + tip) * (1f / 3) - (root + dir * (length * 0.85f)), TrimPart, color);
+            }
+            var cap = new List<V3>(); for (int k = 0; k < sides; k++) cap.Add(P(0, k));
+            b.Polygon(cap, dir * -1, TrimPart, color, 0.9f);
+            b.Group = group;
+        }
+        // A shell over the skull from the crown to the hairline (radians from the crown, by azimuth): `grow` off the skull,
+        // `crown` more on top (the hair's volume), times `growth` by (row 0–1 from the crown, azimuth), roughened by `bumps`
+        // from the seed; `rows` rows and `sides` round. Its rim runs down to the skull, so the edge has a thickness. Colour
+        // per row (from the crown) and azimuth.
+        private static void Shell(PolyBuilder b, int sides, int rows, Func<double, double> hairline, float grow, float crown, float bumps, int seed,
+            Func<int, double, byte> color, float shade = 1, Func<double, double, float> growth = null)
+        {
+            int group = b.Group; b.Group = b.NextGroup();
+            var edge = new double[sides + 1];
+            for (int k = 0; k <= sides; k++)
+            {
+                double rough = bumps > 0 ? 1 + 0.06 * (2 * VoxelNoise.Value(k % sides, 1, 7, seed) - 1) : 1;
+                edge[k] = hairline(2 * Math.PI * k / sides) * rough;
+            }
+            double Az(int k) => 2 * Math.PI * k / sides;
             V3 P(int i, int k)
             {
-                float g = grow * (i == rows ? 0.7f : 1);
-                if (bumps > 0 && i > 0 && i < rows) g *= 1 + bumps * (2 * VoxelNoise.Value(i, k % SkullSides, 5, seed) - 1);
-                return SkullPoint(edge[k] * i / rows, 2 * Math.PI * k / SkullSides, g);
+                float t = (float)i / rows, g = (grow + crown * (1 - t * t)) * (i == rows ? 0.7f : 1);
+                if (bumps > 0 && i > 0 && i < rows) g *= 1 + bumps * (2 * VoxelNoise.Value(i, k % sides, 5, seed) - 1);
+                if (growth != null) g *= growth(t, Az(k));
+                return SkullPoint(edge[k] * i / rows, Az(k), g);
             }
             for (int i = 0; i < rows; i++)
-                for (int k = 0; k < SkullSides; k++)
+                for (int k = 0; k < sides; k++)
                 {
                     V3 p00 = P(i, k), p01 = P(i, k + 1), p11 = P(i + 1, k + 1), p10 = P(i + 1, k);
-                    b.Quad(p00, p01, p11, p10, (p00 + p01 + p11 + p10) * 0.25f - SkullCentre, TrimPart, color(i, k), shade);
+                    b.Quad(p00, p01, p11, p10, (p00 + p01 + p11 + p10) * 0.25f - SkullCentre, TrimPart, color(i, Az(k) + Math.PI / sides), shade);
                 }
-            for (int k = 0; k < SkullSides; k++)
+            for (int k = 0; k < sides; k++)
             {
                 V3 e0 = P(rows, k), e1 = P(rows, k + 1);
-                V3 s0 = SkullPoint(edge[k] + 0.04, 2 * Math.PI * k / SkullSides), s1 = SkullPoint(edge[k + 1] + 0.04, 2 * Math.PI * (k + 1) / SkullSides);
-                b.Quad(e0, e1, s1, s0, (e0 + e1 + s1 + s0) * 0.25f - SkullCentre, TrimPart, color(rows - 1, k), shade * 0.85f);
+                V3 s0 = SkullPoint(edge[k] + 0.04, Az(k)), s1 = SkullPoint(edge[k + 1] + 0.04, Az(k + 1));
+                b.Quad(e0, e1, s1, s0, (e0 + e1 + s1 + s0) * 0.25f - SkullCentre, TrimPart, color(rows - 1, Az(k) + Math.PI / sides), shade * 0.85f);
             }
             b.Group = group;
         }
@@ -149,7 +238,7 @@ namespace Broker.Core
                 {
                     // A baseball cap: a dome over the hair, a curved peak, a button on top.
                     const double front = 1.06, side = 1.3, back = 1.62; const float grow = 0.022f;
-                    Shell(b, front, side, back, grow, 0, 0, (i, k) => o.HatColor);
+                    Shell(b, o.SkullSides, o.HairRows, a => Hairline(a, front, side, back), grow, 0, 0, 0, (i, a) => o.HatColor);
                     var inner = new List<V3>();
                     for (int j = 0; j <= 8; j++)
                     {
@@ -157,13 +246,13 @@ namespace Broker.Core
                         inner.Add(SkullPoint(Hairline(a, front, side, back), a, grow * 0.7f));
                     }
                     Brim(b, inner, 0.072f, 0.014f, 0.006f, o.HatColor);
-                    PolyShapes.Blob(b, new V3(0, SkullY + SkullRy + grow + 0.002f, SkullZ), 0.012f, 0.006f, 0.012f, 6, 4, TrimPart, o.HatColor, 0.9f);
+                    PolyShapes.Blob(b, new V3(0, SkullY + SkullRy + grow + 0.002f, SkullZ), 0.012f, 0.006f, 0.012f, o.Round(6), o.Round(4), TrimPart, o.HatColor, 0.9f);
                     break;
                 }
                 case Hat.FlatCap:
                 {
                     // A flat cap: a flattened crown over the hair, wider than the head and pulled forward, a short peak.
-                    PolyShapes.Blob(b, new V3(0, SkullY + 0.094f, SkullZ - 0.012f), SkullRx + 0.022f, 0.054f, SkullRz + 0.03f, 12, 6, TrimPart, o.HatColor);
+                    PolyShapes.Blob(b, new V3(0, SkullY + 0.094f, SkullZ - 0.012f), SkullRx + 0.022f, 0.054f, SkullRz + 0.03f, o.Round(12), o.Round(6), TrimPart, o.HatColor);
                     var (x, front, _) = HatBand(0.058f, 0.015f);
                     Brim(b, BandFront(SkullY + 0.058f, x, front), 0.058f, 0.012f, 0.007f, o.HatColor);
                     break;
@@ -174,7 +263,7 @@ namespace Broker.Core
                     var (x, front, back) = HatBand(0.05f, 0.017f);
                     var rings = new (float y, float x, float front, float back)[] { (SkullY + 0.05f, x, front, back), (SkullY + 0.088f, x, front, back),
                         (SkullY + 0.118f, x + 0.02f, front + 0.03f, back + 0.014f), (SkullY + 0.136f, x + 0.022f, front + 0.033f, back + 0.016f) };
-                    HatLoft(b, rings, new[] { VoxelPalette.CarBlack, o.HatColor, o.HatColor }, SkullY + 0.142f, o.HatColor);
+                    HatLoft(b, o.SkullSides, rings, new[] { VoxelPalette.CarBlack, o.HatColor, o.HatColor }, SkullY + 0.142f, o.HatColor);
                     Brim(b, BandFront(rings[0].y, x, front), 0.062f, 0.018f, 0.006f, VoxelPalette.Ink);
                     float by = SkullY + 0.07f, bz = SkullZ - front - 0.003f;
                     var points = new List<V3>();
@@ -194,30 +283,30 @@ namespace Broker.Core
         }
         // A hat as rings of half-width x, half-depth `front` ahead of the middle and `back` behind, one colour per band
         // between them, closed on top at `top`.
-        private static void HatLoft(PolyBuilder b, (float y, float x, float front, float back)[] rings, byte[] colors, float top, byte topColor)
+        private static void HatLoft(PolyBuilder b, int sides, (float y, float x, float front, float back)[] rings, byte[] colors, float top, byte topColor)
         {
             int group = b.Group; b.Group = b.NextGroup();
             V3 P(int r, int k)
             {
-                double a = 2 * Math.PI * k / SkullSides; float s = (float)Math.Sin(a);
+                double a = 2 * Math.PI * k / sides; float s = (float)Math.Sin(a);
                 return new V3(rings[r].x * (float)Math.Cos(a), rings[r].y, SkullZ + (s < 0 ? rings[r].front : rings[r].back) * s);
             }
             for (int r = 0; r + 1 < rings.Length; r++)
             {
                 var axis = new V3(0, (rings[r].y + rings[r + 1].y) / 2, SkullZ);
-                for (int k = 0; k < SkullSides; k++)
+                for (int k = 0; k < sides; k++)
                 {
                     V3 a0 = P(r, k), a1 = P(r, k + 1), b1 = P(r + 1, k + 1), b0 = P(r + 1, k);
                     b.Quad(a0, a1, b1, b0, (a0 + a1 + b1 + b0) * 0.25f - axis, TrimPart, colors[r]);
                 }
             }
             var lid = new List<V3>(); int last = rings.Length - 1;
-            for (int k = 0; k < SkullSides; k++) lid.Add(P(last, k));
+            for (int k = 0; k < sides; k++) lid.Add(P(last, k));
             var centre = new V3(0, top, SkullZ);
-            for (int k = 0; k < SkullSides; k++) b.Triangle(centre, lid[k], lid[(k + 1) % SkullSides], new V3(0, 1, 0), TrimPart, topColor, 1.04f);
+            for (int k = 0; k < sides; k++) b.Triangle(centre, lid[k], lid[(k + 1) % sides], new V3(0, 1, 0), TrimPart, topColor, 1.04f);
             // Underneath, the band's inside, so the hat is not hollow seen from below.
             var under = new List<V3>();
-            for (int k = 0; k < SkullSides; k++) under.Add(P(0, k));
+            for (int k = 0; k < sides; k++) under.Add(P(0, k));
             b.Polygon(under, new V3(0, -1, 0), TrimPart, VoxelPalette.Ink, 0.6f);
             b.Group = group;
         }
@@ -285,28 +374,15 @@ namespace Broker.Core
         }
 
         // ---------- Face ----------
-        // The face on the skull's front for a style and a mood: eyes (dots; small eyes; whites with pupils and a glint), brows
-        // in the given colour (not with dots) and a mouth; empty for FaceStyle.None. On the head's pivot, a few millimetres
-        // off the skull, in palette trim.
-        public static PolyMesh Face(FaceStyle style, FaceMood mood, byte brows)
+        // The face on the skull's front for a mood: small dark eyes, brows in the given colour and a mouth (the author's
+        // choice of the prototype's variants). On the head's pivot, a few millimetres off the skull, in palette trim.
+        public static PolyMesh Face(FaceMood mood, byte brows)
         {
             var b = NewBuilder();
-            if (style == FaceStyle.None) return Done(b);
             foreach (int sx in new[] { -1, 1 })
             {
-                float x = sx * EyeX;
-                switch (style)
-                {
-                    case FaceStyle.Dots: Spot(b, x, EyeY, 0.0068f, 0.0098f, 0.0016f, VoxelPalette.Ink); break;
-                    case FaceStyle.Brows: Spot(b, x, EyeY, 0.0062f, 0.0085f, 0.0016f, VoxelPalette.Ink); break;
-                    case FaceStyle.Whites:
-                        Spot(b, x, EyeY, 0.0145f, 0.0105f, 0.0016f, VoxelPalette.CarWhite, 12);
-                        Spot(b, x, EyeY - 0.0006f, 0.0068f, 0.0074f, 0.0026f, VoxelPalette.Ink);
-                        Spot(b, x + 0.0026f, EyeY + 0.0028f, 0.0021f, 0.0021f, 0.0034f, VoxelPalette.CarWhite, 6);
-                        break;
-                    default: throw new ArgumentOutOfRangeException(nameof(style));
-                }
-                if (style != FaceStyle.Dots) Brow(b, sx, mood, brows);
+                Spot(b, sx * EyeX, EyeY, 0.0062f, 0.0085f, 0.0016f, VoxelPalette.Ink);
+                Brow(b, sx, mood, brows);
             }
             Mouth(b, mood);
             return Done(b);
