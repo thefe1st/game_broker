@@ -454,6 +454,9 @@ namespace Broker.FlowChecks
         }
         private string NotebookText()
         { GUI.Labels.Clear(); Call("OnGUI"); return string.Join("\n", GUI.Labels); }
+        // The HUD's pictograms (HudIcon names) of one OnGUI call; GUI.Labels holds its texts afterwards.
+        private string[] Pictograms()
+        { GUI.Labels.Clear(); GUI.Pictures.Clear(); Call("OnGUI"); return GUI.Pictures.ToArray(); }
         [Test] public void NotebookListsSixClientsWithoutChangingFilesMoneyOrClock()
         {
             StartWork(); Interact(OfficeStation.Desk);

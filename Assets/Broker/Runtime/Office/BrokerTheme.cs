@@ -1,19 +1,25 @@
 using System.Collections.Generic;
+using Broker.Core;
 using UnityEngine;
 
 namespace Broker.Runtime.Office
 {
-    public sealed class BrokerTheme
+    public sealed class BrokerTheme : IHudText
     {
         public readonly Color Canvas = Hex("#0B1220"), Surface = Hex("#172437"), Border = Hex("#384B63");
         public readonly Color Ink = Hex("#F3F7FB"), Muted = Hex("#BAC6D7"), Gold = Hex("#E9B56D"), Green = Hex("#79D7BA"), Red = Hex("#FFABAD"), Accent = Hex("#83E4D1");
         public GUIStyle Text, Small, Title, Heading, Button, Primary, Field, Card, Tag, Display, Metric, PanelStyle;
-        // Exploration HUD: text straight over the world (no cards) in a warm white with a dark drop shadow and gold accents,
-        // over the bright voxel city. HudShadow tints the two shadow passes of the same text (GUI.contentColor).
-        public readonly Color HudInk = Hex("#F5F0E6"), HudMuted = Hex("#E4DACD"), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.8f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
-        // HudSpeed: the big speedometer figure while driving.
-        public GUIStyle HudHeading, HudText, HudTag, HudClock, HudRight, HudCenter, HudHint, HudKey, HudSpeed;
+        // Exploration HUD (Core/HudPlan): text and pictograms straight over the world (no cards) in a warm white with a dark
+        // drop shadow and gold accents, over the bright voxel city. HudShadow tints the two shadow passes of the same text or
+        // pictogram; HudTrack is the meter's track.
+        public readonly Color HudInk = Hex(HudPlan.ToneHex(HudTone.Ink)), HudShadow = new Color(0.04f, 0.025f, 0.02f, 0.8f), HudTrack = new Color(0.08f, 0.05f, 0.04f, 0.45f);
+        // The pictograms' textures (white, tinted by GUI.color): this many pixels a side, mipmapped for small screens.
+        public const int IconPixels = 96;
         private readonly List<Texture2D> textures = new List<Texture2D>();
+        private readonly Dictionary<int, GUIStyle> hudStyles = new Dictionary<int, GUIStyle>();
+        private readonly Dictionary<string, float>[] hudWidths = new Dictionary<string, float>[6];
+        private readonly Dictionary<int, Texture2D> icons = new Dictionary<int, Texture2D>();
+        private readonly Color[] hudTones = new Color[5];
         private Font font;
         private bool ownsFont;
         public BrokerTheme()
@@ -24,10 +30,7 @@ namespace Broker.Runtime.Office
             Text = Label(20, Ink); Small = Label(16, Muted); Title = Label(32, Ink, FontStyle.Bold);
             Heading = Label(22, Ink, FontStyle.Bold); Tag = Label(16, Accent, FontStyle.Bold);
             Display = Label(52, Ink, FontStyle.Bold); Metric = Label(36, Ink, FontStyle.Bold);
-            HudHeading = Label(22, HudInk, FontStyle.Bold); HudText = Label(16, HudMuted); HudTag = Label(16, Gold, FontStyle.Bold);
-            HudClock = Label(32, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudRight = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperRight);
-            HudCenter = Label(22, HudInk, FontStyle.Bold, TextAnchor.UpperCenter); HudHint = Label(16, HudMuted, FontStyle.Normal, TextAnchor.UpperCenter);
-            HudKey = Label(20, HudInk, FontStyle.Bold, TextAnchor.MiddleCenter); HudSpeed = Label(44, HudInk, FontStyle.Bold, TextAnchor.UpperRight);
+            for (int i = 0; i < hudTones.Length; i++) hudTones[i] = Hex(HudPlan.ToneHex((HudTone)i));
             PanelStyle = new GUIStyle { border = new RectOffset(10, 10, 10, 10) };
             PanelStyle.normal.background = Rounded(Surface);
             Button = new GUIStyle(GUI.skin.button) { font = font, fontSize = 18, wordWrap = true,
@@ -56,6 +59,41 @@ namespace Broker.Runtime.Office
             var style = new GUIStyle(GUI.skin.label) { font = font, fontSize = size, wordWrap = true, fontStyle = weight, richText = false,
                 alignment = alignment, padding = new RectOffset(0, 0, 0, 0) };
             style.normal.textColor = color; return style;
+        }
+        // A HUD type size in white (the item's tone tints it through GUI.contentColor), made on first use.
+        public GUIStyle HudStyle(HudFont font, HudAlign align)
+        {
+            int key = (int)font * 4 + (int)align;
+            if (hudStyles.TryGetValue(key, out var style)) return style;
+            var anchor = align == HudAlign.Middle ? TextAnchor.MiddleCenter : align == HudAlign.Center ? TextAnchor.UpperCenter
+                : align == HudAlign.Right ? TextAnchor.UpperRight : TextAnchor.UpperLeft;
+            style = Label(HudPlan.FontSize(font), Color.white, HudPlan.Bold(font) ? FontStyle.Bold : FontStyle.Normal, anchor);
+            hudStyles[key] = style; return style;
+        }
+        public Color HudColor(HudTone tone) => hudTones[(int)tone];
+        // IHudText for the HUD's layout: one line's width in the HUD font, remembered per string.
+        public float Width(string text, HudFont font)
+        {
+            var cache = hudWidths[(int)font] ?? (hudWidths[(int)font] = new Dictionary<string, float>());
+            text = text ?? "";
+            if (cache.TryGetValue(text, out float width)) return width;
+            if (cache.Count > 256) cache.Clear();
+            width = HudStyle(font, HudAlign.Left).CalcSize(new GUIContent(text)).x; cache[text] = width; return width;
+        }
+        // A pictogram of Core/HudIcons as a white texture, turned by `sector` steps of HudIcons.Sectors (the arrow), made on
+        // first use and destroyed with the theme.
+        public Texture2D Icon(HudIcon icon, int sector = 0)
+        {
+            int key = (int)icon * HudIcons.Sectors + sector;
+            if (icons.TryGetValue(key, out var texture)) return texture;
+            var mask = HudIcons.Mask(icon, IconPixels, sector * 360f / HudIcons.Sectors);
+            var pixels = new Color32[mask.Length];
+            for (int y = 0; y < IconPixels; y++)
+                for (int x = 0; x < IconPixels; x++)
+                    pixels[(IconPixels - 1 - y) * IconPixels + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(mask[y * IconPixels + x] * 255));
+            texture = new Texture2D(IconPixels, IconPixels, TextureFormat.RGBA32, true) { name = "HUD / " + icon, filterMode = FilterMode.Trilinear, wrapMode = TextureWrapMode.Clamp };
+            texture.SetPixels32(pixels); texture.Apply(true, true);
+            icons[key] = texture; textures.Add(texture); return texture;
         }
         private Texture2D Rounded(Color color)
         {

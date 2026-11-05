@@ -45,7 +45,7 @@ namespace UnityEngine
     }
     public struct Color { public Color(float r, float g, float b, float a = 1) { } }
     public struct Rect { public Rect(float x, float y, float w, float h) { } }
-    public class Texture2D { public static Texture2D whiteTexture = new Texture2D(); }
+    public class Texture2D { public static Texture2D whiteTexture = new Texture2D(); public string name; }
     public class GUIStyle { public float CalcHeight(GUIContent c, float w) => 24; public Vector2 CalcSize(GUIContent c) => new Vector2(160, 24); }
     public class GUIContent { public GUIContent(string text) { } }
     public static class Screen { public static int width = 1440, height = 960; }
@@ -59,10 +59,12 @@ namespace UnityEngine
         public static Matrix4x4 matrix; public static Color color, contentColor;
         public static string Click;
         public static readonly List<string> Labels = new List<string>();
-        public static void Reset() { enabled = true; Click = null; Labels.Clear(); }
+        // The named textures drawn: the HUD's pictograms (FakeTheme.Icon names them after Core's HudIcon).
+        public static readonly List<string> Pictures = new List<string>();
+        public static void Reset() { enabled = true; Click = null; Labels.Clear(); Pictures.Clear(); }
         public static void Label(Rect r, string text, GUIStyle s) { Labels.Add(text); }
         public static void Box(Rect r, string text, GUIStyle s) { }
-        public static void DrawTexture(Rect r, Texture2D t) { }
+        public static void DrawTexture(Rect r, Texture2D t) { if (t != null && t.name != null) Pictures.Add(t.name); }
         public static bool Button(Rect r, string text, GUIStyle s)
         { Labels.Add(text); if (!enabled || Click != text) return false; Click = null; return true; }
         public static bool Toggle(Rect r, bool value, string label, GUIStyle s) => value;
@@ -76,17 +78,20 @@ namespace UnityEngine
 }
 namespace Broker.Runtime.Office
 {
-    public sealed class BrokerTheme
+    public sealed class BrokerTheme : IHudText
     {
-        public UnityEngine.Color Border, Accent, Ink, Gold, Red, Green, HudInk, HudMuted, HudShadow, HudTrack;
+        public UnityEngine.Color Border, Accent, Ink, Gold, Red, Green, HudShadow, HudTrack;
         public UnityEngine.GUIStyle Text = new UnityEngine.GUIStyle(), Small = new UnityEngine.GUIStyle(),
             Heading = new UnityEngine.GUIStyle(), Title = new UnityEngine.GUIStyle(), Tag = new UnityEngine.GUIStyle(),
             Display = new UnityEngine.GUIStyle(), Metric = new UnityEngine.GUIStyle(), Field = new UnityEngine.GUIStyle(),
-            Button = new UnityEngine.GUIStyle(), Primary = new UnityEngine.GUIStyle(), PanelStyle = new UnityEngine.GUIStyle(),
-            HudHeading = new UnityEngine.GUIStyle(), HudText = new UnityEngine.GUIStyle(), HudTag = new UnityEngine.GUIStyle(),
-            HudClock = new UnityEngine.GUIStyle(), HudRight = new UnityEngine.GUIStyle(), HudCenter = new UnityEngine.GUIStyle(),
-            HudHint = new UnityEngine.GUIStyle(), HudKey = new UnityEngine.GUIStyle(), HudSpeed = new UnityEngine.GUIStyle();
+            Button = new UnityEngine.GUIStyle(), Primary = new UnityEngine.GUIStyle(), PanelStyle = new UnityEngine.GUIStyle();
         public static UnityEngine.Color Hex(string s) => new UnityEngine.Color();
+        // The HUD: one style for everything, ten pixels a letter, every pictogram a texture named after its HudIcon.
+        private readonly UnityEngine.GUIStyle hud = new UnityEngine.GUIStyle();
+        public UnityEngine.GUIStyle HudStyle(HudFont font, HudAlign align) => hud;
+        public UnityEngine.Color HudColor(HudTone tone) => new UnityEngine.Color();
+        public float Width(string text, HudFont font) => (text ?? "").Length * 10;
+        public UnityEngine.Texture2D Icon(HudIcon icon, int sector = 0) => new UnityEngine.Texture2D { name = icon.ToString() };
         public void Dispose() { }
     }
     public static class OfficeInput
@@ -120,7 +125,8 @@ namespace Broker.Runtime.Office
         public string CarGear = "1";
         public bool EnterCar() { if (!IsInCity || Driving) return false; Driving = true; return true; }
         public bool TryLeaveCar() { if (!CanLeaveCar) return false; Driving = false; return true; }
-        public string CrossingHint;
+        public float MapHeading;
+        public CrosswalkSignal CrossingSignal;
         public int CrossingRequests;
         public bool RequestCrossing() { CrossingRequests++; return true; }
     }

@@ -29,7 +29,10 @@ namespace Broker.FlowChecks
             Interact(OfficeStation.CityMap); Click("Ориентир / Западный сквер"); Frame();
             Assert.That(Get<string>("cityDestinationId"), Is.EqualTo("park")); Assert.That(office.MapX, Is.EqualTo(x)); Assert.That(office.MapZ, Is.EqualTo(z));
             Assert.That(Day.Employees[0].Remaining, Is.EqualTo(25)); Assert.That(Day.Current.Researched, Is.False);
-            Click("Назад · Esc"); Assert.That(NotebookText(), Does.Contain("Западный сквер"));
+            // Back in the street the compass under the clock points to the park: its tree and the metres, not its name.
+            Click("Назад · Esc"); var pictures = Pictograms();
+            Assert.That(pictures, Does.Contain("Tree")); Assert.That(pictures, Does.Contain("Arrow"));
+            Assert.That(GUI.Labels.Exists(label => label.EndsWith(" м")), Is.True); Assert.That(GUI.Labels, Does.Not.Contain("Западный сквер"));
             for (int i = 0; i < files.Length; i++) Assert.That(File.ReadAllText(files[i]), Is.EqualTo(bytes[i]));
         }
         [Test] public void MapFromPausePreservesDeskCallAndDoesNotTeleportOutOfOffice()

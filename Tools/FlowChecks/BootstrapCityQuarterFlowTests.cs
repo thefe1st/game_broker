@@ -66,13 +66,20 @@ namespace Broker.FlowChecks
             Frame(); Assert.That(Day.RemainingSeconds, Is.LessThan(seconds)); Assert.That(Day.Cash, Is.Zero);
             Call("PauseGameplay"); Interact(OfficeStation.CrosswalkButton); Assert.That(office.CrossingRequests, Is.EqualTo(1));
         }
-        [Test] public void CrossingPanelFollowsTheSceneHintOnlyInTheCity()
+        [Test] public void CrossingCueFollowsTheSignalOnlyInTheCity()
         {
-            Begin(); var office = Get<OfficeScene>("office"); office.CrossingHint = "Пешеходам красный\nКнопка на столбе — E";
-            Assert.That(NotebookText(), Does.Not.Contain("ПЕРЕХОД / СВЕТОФОР"));
-            Interact(OfficeStation.Street); string text = NotebookText();
-            Assert.That(text, Does.Contain("ПЕРЕХОД / СВЕТОФОР")); Assert.That(text, Does.Contain("Кнопка на столбе — E"));
-            office.CrossingHint = null; Assert.That(NotebookText(), Does.Not.Contain("ПЕРЕХОД / СВЕТОФОР"));
+            Begin(); var office = Get<OfficeScene>("office"); office.CrossingSignal = new CrosswalkSignal();
+            Assert.That(Pictograms(), Does.Not.Contain("Standing"));
+            Interact(OfficeStation.Street); var pictures = Pictograms();
+            // The cars have their full green and nobody has asked: the red man and the button on the pole.
+            Assert.That(pictures, Does.Contain("Standing")); Assert.That(pictures, Does.Contain("Button"));
+            Assert.That(pictures, Does.Not.Contain("Hourglass"));
+            // Asked: the hourglass and the seconds until the green man.
+            office.CrossingSignal.RequestWalk(); pictures = Pictograms();
+            Assert.That(pictures, Does.Contain("Hourglass")); Assert.That(pictures, Does.Not.Contain("Button"));
+            Assert.That(GUI.Labels.Any(label => label.EndsWith(" с")), Is.True);
+            Assert.That(string.Join("\n", GUI.Labels), Does.Not.Contain("ПЕРЕХОД / СВЕТОФОР"));
+            office.CrossingSignal = null; Assert.That(Pictograms(), Does.Not.Contain("Standing"));
         }
         [Test] public void MapOffersEveryLandmarkIncludingExchangeCafeAndCrossing()
         {

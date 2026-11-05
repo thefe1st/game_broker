@@ -22,7 +22,6 @@ namespace Broker.Core
         // The player is between the kerb gates; the cars wait for the player like for any walker.
         public bool PlayerOnCrossing { get; private set; }
         public bool GatesOpen => CityCrosswalk.GatesOpen(Signal, PlayerOnCrossing);
-        public string Hint => CityCrosswalk.Hint(Signal);
         // The zebra between the kerbs with a little room at its sides: the player's car there holds the walkers' green
         // like a boulevard car past the stop line.
         public static readonly CityRect ZebraZone = new CityRect(-CityCrosswalk.HalfWidth - 0.6f, CityDistrictPlan.SouthKerbZ,

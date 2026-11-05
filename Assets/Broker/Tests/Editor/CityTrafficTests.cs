@@ -76,16 +76,19 @@ namespace Broker.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => new CityLife().Advance(double.NaN, false, 0, 0));
             Assert.Throws<ArgumentOutOfRangeException>(() => CityTraffic.LaneZ(4));
         }
-        [Test] public void HintsAndGatesFollowTheSignal()
+        [Test] public void CuesAndGatesFollowTheSignal()
         {
-            var s = new CrosswalkSignal();
-            Assert.That(CityCrosswalk.Hint(s), Does.Contain("Кнопка на столбе — E")); Assert.That(CityCrosswalk.GatesOpen(s, false), Is.False);
+            var s = new CrosswalkSignal(); var cue = CityCrosswalk.Cue(s);
+            Assert.That(cue.Press, Is.True); Assert.That(cue.Green, Is.False); Assert.That(cue.Seconds, Is.Zero); Assert.That(CityCrosswalk.GatesOpen(s, false), Is.False);
             Assert.That(CityCrosswalk.GatesOpen(s, true), Is.True, "nobody is locked on the zebra");
-            s.RequestWalk(); Assert.That(CityCrosswalk.Hint(s), Does.Contain("Зелёный ≈ через 10 с"));
-            Run(s, 6 + 3 + 1 + 0.5); Assert.That(CityCrosswalk.Hint(s), Does.StartWith("Пешеходам зелёный · 14 с")); Assert.That(CityCrosswalk.GatesOpen(s, false), Is.True);
-            Run(s, 10); Assert.That(CityCrosswalk.Hint(s), Does.Contain("Не начинайте переход"));
-            Run(s, 4); Assert.That(CityCrosswalk.Hint(s), Does.Contain("когда зебра свободна")); Assert.That(CityCrosswalk.GatesOpen(s, false), Is.False);
-            Assert.That(CityCrosswalk.Hint(null), Is.Empty);
+            s.RequestWalk(); cue = CityCrosswalk.Cue(s); Assert.That(cue.Press, Is.False); Assert.That(cue.Green, Is.False); Assert.That(cue.Seconds, Is.EqualTo(10));
+            Run(s, 6 + 3 + 1 + 0.5); cue = CityCrosswalk.Cue(s);
+            Assert.That(cue.Green, Is.True); Assert.That(cue.Flashing, Is.False); Assert.That(cue.Seconds, Is.EqualTo(14)); Assert.That(CityCrosswalk.GatesOpen(s, false), Is.True);
+            Run(s, 10); cue = CityCrosswalk.Cue(s); Assert.That(cue.Green, Is.True); Assert.That(cue.Flashing, Is.True); Assert.That(cue.Seconds, Is.EqualTo(4));
+            Run(s, 4); cue = CityCrosswalk.Cue(s); Assert.That(cue.Green, Is.False); Assert.That(cue.Holding, Is.True); Assert.That(cue.Seconds, Is.Zero);
+            Assert.That(CityCrosswalk.GatesOpen(s, false), Is.False);
+            Run(s, 2.5); cue = CityCrosswalk.Cue(s); Assert.That(cue.Press, Is.True, "a fresh green for the cars: the button is worth pressing again");
+            Assert.That(CityCrosswalk.Cue(null).Green || CityCrosswalk.Cue(null).Press || CityCrosswalk.Cue(null).Seconds > 0, Is.False);
             Assert.That(CityCrosswalk.PlayerInZone(0, 35), Is.True); Assert.That(CityCrosswalk.PlayerInZone(0, 28.2f), Is.True);
             Assert.That(CityCrosswalk.PlayerInZone(0, 27.5f), Is.False); Assert.That(CityCrosswalk.PlayerInZone(3, 35), Is.False);
             Assert.That(CityCrosswalk.Near(0, 26.5f), Is.True); Assert.That(CityCrosswalk.Near(-31, 16), Is.False);
@@ -205,7 +208,7 @@ namespace Broker.Tests
             foreach (var car in life.Traffic.Cars) Assert.That(Overlap(car), Is.LessThanOrEqualTo(0));
             life.Advance(0.5, true, 0, 44); Assert.That(life.PlayerOnCrossing, Is.False);
             life.Advance(10, true, 0, 44); Assert.That(life.Signal.Phase, Is.Not.EqualTo(CrosswalkPhase.ClearToCars)); Assert.That(life.GatesOpen, Is.False);
-            Assert.That(life.Hint, Is.Not.Empty);
+            var last = CityCrosswalk.Cue(life.Signal); Assert.That(last.Green || last.Press || last.Seconds > 0, Is.True);
         }
     }
 }

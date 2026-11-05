@@ -9,7 +9,9 @@ dotnet test Tools/FlowChecks/FlowChecks.csproj
 This project compiles the **actual Core, PrototypeBootstrap partials, VoiceSession,
 Dialogue providers and OfficeInteractable** with narrow substitutes for UnityEngine,
 OfficeScene, player controls and BrokerTheme. `GUI.Click` consumes one enabled
-button label; labels are recorded, not rendered. Lifecycle methods are invoked
+button label; labels are recorded, not rendered. HUD pictograms (stage 8) are recorded too:
+the fake `BrokerTheme.Icon` names each texture after its `HudIcon` and `GUI.DrawTexture` puts that name in
+`GUI.Pictures`, so the driving, pause, crossing and map cases check the icons the HUD draws. Lifecycle methods are invoked
 explicitly. JSON is serialized through System.Text.Json, NOT Unity JsonUtility.
 
 Tests exercise menu/intro/panel clock gates, the city clock in the HUD and on the desk, confirmation/cancellation, next-client
