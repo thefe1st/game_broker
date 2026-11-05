@@ -36,8 +36,10 @@ object's `Mood` would (stage 5: the faces are eyes with brows, everybody calm by
 | `parking` | the red test sedan in its lay-by by the square, aimed at (E «Сесть за руль») |
 | `drive-boulevard`, `drive-south`, `drive-corner` | behind the wheel with the chase camera: among the traffic on the boulevard, on the southern street of the ring past the office's windowed back, turning into the eastern street; speedometer, gear and the driving keys |
 | `drive-parked` | the sedan back in the lay-by: E «Выйти из машины» |
+| `drive-junction`, `drive-highway` | stage 7: down the Southern drive to the give-way line and its triangle sign, the highway traffic crossing ahead; in the eastbound outer lane of the highway beside the median barrier and the green verge |
 | `office`, `office-employee` | the office as the owner and as the hired broker |
 | `aerial` | both quarters from above, no HUD |
+| `aerial-south`, `highway`, `highway-tunnel`, `night-highway` | stage 7, no HUD: the south from above — the Southern drive, the new quarter and the highway between its tunnels; the highway from its town-side pavement by the junction; the eastern highway tunnel in its embankment; the same pavement view at 20:30 |
 | `golden-boulevard`, `sunset-crosswalk`, `dusk-crosswalk` | the end of the work day (stage 4): the boulevard at the golden hour, 18:00; the crosswalk at sunset, 19:00, with the street lamps coming on, and in the blue hour, 19:45, with every light on; no HUD |
 | `night-plaza`, `night-boulevard`, `night-office`, `night-aerial` | night, 20:30 (the aerial at midnight, the end of the day): lit windows and shop fronts, street lamps and their pools of light, the light over the office door, headlights; the office with its lamps and the night city in the windows; no HUD |
 | `people-lineup`, `people-lineup-2` | the low-poly people (stage 5): the twelve kinds of passer-by in two rows of six on the plaza, staged to face the camera — the game never lines them up; no HUD |
