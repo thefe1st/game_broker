@@ -61,13 +61,18 @@ namespace Broker.Core
         // ---------- Tunnel portal ----------
         // 18 × 9 × 1 m of cast concrete (the wall material) with the 14 × 6.5 m mouth through it over the carriageway, a
         // light stone frame round the mouth with seven small lamps on its lintel, stone joint strips every 2 m over it
-        // (down to the base at the ends), a dark base and a coping. Front −Z; pivot at the bottom centre of the slab.
+        // (down to the base at the ends), a dark base and a coping. Front −Z; pivot at the bottom centre of the slab. The
+        // highway's portal is the same wall 22 m wide over an 18 m mouth, with nine lamps.
         public static readonly WallLook PortalConcrete = new WallLook("concrete", 0xFFFFFF);
         public const float PortalWidth = 18, PortalHeight = 9, PortalDepth = 1, MouthHalf = 7;
-        public static PolyMesh TunnelPortal()
+        public const float HighwayPortalWidth = 22, HighwayMouthHalf = 9;
+        public static PolyMesh TunnelPortal() => TunnelPortal(PortalWidth, MouthHalf);
+        public static PolyMesh TunnelPortal(float width, float mouthHalf)
         {
+            if (!(mouthHalf >= 2) || !(width >= 2 * mouthHalf + 2)) throw new ArgumentException("A portal needs a mouth and walls beside it.");
             var b = NewBuilder();
-            const float w = PortalWidth, h = PortalHeight, m = MouthHalf, mouthTop = CityScenery.TunnelHeight;
+            float w = width, m = mouthHalf; const float h = PortalHeight, mouthTop = CityScenery.TunnelHeight;
+            int lamps = (int)((m - 1) / 2), joints = (int)(w / 4);
             var faces = Faces(w, PortalDepth);
             var mouth = new Rect(w / 2 - m, w / 2 + m, 0, mouthTop);
             for (int k = 0; k < 4; k++)
@@ -84,14 +89,14 @@ namespace Broker.Core
             Ledge(b, front, mouth.U0 - 0.5f, mouth.U0, 0, mouthTop + 0.5f, 0.08f, VoxelPalette.StoneLight);
             Ledge(b, front, mouth.U1, mouth.U1 + 0.5f, 0, mouthTop + 0.5f, 0.08f, VoxelPalette.StoneLight);
             Ledge(b, front, mouth.U0, mouth.U1, mouthTop, mouthTop + 0.5f, 0.08f, VoxelPalette.StoneLight, false);
-            for (int k = -3; k <= 3; k++)
+            for (int k = -lamps; k <= lamps; k++)
             {
                 float u = w / 2 + 2 * k;
                 FaceBox(b, front, u - 0.25f, u + 0.25f, mouthTop + 0.1f, mouthTop + 0.4f, 0.08f, 0.16f, GlowPart, VoxelPalette.LampWarm, 0.01f);
             }
-            for (int k = -4; k <= 4; k++)
+            for (int k = -joints; k <= joints; k++)
             {
-                float u = w / 2 + 2 * k; bool end = Math.Abs(k) == 4;
+                float u = w / 2 + 2 * k; bool end = Math.Abs(k) == joints;
                 Ledge(b, front, u - 0.15f, u + 0.15f, end ? 0.5f : mouthTop + 0.5f, h - 0.5f, 0.03f, VoxelPalette.StoneLight, true, false);
             }
             return b.Build(PaletteUv);

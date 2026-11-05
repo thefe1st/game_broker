@@ -94,6 +94,7 @@ namespace Broker.Runtime.Office
             BuildDistrict(facades);
             BuildBoulevard(asphalt, concrete, grass, metal);
             BuildRoads(asphalt, concrete, pavement, grass, metal);
+            BuildHighway(asphalt, concrete, pavement, grass);
             BuildPlayerCar();
             BuildExchange();
             BuildCafe();

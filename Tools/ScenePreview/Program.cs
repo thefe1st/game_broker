@@ -108,6 +108,14 @@ namespace Broker.Tools.ScenePreview
             new Shot { Name = "office-lounge", Local = new Vector3(-6.75f, 1.7f, -0.6f), Yaw = -118, Pitch = 12, Fov = 72, Hud = false },
             new Shot { Name = "office-aquarium", Local = new Vector3(-11.3f, 1.65f, -3.7f), Yaw = 55, Pitch = 8, Fov = 66, Hud = false },
             new Shot { Name = "office-staff", Local = new Vector3(5.3f, 1.8f, 0.2f), Yaw = -50, Pitch = 8, Fov = 70, Hud = false },
+            // Stage 7: the new quarter and the highway — from above toward the south, the highway from the junction and at
+            // the east tunnel, at night, then behind the wheel down the Southern drive and along the highway.
+            new Shot { Name = "aerial-south", Local = new Vector3(0, 74, -12), Yaw = 180, Pitch = 50, Fov = 62, City = true, Hud = false, Traffic = 6 },
+            new Shot { Name = "highway", Local = new Vector3(-8, CityBlockPlan.GroundY + 3.2f, -81.6f), Yaw = 99, Pitch = 7, Fov = 66, City = true, Hud = false, Traffic = 6 },
+            new Shot { Name = "highway-tunnel", Local = new Vector3(52, CityBlockPlan.GroundY + 2.2f, -81.4f), Yaw = 104, Pitch = 3, Fov = 62, City = true, Hud = false, Traffic = 9 },
+            new Shot { Name = "night-highway", Local = new Vector3(-8, CityBlockPlan.GroundY + 3.2f, -81.6f), Yaw = 99, Pitch = 7, Fov = 66, City = true, Hud = false, Traffic = 6, Hour = 20.5f },
+            new Shot { Name = "drive-junction", City = true, Drive = true, CarX = -2, CarZ = -58, CarHeading = -(float)Math.PI / 2, CarSpeed = 10, Throttle = 0.1f, DriveSeconds = 1.5, Traffic = 7 },
+            new Shot { Name = "drive-highway", City = true, Drive = true, CarX = -46, CarZ = -98.25f, CarHeading = 0, CarSpeed = 21, Throttle = 0.6f, DriveSeconds = 1.6, Traffic = 10 },
         };
 
         public static int Main(string[] args)

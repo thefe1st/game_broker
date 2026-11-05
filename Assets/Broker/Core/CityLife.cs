@@ -2,7 +2,7 @@ using System;
 
 namespace Broker.Core
 {
-    // One clock for the boulevard: the signal, the cars, the walkers and the player's car advance together in small
+    // One clock for the streets: the signal, the boulevard and highway cars, the walkers and the player's car advance together in small
     // steps, so a long frame or a preview jump gives the same picture as many short frames. The scene feeds frame time,
     // the player's position and the driver's keys; nothing here touches the working day, money or clients.
     public sealed class CityLife
@@ -10,6 +10,8 @@ namespace Broker.Core
         private const double Step = 0.05;
         public CrosswalkSignal Signal { get; } = new CrosswalkSignal();
         public CityTraffic Traffic { get; } = new CityTraffic();
+        // The highway beyond the new quarter, with traffic of its own.
+        public HighwayTraffic Highway { get; } = new HighwayTraffic();
         public CityCrowd Crowd { get; } = new CityCrowd();
         // The test sedan in its lay-by by the western square; it moves only while the player drives it.
         public PlayerCar Car { get; } = new PlayerCar();
@@ -52,8 +54,9 @@ namespace Broker.Core
                 var car = Car.Footprint;
                 Signal.Advance(dt, Traffic.CarInCrosswalk || car.Overlaps(ZebraZone), Crowd.AnyOnCrossing || PlayerOnCrossing);
                 Traffic.Advance(dt, Signal, car, Car.VelocityX);
+                Highway.Advance(dt, car, Car.VelocityX);
                 Crowd.Advance(dt, Signal, walking, playerX, playerZ, car);
-                Car.Advance(dt, keys, Traffic, Crowd);
+                Car.Advance(dt, keys, Traffic, Crowd, Highway);
                 Elapsed += dt;
             }
         }

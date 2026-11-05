@@ -30,6 +30,7 @@ namespace Broker.Tests
             yield return ("rostral column", BuildingModels.RostralColumn());
             yield return ("kiosk", BuildingModels.Kiosk());
             yield return ("tunnel portal", BuildingModels.TunnelPortal());
+            yield return ("highway tunnel portal", BuildingModels.TunnelPortal(BuildingModels.HighwayPortalWidth, BuildingModels.HighwayMouthHalf));
             for (int k = 0; k < BuildingModels.SkylineLooks.Length; k++) yield return ("skyline " + k, BuildingModels.Skyline(k));
             foreach (float length in HedgeLengths) yield return ("hedge " + length, StreetModels.Hedge(length, 1));
         }
@@ -262,10 +263,11 @@ namespace Broker.Tests
             Assert.That(band.Part, Is.EqualTo(Trim));
             Assert.That(Tris(BuildingModels.Kiosk(), Glass).Count, Is.GreaterThan(0), "a glazed display");
         }
-        [Test] public void TheTunnelMouthIsOpenOverTheCarriageway()
+        [TestCase(false)] [TestCase(true)]
+        public void TheTunnelMouthIsOpenOverTheCarriageway(bool highway)
         {
-            var portal = Tris(BuildingModels.TunnelPortal());
-            float m = BuildingModels.MouthHalf;
+            var portal = Tris(highway ? BuildingModels.TunnelPortal(BuildingModels.HighwayPortalWidth, BuildingModels.HighwayMouthHalf) : BuildingModels.TunnelPortal());
+            float m = highway ? BuildingModels.HighwayMouthHalf : BuildingModels.MouthHalf;
             foreach (float x in new[] { -m + 0.3f, 0, m - 0.3f })
                 foreach (float y in new[] { 0.2f, 3, CityScenery.TunnelHeight - 0.2f })
                     Assert.That(Hit(portal, new V3(x, y, -3), new V3(0, 0, 1), out _, out _), Is.False, "open at " + x + ", " + y);
@@ -273,7 +275,16 @@ namespace Broker.Tests
             Assert.That(1 + soffit, Is.EqualTo(CityScenery.TunnelHeight).Within(1e-3f), "the mouth's soffit");
             Assert.That(Hit(portal, new V3(m + 1.5f, 3, -3), new V3(0, 0, 1), out _, out float wall), Is.True);
             Assert.That(wall, Is.InRange(3 - BuildingModels.PortalDepth / 2 - 0.1f, 3 - BuildingModels.PortalDepth / 2 + 1e-3f), "solid beside the mouth");
-            Assert.That(2 * m, Is.EqualTo(CityScenery.TunnelMaxZ - CityScenery.TunnelMinZ).Within(1e-3f), "as wide as the tunnel");
+            Assert.That(2 * m, Is.EqualTo(highway ? CityScenery.HighwayTunnelMaxZ - CityScenery.HighwayTunnelMinZ : CityScenery.TunnelMaxZ - CityScenery.TunnelMinZ).Within(1e-3f),
+                "as wide as the tunnel");
+            if (!highway) return;
+            // Over both carriageways and the median, with the wall reaching past the mouth into the embankments.
+            Assert.That(CityScenery.HighwayTunnelMinZ, Is.LessThan(CityRoads.HighwaySouthZ - 2 * CityRoads.KerbHalf));
+            Assert.That(CityScenery.HighwayTunnelMaxZ, Is.GreaterThan(CityRoads.HighwayNorthZ + 2 * CityRoads.KerbHalf));
+            Assert.That(BuildingModels.HighwayPortalWidth / 2, Is.GreaterThan(m + 1));
+            Assert.That(BuildingModels.TunnelPortal(BuildingModels.HighwayPortalWidth, BuildingModels.HighwayMouthHalf).TriangleCount, Is.LessThan(1000));
+            Assert.Throws<ArgumentException>(() => BuildingModels.TunnelPortal(10, 6));
+            Assert.Throws<ArgumentException>(() => BuildingModels.TunnelPortal(20, 1));
         }
         [Test] public void HedgesRunTheirLengthWithSeededBumps()
         {

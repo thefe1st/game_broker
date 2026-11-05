@@ -5,8 +5,9 @@ using UnityEngine;
 namespace Broker.Runtime.Office
 {
     // The ring of roads round the office quarter (CityRoads): asphalt slabs of the west, south and east streets and of the
-    // lay-by, the 45° kerb cuts as asphalt prisms, kerbs on every edge, pavements, centre dashes, lamps, the towers along
-    // the outer side, and the railing with its parking sign round the lay-by. The player's car meets the kerbs in Core
+    // lay-by, the 45° kerb cuts as asphalt prisms (the Southern drive's too), kerbs on every edge, pavements, centre
+    // dashes, lamps, the towers along the outer side and in the new quarter, and the railing with its parking sign round
+    // the lay-by. The player's car meets the kerbs in Core
     // (PlayerCar); the walls here only keep a walker on the square, and they let the aim through to the car.
     public sealed partial class OfficeScene
     {
@@ -36,7 +37,10 @@ namespace Broker.Runtime.Office
             // Kerbs: the outer south kerb runs past both outer corners and covers them; the inner kerbs end at the cuts.
             Kerb("Ring / outer kerb", west.MinX, south.MinZ, west.MinX, bz - outer, -1, 0, 0, KerbJoin, false, concrete);
             Kerb("Ring / outer kerb", east.MaxX, south.MinZ, east.MaxX, bz - outer, 1, 0, 0, KerbJoin, false, concrete);
-            Kerb("Ring / outer kerb", west.MinX, south.MinZ, east.MaxX, south.MinZ, 0, -1, 2 * h, 2 * h, false, concrete);
+            // The south kerb opens for the Southern drive (OfficeScene.Highway).
+            const float drive = CityRoads.DriveHalfWidth + CityRoads.DriveCut;
+            Kerb("Ring / outer kerb", west.MinX, south.MinZ, -drive, south.MinZ, 0, -1, 2 * h, KerbJoin, false, concrete);
+            Kerb("Ring / outer kerb", drive, south.MinZ, east.MaxX, south.MinZ, 0, -1, KerbJoin, 2 * h, false, concrete);
             Kerb("Ring / inner kerb", west.MaxX, south.MaxZ + outer, west.MaxX, bz - inner, 1, 0, KerbJoin, KerbJoin, false, concrete);
             Kerb("Ring / inner kerb", east.MinX, south.MaxZ + outer, east.MinX, bz - inner, -1, 0, KerbJoin, KerbJoin, false, concrete);
             Kerb("Ring / inner kerb", west.MaxX + outer, south.MaxZ, east.MinX - outer, south.MaxZ, 0, 1, KerbJoin, KerbJoin, false, concrete);

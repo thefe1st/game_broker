@@ -8,10 +8,11 @@ namespace Broker.Runtime
     {
         private string cityDestinationId = "office";
         private bool cityMapFromPause;
-        // District map at 3.3 px per metre: the ring of roads with the lay-by, the walkable areas, the zebra, closed
-        // buildings in gold with the open rooms (café, Exchange hall) cut out, the chosen landmark and the player (in the
-        // car while driving). It never moves the player.
-        private const float MapLeft = 212, MapTop = 234, MapScale = 3.3f, MapMinX = -62, MapMaxX = 62, MapMinZ = -32, MapMaxZ = 76;
+        // District map at 2.2 px per metre, from the Exchange to the highway and between the tunnels: the ring of roads with
+        // the lay-by, the Southern drive and the highway, the walkable areas, the zebra, closed buildings in gold with the
+        // open rooms (café, Exchange hall) cut out, the chosen landmark and the player (in the car while driving). It never
+        // moves the player.
+        private const float MapLeft = 240, MapTop = 232, MapScale = 2.2f, MapMinX = -80, MapMaxX = 80, MapMinZ = -104, MapMaxZ = 76;
         private static Rect MapRect(CityRect r)
         {
             float minX = Mathf.Max(r.MinX, MapMinX), maxX = Mathf.Min(r.MaxX, MapMaxX), minZ = Mathf.Max(r.MinZ, MapMinZ), maxZ = Mathf.Min(r.MaxZ, MapMaxZ);
@@ -19,10 +20,13 @@ namespace Broker.Runtime
                 Mathf.Max(0, maxX - minX) * MapScale, Mathf.Max(0, maxZ - minZ) * MapScale);
         }
         private static Rect MapDot(float x, float z, float size) => new Rect(MapLeft + (x - MapMinX) * MapScale - size / 2, MapTop + (MapMaxZ - z) * MapScale - size / 2, size, size);
+        // A name on the map centred over a point of the plan.
+        private void MapTag(string text, float x, float z, float width)
+            => Label(MapLeft + (x - MapMinX) * MapScale - width / 2, MapTop + (MapMaxZ - z) * MapScale - 12, width, 24, text, theme.Tag);
         private void DrawCityMap()
         {
             Panel(160, 64, 1120, 832, ""); Label(200, 92, 1040, 48, "Район / навигация", theme.Title);
-            Label(200, 148, 1040, 52, "Юг — площадь у офиса, сквер и офисная улица. Север — Биржа за бульваром: зебра на зелёный, кнопка на столбе. Кольцо дорог — для тестового седана с парковки у сквера.", theme.Small);
+            Label(200, 148, 1040, 52, "Юг — площадь у офиса, сквер и офисная улица, за ними новый квартал и трасса. Север — Биржа за бульваром: зебра на зелёный, кнопка на столбе. Седан — с парковки у сквера.", theme.Small);
             Panel(200, 216, 432, 480, "");
             foreach (var area in CityDistrictPlan.Areas) Paint(MapRect(area), theme.Border);
             var road = Broker.Runtime.Office.BrokerTheme.Hex("#0F1B2D");
@@ -32,23 +36,20 @@ namespace Broker.Runtime
             foreach (var footprint in CityDistrictPlan.Footprints) Paint(MapRect(footprint), theme.Gold);
             foreach (var building in CityRoads.Frontage) Paint(MapRect(building.Footprint), theme.Gold);
             foreach (var opening in CityDistrictPlan.Openings) Paint(MapRect(opening), theme.Border);
-            Label(396, 256, 96, 24, "БИРЖА", theme.Tag);
-            Label(278, 358, 120, 24, "БУЛЬВАР", theme.Tag);
-            Label(312, 400, 96, 24, "ПАРКОВКА", theme.Tag);
-            Label(400, 422, 120, 24, "ПЛОЩАДЬ", theme.Tag);
-            Label(284, 446, 96, 24, "СКВЕР", theme.Tag);
-            Label(488, 446, 96, 24, "ОФИСЫ", theme.Tag);
-            Label(382, 536, 96, 24, "КОЛЬЦО", theme.Tag);
+            MapTag("БИРЖА", 0, 64, 64); MapTag("БУЛЬВАР", -60, 35, 84);
+            MapTag("ПАРКОВКА", -36, 20, 96); MapTag("ПЛОЩАДЬ", 4, 14, 84);
+            MapTag("СКВЕР", -30, 5, 64); MapTag("ОФИСЫ", 30, 5, 64);
+            MapTag("КОЛЬЦО", -30, -20, 72); MapTag("ТРАССА", -45, -92, 72);
             var selected = CityDistrictPlan.Find(cityDestinationId);
             Paint(MapDot(selected.X, selected.Z, 8), theme.Accent);
             if (office.IsInCity) Paint(MapDot(office.MapX, office.MapZ, 6), theme.Ink);
-            Label(224, 606, 384, 72, "Белый — вы, зелёный — ориентир, тёмное — дороги. Золотое — закрытые здания; открыты кофейня и зал Биржи.", theme.Small);
+            Label(224, 632, 384, 60, "Белый — вы, зелёный — ориентир, тёмное — дороги. Золотое — закрытые здания; открыты кофейня и зал Биржи.", theme.Small);
             var destinations = CityDistrictPlan.Destinations;
             for (int i = 0; i < destinations.Count; i++)
                 if (Button(664, 216 + i * 48, 568, 40, "Ориентир / " + destinations[i].Name, ApplicationActive, destinations[i].Id == cityDestinationId)) cityDestinationId = destinations[i].Id;
             Label(664, 652, 568, 64, selected.Description, theme.Small);
             Label(200, 724, 700, 64, office.IsInCity ? "От вас: " + Math.Ceiling(CityDistrictPlan.Distance(office.MapX, office.MapZ, selected)) + " м по прямой · "
-                + CityDistrictPlan.Direction(office.MapX, office.MapZ, selected) + (office.Driving ? ". В машине — только по кольцу; выйти можно на парковке у сквера."
+                + CityDistrictPlan.Direction(office.MapX, office.MapZ, selected) + (office.Driving ? ". В машине — по кольцу и трассе; выйти можно на парковке у сквера."
                 : ". Обходите клумбы и фасады пешком, бульвар — только по зебре.")
                 : "Карта не переносит игрока. Выйдите через лифт в квартал; выбранный ориентир появится на улице.", theme.Small);
             if (Button(936, 820, 296, 48, "Назад · Esc", ApplicationActive)) CloseCityInformation();

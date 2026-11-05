@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Broker.Runtime.Office
 {
     // The boulevard between the quarters: asphalt and markings, kerbs with railings and the gaps of the crossing, the
-    // signals with the push button, the tunnels at both ends and the cars of CityTraffic. Invisible gates in the kerb
+    // signals with the push button, the tunnels at both ends (and the highway's) and the cars of CityTraffic. Invisible gates in the kerb
     // gaps follow CityLife.GatesOpen; walls along the zebra keep the player off the carriageway.
     public sealed partial class OfficeScene
     {
@@ -136,20 +136,28 @@ namespace Broker.Runtime.Office
         // Portals at both ends, embankments around them and a dark tube with amber lamps where the cars turn round.
         private void BuildTunnels(Material grass)
         {
-            const float g = CityBlockPlan.GroundY, portalX = CityScenery.TunnelPortalX, endX = CityScenery.TunnelEndX;
-            const float minZ = CityScenery.TunnelMinZ, maxZ = CityScenery.TunnelMaxZ, mouth = CityScenery.TunnelHeight;
-            const float bankLength = CityScenery.EmbankmentEndX - portalX, bankTop = CityScenery.EmbankmentHeight - 0.1f;
             var dark = Mat("#17191D"); var lamp = Mat("#F0B45A", true);
+            BuildTunnel("Boulevard", "tunnel portal", BuildingModels.TunnelPortal, CityScenery.TunnelMinZ, CityScenery.TunnelMaxZ,
+                CityScenery.EmbankmentMinZ, CityScenery.EmbankmentMaxZ, grass, dark, lamp);
+            BuildTunnel("Highway", "tunnel portal/highway", () => BuildingModels.TunnelPortal(BuildingModels.HighwayPortalWidth, BuildingModels.HighwayMouthHalf),
+                CityScenery.HighwayTunnelMinZ, CityScenery.HighwayTunnelMaxZ, CityScenery.HighwayBankMinZ, CityScenery.HighwayBankMaxZ, grass, dark, lamp);
+        }
+        // One road's tunnels: a portal over the mouth (minZ…maxZ) at each end, the embankment round it (bankMinZ…bankMaxZ)
+        // and the tube behind.
+        private void BuildTunnel(string road, string portalKey, Func<PolyMesh> portal, float minZ, float maxZ, float bankMinZ, float bankMaxZ,
+            Material grass, Material dark, Material lamp)
+        {
+            const float g = CityBlockPlan.GroundY, portalX = CityScenery.TunnelPortalX, endX = CityScenery.TunnelEndX, mouth = CityScenery.TunnelHeight;
+            const float bankLength = CityScenery.EmbankmentEndX - portalX, bankTop = CityScenery.EmbankmentHeight - 0.1f;
             foreach (float side in new[] { -1f, 1f })
             {
                 float bank = side * (portalX + CityScenery.EmbankmentEndX) / 2, tube = side * (portalX + endX) / 2;
-                PlaceBuilding("tunnel portal", BuildingModels.TunnelPortal, BuildingModels.PortalConcrete, "Boulevard / tunnel portal",
-                    new Vector3(side * portalX, g, (CityDistrictPlan.SouthKerbZ + CityDistrictPlan.NorthKerbZ) / 2), side > 0 ? 90 : -90);
-                Box("Boulevard / embankment south", new Vector3(bank, g - 0.1f + CityScenery.EmbankmentHeight / 2, (CityScenery.EmbankmentMinZ + minZ) / 2),
-                    new Vector3(bankLength, CityScenery.EmbankmentHeight, minZ - CityScenery.EmbankmentMinZ), grass, false);
-                Box("Boulevard / embankment north", new Vector3(bank, g - 0.1f + CityScenery.EmbankmentHeight / 2, (maxZ + CityScenery.EmbankmentMaxZ) / 2),
-                    new Vector3(bankLength, CityScenery.EmbankmentHeight, CityScenery.EmbankmentMaxZ - maxZ), grass, false);
-                Box("Boulevard / embankment over tunnel", new Vector3(bank, g + (mouth + bankTop) / 2, (minZ + maxZ) / 2),
+                PlaceBuilding(portalKey, portal, BuildingModels.PortalConcrete, road + " / tunnel portal", new Vector3(side * portalX, g, (minZ + maxZ) / 2), side > 0 ? 90 : -90);
+                Box(road + " / embankment south", new Vector3(bank, g - 0.1f + CityScenery.EmbankmentHeight / 2, (bankMinZ + minZ) / 2),
+                    new Vector3(bankLength, CityScenery.EmbankmentHeight, minZ - bankMinZ), grass, false);
+                Box(road + " / embankment north", new Vector3(bank, g - 0.1f + CityScenery.EmbankmentHeight / 2, (maxZ + bankMaxZ) / 2),
+                    new Vector3(bankLength, CityScenery.EmbankmentHeight, bankMaxZ - maxZ), grass, false);
+                Box(road + " / embankment over tunnel", new Vector3(bank, g + (mouth + bankTop) / 2, (minZ + maxZ) / 2),
                     new Vector3(bankLength, bankTop - mouth, maxZ - minZ), grass, false);
                 Box("Tunnel / south wall", new Vector3(tube, g + mouth / 2, minZ + 0.05f), new Vector3(endX - portalX, mouth, 0.1f), dark, false);
                 Box("Tunnel / north wall", new Vector3(tube, g + mouth / 2, maxZ - 0.05f), new Vector3(endX - portalX, mouth, 0.1f), dark, false);
@@ -161,10 +169,14 @@ namespace Broker.Runtime.Office
         }
         private void ShowTraffic()
         {
-            var cars = Life.Traffic.Cars;
-            for (int i = 0; i < cityCars.Length && i < cars.Count; i++)
+            ShowCars(cityCars, Life.Traffic.Cars);
+            ShowCars(highwayCars, Life.Highway.Cars);
+        }
+        private static void ShowCars(CarRig[] rigs, System.Collections.ObjectModel.ReadOnlyCollection<CityCar> cars)
+        {
+            for (int i = 0; i < rigs.Length && i < cars.Count; i++)
             {
-                var car = cars[i]; var rig = cityCars[i];
+                var car = cars[i]; var rig = rigs[i];
                 rig.Root.localPosition = new Vector3(car.X, CityBlockPlan.GroundY + RoadTop, car.Z);
                 rig.Root.localRotation = Quaternion.Euler(0, car.Yaw, 0);
                 PoseCar(rig, car.S, car.Braking);
